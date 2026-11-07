@@ -67,12 +67,23 @@ export function randomGenome(rng = Math.random, center = 0.5, spread = 0.13) {
   return genome;
 }
 
+const LINKAGE_GROUPS = [
+  ["bodySize", "fat", "speed", "legs"],
+  ["neck", "tail", "crest", "armor"],
+  ["hue", "pattern"],
+];
+
 export function crossover(a, b, rng = Math.random) {
   const child = {};
-  for (const key of GENE_KEYS) {
-    const t = rng();
-    const value = t < 0.44 ? a[key] : t < 0.88 ? b[key] : (a[key] + b[key]) / 2;
-    child[key] = clamp01(value + gaussian(rng) * 0.018);
+  for (const chromosome of LINKAGE_GROUPS) {
+    // A chromosome is inherited as a linked block, with occasional crossovers
+    // between loci. This creates realistic inherited trait combinations.
+    let source = rng() < 0.5 ? a : b;
+    for (const key of chromosome) {
+      if (rng() < 0.22) source = source === a ? b : a;
+      const value = source[key];
+      child[key] = clamp01(value + gaussian(rng) * 0.012);
+    }
   }
   return child;
 }
@@ -136,20 +147,36 @@ export function evaluate(genome, env, condition = 1) {
   const evasion = clamp01(0.08 + g.legs * 0.38 + g.speed * 0.42 + g.tail * 0.07);
   const defense = clamp01(g.armor * 0.58 + g.bodySize * 0.16 + g.fat * 0.09 + g.crest * 0.08 + evasion * 0.15);
   const protection = clamp01(defense * 0.57 + evasion * 0.57);
-  const efficiency = clamp01(1.08 - (g.bodySize * 0.19 + g.armor * 0.23 + g.fat * 0.15 + g.speed * 0.11) + env.food * 0.055);
+  // A simple whole-organism energy budget: intake scales with forage access,
+  // while maintenance follows sublinear (allometric) body-mass costs plus
+  // locomotion, armor, insulation, and thermal-stress expenses.
+  const resourceAvailability = [0.46, 0.72, 0.92][env.food];
+  const intake = foraging * resourceAvailability;
+  const metabolicMass = 0.2 + g.bodySize * 0.8;
+  const thermalCost = Math.abs(g.bodySize - sizeTarget) * 0.025 + Math.abs(g.fat - fatTarget) * 0.018;
+  const maintenance =
+    0.22 +
+    Math.pow(metabolicMass, 0.75) * 0.25 +
+    g.speed * 0.08 +
+    g.legs * 0.035 +
+    g.armor * 0.05 +
+    g.fat * 0.035 +
+    thermalCost;
+  const reserve = g.fat * (env.food === 0 ? 0.14 : 0.045);
+  const energyBalance = clamp01(0.56 + (intake + reserve - maintenance) * 1.6);
 
   const weights = {
     thermal: 0.18 + (env.climate === 1 ? 0.035 : 0.17),
     foraging: 0.17 + (env.food === 1 ? 0.035 : 0.15),
     defense: 0.1 + [0.02, 0.14, 0.22][env.predators],
-    efficiency: 0.18 + (env.food === 0 ? 0.07 : 0),
+    energy: 0.18 + (env.food === 0 ? 0.07 : 0),
   };
   const total = Object.values(weights).reduce((sum, value) => sum + value, 0);
   const weighted =
     (thermal * weights.thermal +
       foraging * weights.foraging +
       protection * weights.defense +
-      efficiency * weights.efficiency) /
+      energyBalance * weights.energy) /
     total;
 
   return {
@@ -158,7 +185,12 @@ export function evaluate(genome, env, condition = 1) {
       thermal: thermal * 100,
       foraging: foraging * 100,
       defense: protection * 100,
-      efficiency: efficiency * 100,
+      energy: energyBalance * 100,
+    },
+    energyBudget: {
+      intake: intake * 100,
+      maintenance: maintenance * 100,
+      reserve: reserve * 100,
     },
     weights,
   };

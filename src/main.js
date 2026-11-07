@@ -145,7 +145,7 @@ const els = {
     thermal: [$("#weight-thermal"), $("#weight-thermal-value")],
     foraging: [$("#weight-forage"), $("#weight-forage-value")],
     defense: [$("#weight-defense"), $("#weight-defense-value")],
-    efficiency: [$("#weight-energy"), $("#weight-energy-value")],
+    energy: [$("#weight-energy"), $("#weight-energy-value")],
   },
   toast: $("#toast"),
   toastTitle: $("#toast-title"),
@@ -447,14 +447,14 @@ function updateSelectionUI() {
   els.fitThermal.textContent = Math.round(org.evaluation.components.thermal);
   els.fitForage.textContent = Math.round(org.evaluation.components.foraging);
   els.fitDefense.textContent = Math.round(org.evaluation.components.defense);
-  els.fitEnergy.textContent = Math.round(org.evaluation.components.efficiency);
+  els.fitEnergy.textContent = Math.round(org.evaluation.components.energy);
 
   const status = fitness >= 72 ? "Thriving" : fitness >= 56 ? "Stable" : "Stressed";
   els.status.textContent = status;
   els.status.style.color = fitness >= 56 ? "var(--mint)" : "var(--coral)";
   const weightValues = org.evaluation.weights;
   const weightTotal = Object.values(weightValues).reduce((sum, value) => sum + value, 0);
-  for (const key of ["thermal", "foraging", "defense", "efficiency"]) {
+  for (const key of ["thermal", "foraging", "defense", "energy"]) {
     const percentage = (weightValues[key] / weightTotal) * 100;
     els.weights[key][0].style.width = `${percentage}%`;
     els.weights[key][1].textContent = `${Math.round(percentage)}%`;
@@ -611,7 +611,7 @@ function pickDominantPressure(org) {
     thermal: "thermoregulation",
     foraging: "forage access",
     defense: "predator defense",
-    efficiency: "metabolic efficiency",
+    energy: "energy balance",
   };
   return labels[entries[0][0]];
 }
