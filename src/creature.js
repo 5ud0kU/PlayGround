@@ -92,9 +92,10 @@ function makeCrestGeometry() {
 }
 
 export class Creature {
-  constructor({ genome, evaluation, world, rng, index, position }) {
+  constructor({ genome, evaluation, world, rng, index, position, stage = "organism" }) {
     this.genome = genome;
     this.evaluation = evaluation;
+    this.stage = stage;
     this.world = world;
     this.rng = rng;
     this.index = index;
@@ -207,6 +208,11 @@ export class Creature {
       transparent: true,
       opacity: 0.6,
     });
+
+    if (this.stage === "cellular") {
+      this.buildCell();
+      return;
+    }
 
     // Proportions: raw genes become an actual biological body plan.
     const bodyLen = 0.9;
@@ -518,6 +524,87 @@ export class Creature {
     }
   }
 
+  buildCell() {
+    const g = this.genome;
+    this.sizeScale = 0.72 + g.bodySize * 0.3;
+    this.dimensions = { bodyY: 0.1, neckLen: 0 };
+    this.movementSpeed = 0;
+
+    const cell = new THREE.Group();
+    this.cellBody = new THREE.Mesh(new THREE.SphereGeometry(0.74, 32, 24), this.bodyMat);
+    this.cellBody.scale.set(1, 0.9, 1);
+    this.cellBody.castShadow = true;
+    this.cellBody.receiveShadow = true;
+    cell.add(this.cellBody);
+
+    const membrane = new THREE.Mesh(
+      new THREE.SphereGeometry(0.78, 32, 24),
+      new THREE.MeshPhysicalMaterial({
+        color: this.themeColor,
+        transparent: true,
+        opacity: 0.19,
+        roughness: 0.22,
+        metalness: 0.02,
+        transmission: 0.18,
+        thickness: 0.18,
+        side: THREE.DoubleSide,
+      }),
+    );
+    membrane.scale.set(1, 0.92, 1);
+    cell.add(membrane);
+
+    const nucleusMat = new THREE.MeshStandardMaterial({
+      color: this.accentColor,
+      emissive: this.accentColor,
+      emissiveIntensity: 0.22,
+      roughness: 0.48,
+    });
+    const nucleus = new THREE.Mesh(new THREE.SphereGeometry(0.3, 24, 18), nucleusMat);
+    nucleus.position.set(-0.09, 0.04, 0.04);
+    nucleus.scale.set(1, 0.93, 1.08);
+    nucleus.castShadow = true;
+    cell.add(nucleus);
+
+    const nucleolus = new THREE.Mesh(
+      new THREE.SphereGeometry(0.095, 16, 12),
+      new THREE.MeshStandardMaterial({ color: 0xd7ff9a, emissive: 0x7dba4b, emissiveIntensity: 0.2, roughness: 0.4 }),
+    );
+    nucleolus.position.set(-0.02, 0.11, 0.16);
+    cell.add(nucleolus);
+
+    const mitoMat = new THREE.MeshStandardMaterial({ color: 0xffc06d, emissive: 0x743c1f, emissiveIntensity: 0.18, roughness: 0.52 });
+    const mitoGeo = new THREE.SphereGeometry(0.105, 14, 10);
+    const rng = this.rng;
+    for (let i = 0; i < 5; i += 1) {
+      const angle = (i / 5) * TAU + 0.35;
+      const organelle = new THREE.Mesh(mitoGeo, mitoMat);
+      organelle.position.set(Math.cos(angle) * 0.46, (rng() - 0.5) * 0.34, Math.sin(angle) * 0.46);
+      organelle.scale.set(1.7, 0.72, 0.8);
+      organelle.rotation.y = -angle;
+      organelle.castShadow = true;
+      cell.add(organelle);
+    }
+
+    const ribosomeMat = new THREE.MeshStandardMaterial({ color: 0xe9f3c7, roughness: 0.68 });
+    const ribosomeGeo = new THREE.SphereGeometry(0.025, 8, 6);
+    for (let i = 0; i < 16; i += 1) {
+      const u = rng() * TAU;
+      const v = Math.acos(2 * rng() - 1);
+      const ribosome = new THREE.Mesh(ribosomeGeo, ribosomeMat);
+      ribosome.position.set(
+        0.57 * Math.sin(v) * Math.cos(u),
+        0.52 * Math.cos(v),
+        0.57 * Math.sin(v) * Math.sin(u),
+      );
+      cell.add(ribosome);
+    }
+
+    this.cellGroup = cell;
+    this.cellNucleus = nucleus;
+    this.cellOrganelles = cell.children.filter((child) => child !== this.cellBody && child !== membrane && child !== nucleus && child !== nucleolus);
+    this.model.add(cell);
+  }
+
   chooseTarget(initial = false) {
     const angle = this.rng() * TAU;
     const dist = initial ? 0 : (this.index === 0 ? 0.8 : 1.1) + this.rng() * (this.index === 0 ? 1.7 : 2.2);
@@ -546,6 +633,19 @@ export class Creature {
       return;
     }
     this.model.rotation.z *= 0.9;
+
+    if (this.stage === "cellular") {
+      const time = this.world.time;
+      this.model.position.y = Math.sin(time * 1.3 + this.index) * 0.035;
+      this.cellGroup.rotation.y = time * 0.12 + this.index * 0.4;
+      this.cellNucleus.scale.setScalar(1 + Math.sin(time * 1.7 + this.index) * 0.025);
+      this.cellOrganelles.forEach((organelle, index) => {
+        organelle.rotation.y += dt * (index % 2 ? -0.12 : 0.16);
+      });
+      this.position.y = terrainHeight(this.position.x, this.position.z);
+      this.group.position.y = this.position.y;
+      return;
+    }
 
     const speedGene = 0.6 + this.genome.speed * 1.45;
     this.tempTarget.set(this.target.x - this.position.x, 0, this.target.z - this.position.z);
@@ -660,7 +760,7 @@ export class CreatureSystem {
     this.pointer = new THREE.Vector2();
   }
 
-  spawnPopulation(population, positions) {
+  spawnPopulation(population, positions, stage = "organism") {
     for (const creature of this.creatures) {
       creature.dispose();
     }
@@ -673,6 +773,7 @@ export class CreatureSystem {
         rng: mulberry32(3001 + index * 137 + organism.id * 13),
         index,
         position: positions[index],
+        stage,
       });
       organism.creature = creature;
       this.creatures.push(creature);
@@ -704,6 +805,7 @@ export class CreatureSystem {
       rng: mulberry32(7103 + index * 193 + organism.id * 7),
       index,
       position,
+      stage: old.stage,
     });
     organism.creature = creature;
     this.creatures[index] = creature;

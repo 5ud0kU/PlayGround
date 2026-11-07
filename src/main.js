@@ -16,6 +16,7 @@ import {
   PREDATION,
   TRAIT_ROWS,
   GENE_META,
+  GENE_KEYS,
   breedPopulation,
   conditionOf,
   describeChange,
@@ -38,6 +39,7 @@ const clamp = (v, min, max) => Math.max(min, Math.min(max, v));
 
 const state = {
   generation: 1,
+  stage: "cellular",
   env: { climate: 1, food: 1, predators: 1 },
   population: [],
   history: [],
@@ -104,6 +106,9 @@ const els = {
   specimenName: $("#specimen-name"),
   specimenLatin: $("#specimen-latin"),
   specimenGlyph: $("#specimen-glyph"),
+  stageNote: $("#stage-note"),
+  dossierHeading: $("#dossier-heading"),
+  traitHeading: $("#trait-heading"),
   panel: $("#specimen-panel"),
   diet: $("#tag-diet"),
   plan: $("#tag-plan"),
@@ -143,6 +148,12 @@ const els = {
   toastMark: $("#toast-mark"),
   hint: $("#hint"),
   modal: $("#help-modal"),
+  dnaModal: $("#dna-modal"),
+  dnaList: $("#dna-list"),
+  btnDnaBank: $("#btn-dna-bank"),
+  btnDnaClose: $("#btn-dna-close"),
+  btnDnaSave: $("#btn-dna-save"),
+  dnaCount: $("#dna-count"),
   scrim: $("#sheet-scrim"),
   specimenPanel: $("#specimen-panel"),
   ecologyPanel: $("#ecology-panel"),
@@ -186,6 +197,110 @@ function meanFitness() {
 function currentOrganism() {
   const creature = creatures.selected;
   return creature ? state.population[creatures.selectedIndex] : null;
+}
+
+const DNA_BANK_KEY = "helix-dna-bank-v1";
+const DNA_BANK_LIMIT = 50;
+
+function readDnaBank() {
+  try {
+    const parsed = JSON.parse(localStorage.getItem(DNA_BANK_KEY) || "[]");
+    if (!Array.isArray(parsed)) return [];
+    return parsed.filter((entry) => entry && typeof entry.id === "string" &&
+      typeof entry.name === "string" && entry.genome &&
+      GENE_KEYS.every((key) => Number.isFinite(entry.genome[key]) && entry.genome[key] >= 0 && entry.genome[key] <= 1));
+  } catch {
+    return [];
+  }
+}
+
+function writeDnaBank(entries) {
+  try {
+    localStorage.setItem(DNA_BANK_KEY, JSON.stringify(entries.slice(0, DNA_BANK_LIMIT)));
+    return true;
+  } catch {
+    showToast("Archive unavailable", "Browser storage is full or disabled", "!", 3200);
+    return false;
+  }
+}
+
+function renderDnaBank() {
+  const entries = readDnaBank();
+  els.dnaCount.textContent = `${entries.length} archived genome${entries.length === 1 ? "" : "s"}`;
+  els.dnaList.replaceChildren();
+  if (!entries.length) {
+    const empty = document.createElement("p");
+    empty.className = "dna-empty";
+    empty.textContent = "No genomes archived yet. Save the selected specimen to begin a lineage library.";
+    els.dnaList.append(empty);
+    return;
+  }
+
+  for (const entry of entries) {
+    const card = document.createElement("article");
+    card.className = "dna-entry";
+    const details = document.createElement("div");
+    details.className = "dna-entry-copy";
+    const name = document.createElement("strong");
+    name.textContent = entry.name;
+    const meta = document.createElement("span");
+    const date = new Date(entry.savedAt);
+    meta.textContent = `${entry.latin || "Archived genome"} · G${pad(entry.generation || 1)} · ${Number.isNaN(date.getTime()) ? "saved previously" : date.toLocaleDateString()}`;
+    details.append(name, meta);
+
+    const actions = document.createElement("div");
+    actions.className = "dna-entry-actions";
+    const restore = document.createElement("button");
+    restore.className = "button button-quiet";
+    restore.type = "button";
+    restore.dataset.restoreGenome = entry.id;
+    restore.textContent = "Restore";
+    const remove = document.createElement("button");
+    remove.className = "dna-remove";
+    remove.type = "button";
+    remove.dataset.removeGenome = entry.id;
+    remove.setAttribute("aria-label", `Remove ${entry.name} from DNA bank`);
+    remove.textContent = "×";
+    actions.append(restore, remove);
+    card.append(details, actions);
+    els.dnaList.append(card);
+  }
+}
+
+function saveSelectedGenome() {
+  const org = currentOrganism();
+  if (!org) return;
+  const name = nameCreature(org.genome);
+  const entries = readDnaBank();
+  entries.unshift({
+    id: `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`,
+    name: name.common,
+    latin: name.latin,
+    generation: state.generation,
+    stage: state.stage,
+    savedAt: new Date().toISOString(),
+    genome: Object.fromEntries(GENE_KEYS.map((key) => [key, org.genome[key]])),
+  });
+  if (writeDnaBank(entries)) {
+    renderDnaBank();
+    showToast("Genome archived", `${name.common} · generation ${pad(state.generation)}`, "◈", 2800);
+  }
+}
+
+function restoreGenome(id) {
+  const entry = readDnaBank().find((item) => item.id === id);
+  const org = currentOrganism();
+  if (!entry || !org) return;
+  org.genome = Object.fromEntries(GENE_KEYS.map((key) => [key, entry.genome[key]]));
+  org.evaluation = evaluate(org.genome, state.env, org.condition);
+  org.origin = "DNA bank";
+  org.changes = [];
+  org.parents = [];
+  creatures.replace(creatures.selectedIndex, org);
+  updateAll();
+  addLog(`Archived genome <b>${entry.name}</b> restored to specimen K-${pad(creatures.selectedIndex + 1)}.`, true);
+  showToast("Genome restored", `${entry.name} now occupies the selected specimen`, "◈", 3000);
+  audio.select();
 }
 
 function meanGenome() {
@@ -280,11 +395,19 @@ function updateSelectionUI() {
   hslColor.getHSL(hsl);
   els.specimenLatin.style.color = `hsl(${Math.round(hsl.h * 360)}, 28%, 58%)`;
 
-  els.specimenId.textContent = `SPECIMEN K-${pad(creatures.selectedIndex + 1)}`;
+  const cellular = state.stage === "cellular";
+  els.specimenId.textContent = `${cellular ? "CELL" : "SPECIMEN"} K-${pad(creatures.selectedIndex + 1)}`;
   els.specimenName.textContent = name.common;
-  els.specimenLatin.textContent = name.latin;
+  els.specimenLatin.textContent = cellular ? `cellular lineage · ${name.latin}` : name.latin;
+  els.dossierHeading.textContent = cellular ? "Cell dossier" : "Specimen dossier";
+  els.traitHeading.textContent = cellular ? "Cellular gene expression" : "Trait expression";
+  els.stageNote.textContent = cellular
+    ? "Cellular stage · membrane-bound cell with nucleus, nucleolus, mitochondria & ribosomes"
+    : "Organism stage · multicellular form with differentiated body systems";
+  els.diet.textContent = cellular ? "Eukaryote" : org.genome.armor > 0.66 ? "Omnivore" : org.genome.neck > 0.62 ? "Browser" : "Grazer";
+  els.plan.textContent = cellular ? "Single cell" : org.genome.legs > 0.66 ? "Cursorial" : "Quadruped";
   els.creatureTagName.textContent = name.common;
-  els.creatureTagMeta.textContent = `K-${pad(creatures.selectedIndex + 1)} · fitness ${Math.round(org.evaluation.fitness)}`;
+  els.creatureTagMeta.textContent = `${cellular ? "cell" : "specimen"} K-${pad(creatures.selectedIndex + 1)} · fitness ${Math.round(org.evaluation.fitness)}`;
 
   const fitness = org.evaluation.fitness;
   const ringColor = fitnessColor(fitness);
@@ -301,9 +424,6 @@ function updateSelectionUI() {
   const status = fitness >= 72 ? "Thriving" : fitness >= 56 ? "Stable" : "Stressed";
   els.status.textContent = status;
   els.status.style.color = fitness >= 56 ? "var(--mint)" : "var(--coral)";
-  els.diet.textContent = org.genome.armor > 0.66 ? "Omnivore" : org.genome.neck > 0.62 ? "Browser" : "Grazer";
-  els.plan.textContent = org.genome.legs > 0.66 ? "Cursorial" : "Quadruped";
-
   const weightValues = org.evaluation.weights;
   const weightTotal = Object.values(weightValues).reduce((sum, value) => sum + value, 0);
   for (const key of ["thermal", "foraging", "defense", "efficiency"]) {
@@ -482,11 +602,13 @@ function advanceGeneration({ automatic = false } = {}) {
   }));
 
   state.population = nextOrganisms;
+  const previousStage = state.stage;
   state.generation += 1;
+  state.stage = state.generation >= 4 ? "organism" : "cellular";
   state.mutagen = Math.min(5, state.mutagen + 2);
   state.autoTimer = 0;
   creatures.selectedIndex = 0;
-  creatures.spawnPopulation(state.population, SPAWN_POSITIONS);
+  creatures.spawnPopulation(state.population, SPAWN_POSITIONS, state.stage);
   creatures.select(0, true);
 
   recordHistory();
@@ -499,7 +621,7 @@ function advanceGeneration({ automatic = false } = {}) {
   els.btnAuto.classList.toggle("paused", !state.auto);
 
   addLog(
-    `Generation ${pad(state.generation)} hatched. Mean fitness <b>${mean.toFixed(1)}</b>; ${pressure} led selection.`,
+    `Generation ${pad(state.generation)} ${state.stage === "organism" && previousStage === "cellular" ? "developed into multicellular organisms" : "hatched"}. Mean fitness <b>${mean.toFixed(1)}</b>; ${pressure} led selection.`,
     true,
   );
   if (strongest) {
@@ -516,10 +638,12 @@ function advanceGeneration({ automatic = false } = {}) {
 
   const gain = mean - before;
   showToast(
-    `Generation ${pad(state.generation)} hatched`,
-    `${gain >= 0 ? "+" : "−"}${Math.abs(gain).toFixed(1)} fitness · ${state.population.filter((o) => o.changes.length).length} new alleles`,
+    previousStage !== state.stage ? "Organism stage reached" : `Generation ${pad(state.generation)} hatched`,
+    previousStage !== state.stage
+      ? `Cell lineages now develop into multicellular organisms · ${gain >= 0 ? "+" : "−"}${Math.abs(gain).toFixed(1)} fitness`
+      : `${gain >= 0 ? "+" : "−"}${Math.abs(gain).toFixed(1)} fitness · ${state.population.filter((o) => o.changes.length).length} new alleles`,
     strongest ? "◈" : "✦",
-    3000,
+    3600,
   );
   if (automatic) addLog("Automatic selection advanced the lineage.");
   updateAll();
@@ -611,6 +735,7 @@ function setEnvironment(key, value) {
 
 function resetStudy() {
   state.generation = 1;
+  state.stage = "cellular";
   state.env = { climate: 1, food: 1, predators: 1 };
   state.mutagen = 3;
   state.auto = false;
@@ -622,7 +747,7 @@ function resetStudy() {
   state.transitioning = false;
   state.population = makeFounders();
   creatures.selectedIndex = 0;
-  creatures.spawnPopulation(state.population, SPAWN_POSITIONS);
+  creatures.spawnPopulation(state.population, SPAWN_POSITIONS, state.stage);
   world.applyEnvironment(state.env, true);
   recordHistory();
   updateAll();
@@ -673,6 +798,30 @@ function closeHelp() {
   els.modal.setAttribute("aria-hidden", "true");
 }
 
+function openDnaBank() {
+  hideHint();
+  closeSheets();
+  renderDnaBank();
+  els.dnaModal.classList.add("open");
+  els.dnaModal.setAttribute("aria-hidden", "false");
+  audio.click();
+}
+
+function closeDnaBank() {
+  els.dnaModal.classList.remove("open");
+  els.dnaModal.setAttribute("aria-hidden", "true");
+}
+
+function removeGenome(id) {
+  const entries = readDnaBank();
+  const removed = entries.find((entry) => entry.id === id);
+  if (!removed) return;
+  if (writeDnaBank(entries.filter((entry) => entry.id !== id))) {
+    renderDnaBank();
+    showToast("Genome removed", `${removed.name} was removed from the DNA bank`, "×", 2600);
+  }
+}
+
 function toggleSound() {
   state.sound = !state.sound;
   const success = audio.setEnabled(state.sound);
@@ -695,6 +844,21 @@ function bindEvents() {
   els.btnMutate.addEventListener("click", () => directMutation());
   els.btnHelp.addEventListener("click", openHelp);
   $("#btn-help-close").addEventListener("click", closeHelp);
+  els.btnDnaBank.addEventListener("click", openDnaBank);
+  els.btnDnaClose.addEventListener("click", closeDnaBank);
+  els.btnDnaSave.addEventListener("click", saveSelectedGenome);
+  els.dnaModal.addEventListener("click", (event) => {
+    if (event.target === els.dnaModal) closeDnaBank();
+  });
+  els.dnaList.addEventListener("click", (event) => {
+    const restoreButton = event.target.closest("[data-restore-genome]");
+    if (restoreButton) {
+      restoreGenome(restoreButton.dataset.restoreGenome);
+      return;
+    }
+    const removeButton = event.target.closest("[data-remove-genome]");
+    if (removeButton) removeGenome(removeButton.dataset.removeGenome);
+  });
   els.modal.addEventListener("click", (event) => {
     if (event.target === els.modal) closeHelp();
   });
@@ -800,6 +964,7 @@ function bindEvents() {
       resetStudy();
     } else if (event.key === "Escape") {
       closeHelp();
+      closeDnaBank();
       closeSheets();
     }
   });
@@ -859,7 +1024,7 @@ function initialize() {
   els.autoLabel.textContent = "Start auto-run";
   state.population = makeFounders();
   creatures.selectedIndex = 0;
-  creatures.spawnPopulation(state.population, SPAWN_POSITIONS);
+  creatures.spawnPopulation(state.population, SPAWN_POSITIONS, state.stage);
   creatures.select(0, true);
   state.selectedIndex = 0;
   recordHistory();
