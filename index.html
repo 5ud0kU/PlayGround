@@ -1,0 +1,93 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#f2f0eb" />
+    <meta name="description" content="A quiet, interactive 3D human study. Drag to look around." />
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%23f2f0eb'/%3E%3Cpath d='M9 10v12m7-16v20m7-16v12' stroke='%23dc7857' stroke-width='3' stroke-linecap='round'/%3E%3C/svg%3E" />
+    <title>Still — Human Study 01</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=DM+Sans:wght@400;500;600;700&family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="/src/style.css" />
+    <script type="importmap">
+      { "imports": { "three": "/node_modules/three/build/three.module.js", "three/addons/": "/node_modules/three/examples/jsm/" } }
+    </script>
+  </head>
+  <body>
+    <main class="app-shell">
+      <header class="topbar">
+        <a class="brand" href="#" aria-label="Still home"><span class="brand-mark"><i></i><i></i><i></i></span><span>still<span class="brand-period">.</span></span></a>
+        <div class="top-divider"></div>
+        <div class="breadcrumb"><span>COLLECTION</span><b>/</b><span>HUMAN STUDIES</span></div>
+        <div class="top-spacer"></div>
+        <div class="top-status"><span class="live-dot"></span><span>INTERACTIVE MODEL</span></div>
+        <button id="about-button" class="icon-button about-button" aria-label="About this study" title="About this study">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"></circle><path d="M12 11v5m0-8h.01"></path></svg>
+        </button>
+      </header>
+
+      <section class="workspace">
+        <aside class="study-panel">
+          <div class="panel-kicker"><span>STUDY 001</span><span class="kicker-line"></span><span>2025</span></div>
+          <div class="title-wrap">
+            <div class="eyebrow"><span class="eyebrow-dot"></span>PORTRAIT / MOTION</div>
+            <h1>A human,<br /><em>at rest.</em></h1>
+            <p class="intro">A small study in presence. Take a closer look, find your angle, and stay a while.</p>
+          </div>
+
+          <div class="model-card">
+            <div class="model-avatar"><div class="avatar-orbit"></div><div class="avatar-initial">M</div><span class="avatar-online"></span></div>
+            <div class="model-card-copy"><span class="card-label">SUBJECT</span><strong>Michelle</strong><span class="card-sub">Human · Rigged</span></div>
+            <span class="card-index">01</span>
+          </div>
+
+          <div class="panel-rule"></div>
+          <div class="section-heading"><span>THE MOMENT</span><button id="animation-toggle" class="play-toggle" aria-label="Pause animation" title="Pause / play animation"><svg class="pause-symbol" viewBox="0 0 24 24"><path d="M9 6v12m6-12v12"></path></svg><svg class="play-symbol" viewBox="0 0 24 24"><path d="m9 6 9 6-9 6z"></path></svg></button><span class="section-meta">LOOP 01</span></div>
+          <div class="moment-row"><span class="moment-icon"><svg viewBox="0 0 24 24"><path d="M12 3v3m0 12v3M4.93 4.93l2.12 2.12m9.9 9.9 2.12 2.12M3 12h3m12 0h3M4.93 19.07l2.12-2.12m9.9-9.9 2.12-2.12"></path><circle cx="12" cy="12" r="4"></circle></svg></span><span class="moment-copy"><strong>Quiet breathing</strong><small>Soft, unhurried · 2.5 seconds</small></span><span class="loop-badge">∞</span></div>
+          <div class="timeline-wrap">
+            <div class="timeline-head"><span>PLAYBACK</span><span id="timecode">00:00 <b>/</b> 00:02.5</span></div>
+            <div class="timeline" id="timeline" role="slider" tabindex="0" aria-label="Animation timeline" aria-valuemin="0" aria-valuemax="2.5" aria-valuenow="0">
+              <div class="timeline-track"><div class="timeline-progress" id="timeline-progress"></div><span class="timeline-tick tick-a"></span><span class="timeline-tick tick-b"></span><span class="timeline-tick tick-c"></span><span class="timeline-tick tick-d"></span></div>
+              <span class="timeline-thumb" id="timeline-thumb"></span>
+            </div>
+            <div class="timeline-labels"><span>INHALE</span><span>EXHALE</span><span>REPEAT</span></div>
+          </div>
+
+          <div class="panel-bottom">
+            <div class="credit-mark">✳</div>
+            <div><span>MADE TO BE LOOKED AT</span><small>A 3D portrait study</small></div>
+          </div>
+        </aside>
+
+        <section class="viewer" aria-label="Interactive 3D human viewer">
+          <div class="viewer-backdrop"></div>
+          <div class="viewer-topline"><div class="view-chip"><span class="live-dot"></span>LIVE VIEW</div><div class="model-readout"><span>01</span><i></i><span>MICHELLE</span></div></div>
+          <canvas id="scene" aria-label="3D human model. Drag to rotate; scroll to zoom."></canvas>
+          <div class="ground-shadow"></div>
+          <div class="view-crosshair crosshair-top"></div><div class="view-crosshair crosshair-bottom"></div>
+          <div class="drag-hint" id="drag-hint"><span class="drag-icon"><svg viewBox="0 0 32 32" aria-hidden="true"><path d="M16 4v24M4 16h24M16 4l-3 3m3-3 3 3M16 28l-3-3m3 3 3-3M4 16l3-3m-3 3 3 3m22-3-3-3m3 3-3 3"></path><circle cx="16" cy="16" r="5"></circle></svg></span><span>DRAG TO LOOK AROUND</span></div>
+          <div class="viewer-controls">
+            <button id="zoom-out" class="viewer-button zoom-button" aria-label="Zoom out" title="Zoom out"><svg viewBox="0 0 24 24"><circle cx="10.8" cy="10.8" r="6.3"></circle><path d="m15.5 15.5 4 4M8 10.8h5.6"></path></svg></button>
+            <span class="control-divider"></span>
+            <button id="zoom-in" class="viewer-button zoom-button" aria-label="Zoom in" title="Zoom in"><svg viewBox="0 0 24 24"><circle cx="10.8" cy="10.8" r="6.3"></circle><path d="m15.5 15.5 4 4M8 10.8h5.6m-2.8-2.8v5.6"></path></svg></button>
+            <span class="control-divider"></span>
+            <button id="reset-view" class="viewer-button" aria-label="Reset view" title="Reset view"><svg viewBox="0 0 24 24"><path d="M20 11a8 8 0 1 0 1 4M20 4v7h-7"></path></svg></button>
+          </div>
+          <div class="viewer-caption"><span>FIG. 01</span><span>REST IS A KIND OF MOTION.</span></div>
+          <div class="viewer-side-label">TURN THE MOMENT <span>↘</span></div>
+          <div class="loading-state" id="loading"><span class="loading-ring"></span><span>GATHERING A MOMENT</span></div>
+        </section>
+      </section>
+
+      <footer class="bottom-bar">
+        <div class="bottom-left"><span class="coordinates">40° 43′ 55.3″ N</span><span class="bottom-divider"></span><span class="coordinates">73° 59′ 11.8″ W</span></div>
+        <div class="bottom-center"><span class="sound-dot"></span>TAKE YOUR TIME</div>
+        <div class="bottom-right"><span>SCROLL OR DRAG</span><span class="mouse-wheel-icon"><i></i></span></div>
+      </footer>
+      <div class="about-overlay" id="about-overlay" aria-hidden="true"><div class="about-card"><button id="close-about" class="icon-button close-about" aria-label="Close"><svg viewBox="0 0 24 24"><path d="m6 6 12 12M18 6 6 18"></path></svg></button><span class="eyebrow"><span class="eyebrow-dot"></span>ABOUT THE STUDY</span><h2>Stillness<br /><em>isn't static.</em></h2><p>A looping human portrait made to be explored. Drag anywhere over the figure to orbit, scroll to get closer, and let the breathing cycle play.</p><div class="about-credit"><span>CHARACTER</span><strong>Michelle · Mixamo / Three.js sample</strong><span>MOTION</span><strong>Idle loop · Mixamo X Bot motion, retargeted to Michelle</strong><span>CONTROLS</span><strong>Drag to orbit · Scroll to zoom · Space to pause</strong></div></div></div>
+    </main>
+    <script type="module" src="/src/main.js"></script>
+  </body>
+</html>
