@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#101619" />
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%23101619'/%3E%3Ctext x='32' y='45' text-anchor='middle' font-family='sans-serif' font-size='42' fill='%23d8f279'%3EC%3C/text%3E%3C/svg%3E" />
+  <title>CHEMISTRY / Field Lab</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=DM+Sans:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css" />
+  <script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.169.0/build/three.module.js"}}</script>
+</head>
+<body>
+  <div class="app-shell">
+    <header class="topbar">
+      <a class="brand" href="#" aria-label="Field Lab home"><span class="brand-mark">C<span>+</span></span><span class="brand-name">FIELD<span>LAB</span></span></a>
+      <div class="top-context"><span class="live-dot"></span><span>VIRTUAL CHEMISTRY LAB</span><i></i><span>SESSION 01</span></div>
+      <div class="top-actions"><div class="safety-pill"><span>✦</span> SAFETY FIRST</div><button class="icon-button" id="soundToggle" aria-label="Toggle sound" title="Toggle sound">♫</button><button class="avatar">AL</button></div>
+    </header>
+    <main class="workspace">
+      <section class="lab-column">
+        <div class="scene-head"><div><div class="eyebrow">YOUR WORKSPACE <span class="tiny-live">● LIVE</span></div><h1>Reaction <em>station</em></h1></div><div class="scene-tools"><span class="scene-hint"><span class="mouse-icon">↔</span> DRAG TO ORBIT</span><button class="reset-view" id="resetView" title="Reset camera">⟳ <span>RESET VIEW</span></button></div></div>
+        <div class="scene-frame">
+          <div id="labScene" aria-label="Interactive 3D chemistry laboratory bench"></div>
+          <div class="scene-vignette"></div>
+          <div class="scene-label scene-label-left"><span class="label-icon">◉</span><span>HOOD 01</span><b>ACTIVE</b></div>
+          <div class="scene-label scene-label-right"><span class="temp-icon">♨</span><span>TEMP</span><b id="tempReadout">22.0°C</b></div>
+          <div class="scene-caption"><span class="caption-line"></span><span>BENCH A — TITRATION STATION</span></div>
+          <div id="sceneToast" class="scene-toast" aria-live="polite"></div>
+          <div class="reaction-flash" id="reactionFlash"></div>
+        </div>
+        <div class="bench-footer"><div class="footer-state"><span class="state-orb"></span><span id="benchStatus">STATION READY</span></div><span class="footer-tip"><b>TIP</b> Select a reagent below or click a bottle on the bench to dispense.</span><span class="bench-id">FL–01 <span>•</span> 24° 48′ N</span></div>
+        <section class="reagent-section">
+          <div class="section-title-row"><div><div class="eyebrow">AVAILABLE MATERIALS</div><h2>Reagent rack <span class="count-tag" id="reagentCount">04</span></h2></div><span class="rack-note">CLICK TO ADD TO BEAKER <span>↗</span></span></div>
+          <div id="reagentRack" class="reagent-rack"></div>
+        </section>
+      </section>
+      <aside class="mission-column">
+        <div class="mission-header"><div class="eyebrow">FIELD NOTES <span class="note-number">NO. 014</span></div><button class="more-button" id="missionMenu" aria-label="Choose experiment">•••</button></div>
+        <div class="mission-title-row"><div><h2 id="missionTitle">A matter of<br><em>neutrality</em></h2><p id="missionSubtitle">Can you bring this solution to a neutral pH?</p></div><div class="difficulty"><span>LEVEL</span><b id="missionLevel">01</b></div></div>
+        <div class="mission-select" id="missionSelect">
+          <button class="mission-choice active" data-mission="neutral"><span class="choice-index">01</span><span><b>Acid + base</b><small>Neutralization · 4 min</small></span><span class="choice-check">✓</span></button>
+          <button class="mission-choice" data-mission="displace"><span class="choice-index">02</span><span><b>Metal swap</b><small>Displacement · 3 min</small></span><span class="choice-check">✓</span></button>
+          <button class="mission-choice" data-mission="gas"><span class="choice-index">03</span><span><b>Invisible gas</b><small>Gas evolution · 3 min</small></span><span class="choice-check">✓</span></button>
+        </div>
+        <div class="mission-progress"><div class="progress-copy"><span>EXPERIMENT PROGRESS</span><b id="progressText">0 / 3</b></div><div class="progress-track"><i id="progressBar"></i></div></div>
+        <div class="objective-card"><div class="objective-top"><span class="objective-icon">◎</span><span>OBJECTIVE</span><span class="objective-status" id="objectiveStatus">IN PROGRESS</span></div><p id="objectiveText">Neutralize <b>25 mL</b> of 0.10 M hydrochloric acid using an equal amount of sodium hydroxide.</p><div class="objective-equation" id="equation">HCl <span>+</span> NaOH <span>→</span> NaCl + H₂O</div></div>
+        <div class="procedure"><div class="section-title-row procedure-heading"><div><div class="eyebrow">PROTOCOL</div><h3>Run the experiment</h3></div><span class="step-count" id="stepCount">STEP 01 / 03</span></div><div class="steps" id="steps"></div></div>
+        <div class="data-panel"><div class="data-header"><span>LIVE READINGS</span><span class="data-live"><i></i> STREAMING</span></div><div class="readings"><div class="reading"><span>pH</span><b id="phReadout">—<small> pH</small></b><div class="ph-meter"><i id="phMeter"></i></div></div><div class="reading"><span>VOLUME</span><b id="volumeReadout">0<small> mL</small></b><div class="reading-line"><i id="volumeMeter"></i></div></div><div class="reading"><span>SOLUTION</span><b class="solution-reading" id="solutionReadout">CLEAR</b><div class="color-dot" id="colorDot"></div></div></div></div>
+        <div class="notebook-note"><span class="note-spark">✳</span><p id="labNote">A good experiment begins with a clean beaker. Your observations are saved as you work.</p></div>
+        <button class="reset-button" id="resetExperiment"><span>⟲</span> RESET EXPERIMENT</button>
+      </aside>
+    </main>
+    <footer class="app-footer"><span>FIELDLAB <b>SIMULATOR</b> <span class="footer-version">v1.4</span></span><span>LEARN BY DOING <i>✳</i></span><span>BASED ON REAL CHEMISTRY <b>•</b> ALWAYS FOLLOW LAB SAFETY</span></footer>
+  </div>
+  <div class="completion-modal" id="completionModal" aria-hidden="true"><div class="modal-card"><button class="modal-close" id="closeModal">×</button><div class="modal-star">✳</div><div class="eyebrow">EXPERIMENT COMPLETE</div><h2 id="completionTitle">A balanced result.</h2><p id="completionText">You brought the solution to neutral.</p><div class="result-stamp">FIELD NOTES <b>VERIFIED</b></div><button class="modal-button" id="continueButton">BACK TO THE LAB <span>↗</span></button></div></div>
+  <script type="module" src="main.js"></script>
+</body>
+</html>
