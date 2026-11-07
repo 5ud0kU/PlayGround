@@ -388,7 +388,7 @@ function renderPopDots() {
 
 function updateDNAAnalyser(genome) {
   const analysis = analyzeGenome(genome);
-  els.dnaPairCount.textContent = `${analysis.basePairs} bp`;
+  els.dnaPairCount.textContent = `${analysis.nucleotideCount} nt`;
   els.dnaGcContent.textContent = `${analysis.gcContent.toFixed(1)}%`;
   els.dnaSequence.innerHTML = analysis.genes.map((gene) => `
     <div class="dna-gene" title="${gene.label}: ${gene.value.toFixed(3)}">

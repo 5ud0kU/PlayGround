@@ -17,25 +17,60 @@ export function encodeGenome(genome) {
 
 export function expressSystems(genome) {
   const g = Object.fromEntries(GENE_KEYS.map((key) => [key, clamp01(genome?.[key])]));
-  const combine = (base, terms) => Math.max(0, Math.min(1, base + terms.reduce((sum, [key, weight]) => sum + g[key] * weight, 0)));
+  const combine = (base, terms, interaction = 0) => Math.max(0, Math.min(1,
+    base + terms.reduce((sum, [key, weight]) => sum + g[key] * weight, 0) + interaction,
+  ));
   return {
-    muscle: combine(0.08, [["speed", 0.58], ["bodySize", 0.34]]),
-    bones: combine(0.12, [["bodySize", 0.34], ["legs", 0.24], ["armor", 0.30]]),
-    neurons: combine(0.12, [["speed", 0.34], ["neck", 0.26], ["crest", 0.28]]),
-    fat: combine(0.06, [["fat", 0.78], ["bodySize", 0.16]]),
-    nerves: combine(0.08, [["speed", 0.34], ["neck", 0.24], ["pattern", 0.22], ["crest", 0.20]]),
-    ears: combine(0.08, [["neck", 0.36], ["crest", 0.34], ["pattern", 0.22]]),
+    muscle: combine(0.08, [["speed", 0.50], ["bodySize", 0.30]], g.speed * g.bodySize * 0.12),
+    bones: combine(0.12, [["bodySize", 0.30], ["legs", 0.20], ["armor", 0.26]], g.bodySize * g.armor * 0.12),
+    neurons: combine(0.12, [["speed", 0.30], ["neck", 0.24], ["crest", 0.22]], g.speed * g.neck * 0.08),
+    fat: combine(0.06, [["fat", 0.72], ["bodySize", 0.14]], g.fat * g.bodySize * 0.08),
+    nerves: combine(0.08, [["speed", 0.30], ["neck", 0.22], ["pattern", 0.18], ["crest", 0.16]]),
+    ears: combine(0.08, [["neck", 0.32], ["crest", 0.30], ["pattern", 0.18]]),
+    armor: combine(0.04, [["armor", 0.78], ["bodySize", 0.08]], g.armor * g.bodySize * 0.1),
+  };
+}
+
+// Alleles are regulatory potentials, not literal measurements. Shared pathways,
+// allometric scaling, and interactions turn them into a coherent body plan.
+export function expressMorphology(genome) {
+  const g = Object.fromEntries(GENE_KEYS.map((key) => [key, clamp01(genome?.[key])]));
+  const systems = expressSystems(g);
+  const size = g.bodySize;
+  const sizeScale = 0.82 + size * 0.55;
+  const bodyLen = (0.62 + size * 0.62) * (0.92 + size * 0.16);
+  const bodyW = (0.19 + size * 0.12 + systems.fat * 0.15) * (0.94 + size * 0.12);
+  const bodyH = (0.18 + size * 0.12 + systems.fat * 0.13) * (0.94 + size * 0.12);
+  const legLen = (0.53 + g.legs * 0.8) * (0.88 + size * 0.24);
+  const neckLen = (0.12 + g.neck) * (0.9 + size * 0.2);
+  const tailLen = (0.2 + g.tail * 1.06) * (0.88 + size * 0.24);
+  const limbThickness = (0.045 + size * 0.035 + systems.muscle * 0.035)
+    * (0.9 + systems.bones * 0.12 + size * 0.08);
+  const headScale = 0.14 + size * 0.12 + g.crest * 0.04;
+
+  return {
+    sizeScale,
+    bodyLen,
+    bodyW,
+    bodyH,
+    legLen,
+    neckLen,
+    tailLen,
+    limbThickness,
+    headScale,
+    systems,
   };
 }
 
 export function analyzeGenome(genome) {
   const encoded = encodeGenome(genome);
   const gcCount = [...encoded.sequence].filter((base) => base === "G" || base === "C").length;
-  const systems = expressSystems(genome);
+  const morphology = expressMorphology(genome);
   return {
     ...encoded,
-    basePairs: encoded.sequence.length,
+    nucleotideCount: encoded.sequence.length,
     gcContent: encoded.sequence.length ? (gcCount / encoded.sequence.length) * 100 : 0,
-    systems,
+    systems: morphology.systems,
+    morphology,
   };
 }

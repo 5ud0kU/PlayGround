@@ -12,16 +12,16 @@ export const GENE_KEYS = [
 ];
 
 export const GENE_META = {
-  bodySize: { label: "Body mass", code: "BMP-4", unit: "kg" },
-  neck: { label: "Neck reach", code: "HOX-7", unit: "m" },
-  legs: { label: "Limb length", code: "SHH-2", unit: "m" },
-  tail: { label: "Caudal length", code: "WNT-3", unit: "m" },
-  armor: { label: "Dermal armor", code: "EDAR", unit: "%" },
-  speed: { label: "Sprint capacity", code: "MYH-1", unit: "m/s" },
-  fat: { label: "Adipose layer", code: "FTO-2", unit: "cm" },
-  crest: { label: "Display crest", code: "DLX-5", unit: "%" },
-  hue: { label: "Pigment hue", code: "TYR-1", unit: "°" },
-  pattern: { label: "Pattern density", code: "KIT-3", unit: "%" },
+  bodySize: { label: "Body mass", code: "HX-01", unit: "kg" },
+  neck: { label: "Neck reach", code: "HX-02", unit: "m" },
+  legs: { label: "Limb length", code: "HX-03", unit: "m" },
+  tail: { label: "Caudal length", code: "HX-04", unit: "m" },
+  armor: { label: "Dermal armor", code: "HX-05", unit: "%" },
+  speed: { label: "Sprint capacity", code: "HX-06", unit: "m/s" },
+  fat: { label: "Adipose layer", code: "HX-07", unit: "cm" },
+  crest: { label: "Display crest", code: "HX-08", unit: "%" },
+  hue: { label: "Pigment hue", code: "HX-09", unit: "°" },
+  pattern: { label: "Pattern density", code: "HX-10", unit: "%" },
 };
 
 export const TRAIT_ROWS = ["bodySize", "neck", "legs", "armor", "speed", "fat", "tail"];

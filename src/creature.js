@@ -1,6 +1,6 @@
 import * as THREE from "three";
 import { mulberry32, nameCreature, traitValueForDisplay } from "./genetics.js";
-import { expressSystems } from "./dna.js";
+import { expressMorphology } from "./dna.js";
 import { terrainHeight, POND } from "./world.js";
 
 const clamp01 = (v) => Math.max(0, Math.min(1, v));
@@ -150,9 +150,9 @@ export class Creature {
   build() {
     const g = this.genome;
     const rng = this.rng;
-    this.systems = expressSystems(g);
-    const sizeScale = 0.82 + g.bodySize * 0.55;
-    this.sizeScale = sizeScale;
+    this.morphology = expressMorphology(g);
+    this.systems = this.morphology.systems;
+    this.sizeScale = this.morphology.sizeScale;
     this.model.scale.setScalar(0.01);
     this.spawnTime = this.world.time;
 
@@ -230,20 +230,11 @@ export class Creature {
       return;
     }
 
-    // Alleles shape the body plan directly; systemic expression modifies the tissues.
-    const bodyLen = 0.62 + g.bodySize * 0.62;
-    const bodyW = 0.19 + g.bodySize * 0.12 + this.systems.fat * 0.15;
-    const bodyH = 0.18 + g.bodySize * 0.12 + this.systems.fat * 0.13;
-    const legLen = 0.53 + g.legs * 0.8;
-    const neckLen = 0.12 + g.neck * 1.0;
-    const tailLen = 0.2 + g.tail * 1.06;
-    this.morphology = {
-      torsoLength: bodyLen,
-      torsoWidth: bodyW,
-      torsoHeight: bodyH,
-      limbThickness: 0.045 + g.bodySize * 0.035 + this.systems.muscle * 0.035,
-      headScale: 0.14 + g.bodySize * 0.12 + g.crest * 0.04,
-    };
+    // Development couples allele effects through allometry and shared tissue pathways.
+    const { bodyLen, bodyW, bodyH, legLen, neckLen, tailLen } = this.morphology;
+    this.morphology.torsoLength = bodyLen;
+    this.morphology.torsoWidth = bodyW;
+    this.morphology.torsoHeight = bodyH;
     const bodyY = legLen + bodyH * 0.26 + 0.03;
     this.dimensions = { bodyLen, bodyW, bodyH, legLen, neckLen, tailLen, bodyY };
     this.bodyY = bodyY;
@@ -532,23 +523,23 @@ export class Creature {
   }
 
   buildArmor({ bodyLen, bodyW, bodyH, bodyY, legLen }) {
-    const g = this.genome;
-    if (g.armor < 0.22) return;
-    const count = 3 + Math.round(g.armor * 5);
+    const armor = this.systems.armor;
+    if (armor < 0.22) return;
+    const count = 3 + Math.round(armor * 5);
     for (let i = 0; i < count; i += 1) {
       const t = (i / (count - 1 || 1)) * 1.5 - 0.75;
       const z = t * bodyLen * 0.76;
       const profile = Math.sqrt(Math.max(0.06, 1 - Math.pow(t * 0.72, 2)));
-      const height = (0.11 + g.armor * 0.26) * (0.7 + profile * 0.55);
-      const spike = new THREE.Mesh(new THREE.ConeGeometry(0.045 + g.armor * 0.026, height, 4), this.boneMat);
+      const height = (0.11 + armor * 0.26) * (0.7 + profile * 0.55);
+      const spike = new THREE.Mesh(new THREE.ConeGeometry(0.045 + armor * 0.026, height, 4), this.boneMat);
       spike.position.set(0, bodyY + bodyH * profile * 0.93, z);
-      spike.rotation.x = -0.34 - g.armor * 0.18;
+      spike.rotation.x = -0.34 - armor * 0.18;
       spike.rotation.y = Math.PI / 4;
       spike.castShadow = true;
       this.model.add(spike);
     }
 
-    if (g.armor > 0.62) {
+    if (armor > 0.62) {
       for (const side of [-1, 1]) {
         const plate = new THREE.Mesh(new THREE.ConeGeometry(0.11, 0.18, 4), this.boneMat);
         plate.position.set(side * bodyW * 0.55, bodyY + bodyH * 0.5, bodyLen * 0.55);
