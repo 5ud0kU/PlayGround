@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>VITALIS // Human Systems Lab</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div class="app-shell">
+    <header class="topbar">
+      <div class="brand"><div class="brand-mark">✣</div><div><div class="brand-title">VITALIS <span>//</span> LAB</div><div class="brand-sub">HUMAN SYSTEMS SIMULATOR <i>v.2.4.0</i></div></div></div>
+      <div class="mission"><span class="dot"></span><span>SESSION 07</span><strong>OBSERVATIONAL MODE</strong></div>
+      <div class="top-actions"><button class="icon-btn" aria-label="Help">?</button><button class="icon-btn" aria-label="Settings">⚙</button><button class="avatar">DR</button></div>
+    </header>
+    <main class="workspace">
+      <aside class="left-panel panel">
+        <div class="panel-kicker">CASE FILE / 0148</div>
+        <div class="subject-card"><div class="subject-avatar">A<span>+</span></div><div><h2>Alex Rivera</h2><p>HUMAN / ADULT · 34 YRS</p></div><span class="status-pill">STABLE</span></div>
+        <div class="section-title">ANATOMY LAYERS <button class="text-btn" id="resetLayers">RESET</button></div>
+        <div class="layer-list">
+          <label class="layer-row"><input type="checkbox" data-layer="skin"><span class="check skin"></span><span>Skin / Surface</span><em>01</em></label>
+          <label class="layer-row"><input type="checkbox" data-layer="muscle" checked><span class="check muscle"></span><span>Muscle tissue</span><em>02</em></label>
+          <label class="layer-row"><input type="checkbox" data-layer="vascular" checked><span class="check vascular"></span><span>Vascular network</span><em>03</em></label>
+          <label class="layer-row"><input type="checkbox" data-layer="organs" checked><span class="check organs"></span><span>Vital organs</span><em>04</em></label>
+          <label class="layer-row"><input type="checkbox" data-layer="cells"><span class="check cells"></span><span>Blood cells</span><em>05</em></label>
+        </div>
+        <div class="section-title">SYSTEM READOUT</div>
+        <div class="readout"><div><span class="readout-label">HEART RATE</span><strong id="heartRate">72</strong><small>BPM</small></div><div class="sparkline"><svg viewBox="0 0 100 30" preserveAspectRatio="none"><polyline points="0,17 8,17 12,7 17,25 22,14 31,16 38,17 44,8 49,25 54,16 68,16 74,11 79,22 84,16 100,16" /></svg></div></div>
+        <div class="readout-grid"><div><span>CORE TEMP</span><b id="temp">36.8°</b></div><div><span>O₂ SAT.</span><b id="oxygen">98%</b></div><div><span>BP</span><b id="bp">118/76</b></div><div><span>GLUCOSE</span><b id="glucose">91 <i>mg/dL</i></b></div></div>
+        <div class="warning"><span>▣</span><div><b>SIMULATION NOTICE</b><p>Responses are modeled for education. Not medical advice.</p></div></div>
+      </aside>
+
+      <section class="viewport panel">
+        <div class="view-head"><div><div class="panel-kicker">LIVE ANATOMICAL VIEW</div><h1>FULL BODY / <span id="viewMode">SYSTEMS</span></h1></div><div class="view-tools"><button class="tool active" data-view="systems">◉ SYSTEMS</button><button class="tool" data-view="xray">◈ X-RAY</button><button class="tool" data-view="cells">⊙ CELLULAR</button></div></div>
+        <div class="canvas-wrap"><canvas id="bodyCanvas"></canvas><div class="scanline"></div><div class="crosshair"><i></i><b></b></div><div class="body-label label-heart">HEART <small>02</small></div><div class="body-label label-lung">LUNGS <small>03</small></div><div class="body-label label-liver">LIVER <small>04</small></div><div class="canvas-meta"><span><i class="live-dot"></i> LIVE FEED</span><span>FRONT ELEVATION</span><span>ZOOM 100%</span></div></div>
+        <div class="timeline"><button id="playBtn" class="play">▶</button><div class="time-label">T+ <strong id="timeValue">00:00:00</strong></div><div class="timeline-track"><div class="timeline-fill" id="timelineFill"></div><div class="timeline-knob" id="timelineKnob"></div><div class="event-mark mark-a"></div><div class="event-mark mark-b"></div></div><button class="speed active">1×</button><button class="speed">2×</button><button class="speed">4×</button></div>
+      </section>
+
+      <aside class="right-panel panel">
+        <div class="panel-kicker">COMPOUND WORKBENCH</div><div class="workbench-title"><h2>Formulation</h2><span class="recipe-id">RX-203</span></div>
+        <div class="ingredient-slots"><div class="slot-label">ACTIVE INGREDIENTS <span id="ingredientCount">0 / 3</span></div><div class="slots" id="slots"><div class="empty-slot">+<span>ADD COMPOUND</span></div><div class="empty-slot locked">+</div><div class="empty-slot locked">+</div></div></div>
+        <div class="compound-list"><div class="list-label">AVAILABLE COMPOUNDS</div><button class="compound" data-name="Caffeine" data-color="#ffb84d" data-dose="80 mg"><span class="compound-dot amber"></span><span><b>Caffeine</b><small>STIMULANT · 80 MG</small></span><i>+</i></button><button class="compound" data-name="Saline" data-color="#79d9ff" data-dose="0.9%"><span class="compound-dot blue"></span><span><b>Isotonic saline</b><small>CARRIER · 0.9%</small></span><i>+</i></button><button class="compound" data-name="Adenosine" data-color="#ca8bff" data-dose="6 mg"><span class="compound-dot violet"></span><span><b>Adenosine</b><small>CARDIAC · 6 MG</small></span><i>+</i></button><button class="compound" data-name="Glucose" data-color="#ff7e91" data-dose="5%"><span class="compound-dot coral"></span><span><b>Dextrose</b><small>METABOLIC · 5%</small></span><i>+</i></button><button class="compound" data-name="Heparin" data-color="#57e0b0" data-dose="5000 IU"><span class="compound-dot mint"></span><span><b>Heparin</b><small>ANTICOAGULANT · 5000 IU</small></span><i>+</i></button></div>
+        <div class="formula-card"><div class="formula-top"><span>FORMULA PREVIEW</span><span id="formulaState">EMPTY</span></div><div class="formula-name" id="formulaName">No compound selected</div><div class="formula-bar"><div id="formulaBar"></div></div><p id="formulaHint">Select ingredients to begin a formulation.</p></div>
+        <button class="inject-btn" id="injectBtn" disabled><span>⚗</span> INJECT INTO SUBJECT <b>↗</b></button><button class="clear-btn" id="clearBtn">CLEAR FORMULATION</button>
+      </aside>
+    </main>
+    <footer class="footer"><span>VITALIS LAB / EDUCATIONAL SIMULATION</span><span>PHYSIOLOGY ENGINE: <b>ONLINE</b> <i>•</i> DATA SYNC: <b>CONNECTED</b></span><span>© 2024 VITALIS RESEARCH</span></footer>
+  </div>
+  <div class="toast" id="toast"></div>
+  <script src="app.js"></script>
+</body>
+</html>
