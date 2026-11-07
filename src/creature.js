@@ -1,5 +1,6 @@
 import * as THREE from "three";
 import { mulberry32, nameCreature, traitValueForDisplay } from "./genetics.js";
+import { expressSystems } from "./dna.js";
 import { terrainHeight, POND } from "./world.js";
 
 const clamp01 = (v) => Math.max(0, Math.min(1, v));
@@ -149,6 +150,7 @@ export class Creature {
   build() {
     const g = this.genome;
     const rng = this.rng;
+    this.systems = expressSystems(g);
     const sizeScale = 0.82 + g.bodySize * 0.55;
     this.sizeScale = sizeScale;
     this.model.scale.setScalar(0.01);
@@ -176,6 +178,20 @@ export class Creature {
       color: limbColor,
       roughness: 0.83,
       metalness: 0.01,
+    });
+    this.muscleMat = new THREE.MeshStandardMaterial({
+      color: new THREE.Color().setHSL(((hue + 350) % 360) / 360, 0.42, 0.34),
+      roughness: 0.72,
+      emissive: new THREE.Color().setHSL(((hue + 350) % 360) / 360, 0.36, 0.1),
+      emissiveIntensity: 0.08,
+    });
+    this.neuralMat = new THREE.MeshStandardMaterial({
+      color: 0x7affd8,
+      emissive: 0x28dcb0,
+      emissiveIntensity: 0.45,
+      roughness: 0.34,
+      transparent: true,
+      opacity: 0.68,
     });
     this.bellyMat = new THREE.MeshStandardMaterial({ color: bellyColor, roughness: 0.86 });
     this.boneMat = new THREE.MeshStandardMaterial({ color: 0xaaa48d, roughness: 0.7, metalness: 0.03 });
@@ -216,8 +232,8 @@ export class Creature {
 
     // Proportions: raw genes become an actual biological body plan.
     const bodyLen = 0.9;
-    const bodyW = 0.29 + g.fat * 0.1;
-    const bodyH = 0.32 + g.fat * 0.11;
+    const bodyW = 0.29 + this.systems.fat * 0.1;
+    const bodyH = 0.32 + this.systems.fat * 0.11;
     const legLen = 0.53 + g.legs * 0.8;
     const neckLen = 0.15 + g.neck * 0.9;
     const tailLen = 0.24 + g.tail * 1.02;
@@ -258,6 +274,7 @@ export class Creature {
     this.buildLegs({ bodyLen, bodyW, bodyH, bodyY, legLen });
     this.buildArmor({ bodyLen, bodyW, bodyH, bodyY, legLen });
     this.buildAccents({ bodyLen, bodyW, bodyH, bodyY });
+    this.buildBodySystems({ bodyLen, bodyW, bodyH, bodyY, neckLen, legLen });
   }
 
   buildNeck({ bodyLen, bodyW, bodyH, bodyY, neckLen, accentColor }) {
@@ -324,6 +341,16 @@ export class Creature {
       eye.userData.baseScaleY = headR * 0.22;
       headGroup.add(eye);
       this.eyes.push(eye);
+
+      const ear = new THREE.Mesh(this.torsoGeo, this.limbMat);
+      ear.scale.set(headR * (0.25 + this.systems.ears * 0.16), headR * (0.2 + this.systems.ears * 0.48), headR * 0.18);
+      ear.position.set(side * headR * 1.12, headR * 0.2, -headR * 0.2);
+      ear.rotation.z = side * -0.22;
+      headGroup.add(ear);
+      const earFold = new THREE.Mesh(this.torsoGeo, this.eyeMat);
+      earFold.scale.set(headR * 0.075, headR * (0.08 + this.systems.ears * 0.14), headR * 0.04);
+      earFold.position.set(side * headR * 1.22, headR * 0.2, -headR * 0.035);
+      headGroup.add(earFold);
 
       const glint = new THREE.Mesh(new THREE.SphereGeometry(1, 7, 5), this.glintMat);
       glint.scale.setScalar(headR * 0.055);
@@ -411,7 +438,7 @@ export class Creature {
     const g = this.genome;
     const upperLen = legLen * 0.55;
     const lowerLen = legLen * 0.48;
-    const legRadius = 0.058 + g.bodySize * 0.032;
+    const legRadius = (0.052 + g.bodySize * 0.026) * (0.78 + this.systems.muscle * 0.42);
     const positions = [
       { x: -bodyW * 0.82, z: bodyLen * 0.47, front: true, phase: 0 },
       { x: bodyW * 0.82, z: bodyLen * 0.47, front: true, phase: Math.PI },
@@ -433,6 +460,16 @@ export class Creature {
       thigh.position.y = -upperLen * 0.36;
       thigh.castShadow = true;
       root.add(thigh);
+
+      const muscle = new THREE.Mesh(this.torsoGeo, this.muscleMat);
+      muscle.scale.set(legRadius * (0.72 + this.systems.muscle * 0.28), upperLen * (0.16 + this.systems.muscle * 0.09), legRadius * 0.36);
+      muscle.position.set(0, -upperLen * 0.39, legRadius * 0.82);
+      root.add(muscle);
+
+      const upperBoneRadius = legRadius * (0.1 + this.systems.bones * 0.13);
+      const upperBone = new THREE.Mesh(new THREE.CylinderGeometry(upperBoneRadius * 0.82, upperBoneRadius, upperLen * 0.72, 6), this.boneMat);
+      upperBone.position.set(0, -upperLen * 0.5, legRadius * 0.76);
+      root.add(upperBone);
 
       const upper = new THREE.Mesh(
         new THREE.CylinderGeometry(legRadius * 0.82, legRadius * 0.68, upperLen, 8),
@@ -457,6 +494,10 @@ export class Creature {
       lower.position.y = -lowerLen / 2;
       lower.castShadow = true;
       knee.add(lower);
+      const lowerBoneRadius = legRadius * (0.08 + this.systems.bones * 0.11);
+      const lowerBone = new THREE.Mesh(new THREE.CylinderGeometry(lowerBoneRadius * 0.74, lowerBoneRadius, lowerLen * 0.68, 6), this.boneMat);
+      lowerBone.position.set(0, -lowerLen * 0.5, legRadius * 0.72);
+      knee.add(lowerBone);
 
       const foot = new THREE.Mesh(this.torsoGeo, this.limbMat);
       foot.scale.set(legRadius * 1.65, legRadius * 0.58, legRadius * 2.25);
@@ -522,6 +563,73 @@ export class Creature {
       spot.position.set(side * bodyW * 0.98, bodyY - bodyH * 0.05 + Math.sin(t * 3) * 0.03, t * bodyLen * 0.68);
       this.model.add(spot);
     }
+  }
+
+  buildBodySystems({ bodyLen, bodyW, bodyH, bodyY, neckLen, legLen }) {
+    const { muscle, bones, neurons, fat, nerves } = this.systems;
+    const addTube = (coordinates, radius, material, segments = 20) => {
+      const curve = new THREE.CatmullRomCurve3(coordinates.map(([x, y, z]) => new THREE.Vector3(x, y, z)));
+      const tube = new THREE.Mesh(new THREE.TubeGeometry(curve, segments, radius, 5, false), material);
+      tube.castShadow = false;
+      this.model.add(tube);
+      return curve;
+    };
+
+    // Pale vertebrae and paired leg struts make skeletal expression legible in the living body.
+    const vertebraCount = 4 + Math.round(bones * 3);
+    for (let i = 0; i < vertebraCount; i += 1) {
+      const t = i / Math.max(1, vertebraCount - 1);
+      const vertebra = new THREE.Mesh(this.torsoGeo, this.boneMat);
+      const scale = 0.018 + bones * 0.018;
+      vertebra.scale.set(scale, scale * 0.72, scale * 1.16);
+      vertebra.position.set(0, bodyY + bodyH * 0.83, (t - 0.5) * bodyLen * 1.08);
+      this.model.add(vertebra);
+    }
+
+    // Adipose lobes follow the FTO/body-mass expression rather than being decorative static spots.
+    const lobeScale = 0.018 + fat * 0.038;
+    for (const side of [-1, 1]) {
+      for (const z of [-0.42, 0, 0.42]) {
+        const lobe = new THREE.Mesh(this.torsoGeo, this.bellyMat);
+        lobe.scale.set(lobeScale, lobeScale * 0.72, lobeScale * 1.18);
+        lobe.position.set(side * bodyW * 0.76, bodyY - bodyH * 0.55, z * bodyLen);
+        this.model.add(lobe);
+      }
+    }
+
+    // A luminous central nerve cord links the head to peripheral branches and sensory nodes.
+    const spinePath = [
+      [0, bodyY + bodyH * 0.75, -bodyLen * 0.58],
+      [0, bodyY + bodyH * 0.83, -bodyLen * 0.2],
+      [0, bodyY + bodyH * 0.86, bodyLen * 0.24],
+      [0, bodyY + bodyH * 0.75, bodyLen * 0.62],
+      [0, bodyY + bodyH * 0.86 + neckLen * 0.32, bodyLen * 0.78 + neckLen * 0.28],
+      [0, bodyY + bodyH * 0.86 + neckLen * 0.72, bodyLen * 0.78 + neckLen * 0.58],
+    ];
+    const spineCurve = addTube(spinePath, 0.006 + nerves * 0.006, this.neuralMat, 30);
+    const nodeCount = 4 + Math.round(neurons * 5);
+    for (let i = 0; i < nodeCount; i += 1) {
+      const point = spineCurve.getPoint(i / Math.max(1, nodeCount - 1));
+      const node = new THREE.Mesh(this.torsoGeo, this.neuralMat);
+      node.scale.setScalar(0.018 + neurons * 0.018);
+      node.position.copy(point);
+      this.model.add(node);
+    }
+
+    const branchRadius = 0.0035 + nerves * 0.004;
+    for (const side of [-1, 1]) {
+      for (const z of [-bodyLen * 0.5, bodyLen * 0.48]) {
+        addTube([
+          [0, bodyY + bodyH * 0.8, z * 0.66],
+          [side * bodyW * 0.35, bodyY + bodyH * 0.64, z * 0.82],
+          [side * bodyW * 0.8, bodyY - bodyH * 0.1, z],
+          [side * bodyW * 0.82, Math.max(0.12, bodyY - legLen * 0.66), z],
+        ], branchRadius, this.neuralMat, 12);
+      }
+    }
+
+    // Muscle mass also subtly thickens the upper limbs; this warm inset marks the contractile tissue.
+    this.muscleMat.emissiveIntensity = 0.04 + muscle * 0.09;
   }
 
   buildCell() {

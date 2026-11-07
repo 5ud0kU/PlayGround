@@ -10,6 +10,7 @@ import * as THREE from "three";
 import { World } from "./world.js";
 import { CreatureSystem } from "./creature.js";
 import { AudioEngine } from "./audio.js";
+import { analyzeGenome } from "./dna.js";
 import {
   CLIMATE,
   FORAGE,
@@ -120,6 +121,10 @@ const els = {
   fitDefense: $("#fit-defense"),
   fitEnergy: $("#fit-energy"),
   traitList: $("#trait-list"),
+  dnaPairCount: $("#dna-pair-count"),
+  dnaGcContent: $("#dna-gc-content"),
+  dnaSequence: $("#dna-sequence"),
+  dnaSystems: $("#dna-systems"),
   mutagenPips: $("#mutagen-pips"),
   btnMutate: $("#btn-mutate"),
   btnEvolve: $("#btn-evolve"),
@@ -381,10 +386,33 @@ function renderPopDots() {
     .join("");
 }
 
+function updateDNAAnalyser(genome) {
+  const analysis = analyzeGenome(genome);
+  els.dnaPairCount.textContent = `${analysis.basePairs} bp`;
+  els.dnaGcContent.textContent = `${analysis.gcContent.toFixed(1)}%`;
+  els.dnaSequence.innerHTML = analysis.genes.map((gene) => `
+    <div class="dna-gene" title="${gene.label}: ${gene.value.toFixed(3)}">
+      <span class="dna-gene-code">${gene.code}</span>
+      <span class="dna-gene-bases">${[...gene.sequence].map((base) => `<i class="base-${base}">${base}</i>`).join("")}</span>
+    </div>`).join("");
+
+  const labels = {
+    muscle: "Muscle", bones: "Bones", neurons: "Neurons",
+    fat: "Adipose", nerves: "Nerves", ears: "Ears",
+  };
+  els.dnaSystems.innerHTML = Object.entries(analysis.systems).map(([system, value]) => `
+    <div class="dna-system" title="${labels[system]} expression ${Math.round(value * 100)}%">
+      <span>${labels[system]}</span>
+      <div class="dna-system-track"><i style="width:${Math.round(value * 100)}%"></i></div>
+      <b>${Math.round(value * 100)}</b>
+    </div>`).join("");
+}
+
 function updateSelectionUI() {
   const org = currentOrganism();
   const creature = creatures.selected;
   if (!org || !creature) return;
+  updateDNAAnalyser(org.genome);
 
   const name = nameCreature(org.genome);
   const color = creatureColorHex(creature);
