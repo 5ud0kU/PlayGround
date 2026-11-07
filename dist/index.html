@@ -1,0 +1,311 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta name="theme-color" content="#071310" />
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 48 48'%3E%3Crect width='48' height='48' rx='11' fill='%230a1a14'/%3E%3Cpath d='M14 7c0 10 20 10 20 20S14 37 14 41M34 7c0 10-20 10-20 20s20 10 20 14M17 13h14M15 21h18M15 31h18M17 39h14' stroke='%23c9ff66' stroke-width='2' fill='none' stroke-linecap='round'/%3E%3C/svg%3E" />
+    <meta name="description" content="HELIX — a living 3D laboratory where creatures evolve through real selective pressures and mutation." />
+    <title>HELIX — Evolution Lab</title>
+    <script type="module" crossorigin src="./assets/index-DLReCC3Y.js"></script>
+    <link rel="stylesheet" crossorigin href="./assets/index-Ced8L0MT.css">
+  </head>
+  <body>
+    <div id="app">
+      <div class="ambient-bg" aria-hidden="true">
+        <div class="aurora aurora-a"></div>
+        <div class="aurora aurora-b"></div>
+        <div class="grid-floor"></div>
+        <div class="grain"></div>
+      </div>
+
+      <canvas id="scene" aria-label="3D terrarium containing a population of evolving creatures"></canvas>
+      <div class="vignette" aria-hidden="true"></div>
+      <div class="screen-brackets" aria-hidden="true"><i></i><i></i><i></i><i></i></div>
+
+      <header class="topbar">
+        <div class="brand">
+          <div class="brand-mark" aria-hidden="true">
+            <svg viewBox="0 0 48 48" fill="none">
+              <path d="M14 7c0 10 20 10 20 20S14 37 14 41" stroke="currentColor" stroke-width="2.3" stroke-linecap="round"/>
+              <path d="M34 7c0 10-20 10-20 20s20 10 20 14" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" opacity=".55"/>
+              <path d="M17 13h14M15 21h18M15 31h18M17 39h14" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" opacity=".8"/>
+            </svg>
+          </div>
+          <div class="brand-copy">
+            <h1>HELIX</h1>
+            <span>Evolutionary field lab</span>
+          </div>
+          <span class="build-tag">BIO/03</span>
+        </div>
+
+        <div class="top-stats" aria-label="Simulation statistics">
+          <div class="stat">
+            <span>Generation</span>
+            <strong id="stat-generation">01</strong>
+          </div>
+          <div class="stat">
+            <span>Population</span>
+            <strong id="stat-population">06</strong>
+          </div>
+          <div class="stat">
+            <span>Mean fitness</span>
+            <strong id="stat-fitness">0.0</strong>
+          </div>
+          <div class="stat">
+            <span>Gene diversity</span>
+            <strong id="stat-diversity">0.00</strong>
+          </div>
+        </div>
+
+        <div class="top-actions">
+          <button class="icon-button" id="btn-sound" aria-label="Toggle ambient sound" title="Ambient sound">
+            <svg class="sound-on" viewBox="0 0 24 24" fill="none"><path d="M4 9.5v5h3.2L12 18V6L7.2 9.5H4Z" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/><path d="M15 9a4.2 4.2 0 0 1 0 6M17.8 6.3a8 8 0 0 1 0 11.4" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg>
+            <svg class="sound-off" viewBox="0 0 24 24" fill="none"><path d="M4 9.5v5h3.2L12 18V6L7.2 9.5H4Z" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/><path d="m16 9 5 5m0-5-5 5" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg>
+          </button>
+          <button class="icon-button" id="btn-help" aria-label="Open field guide" title="Field guide">
+            <svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="8.5" stroke="currentColor" stroke-width="1.7"/><path d="M9.7 9.3a2.4 2.4 0 0 1 4.7.7c0 1.8-2.4 2-2.4 3.7" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/><circle cx="12" cy="16.8" r=".9" fill="currentColor"/></svg>
+          </button>
+        </div>
+      </header>
+
+      <aside class="panel specimen-panel" id="specimen-panel" aria-label="Selected specimen dossier">
+        <div class="panel-heading">
+          <span>Specimen dossier</span>
+          <span class="panel-heading-tools">
+            <span class="live-badge"><i></i>Live tissue</span>
+            <button class="mini-icon sheet-close mobile-only" data-close-sheet aria-label="Close specimen dossier">
+              <svg viewBox="0 0 24 24" fill="none"><path d="m7 7 10 10M17 7 7 17" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+            </button>
+          </span>
+        </div>
+
+        <div class="specimen-heading">
+          <div class="specimen-glyph" id="specimen-glyph" aria-hidden="true">
+            <span></span><span></span><span></span>
+          </div>
+          <div class="specimen-name-wrap">
+            <span class="eyebrow" id="specimen-id">SPECIMEN K-01</span>
+            <h2 id="specimen-name">Aurelia</h2>
+            <p id="specimen-latin">Aurelia viridis</p>
+          </div>
+          <button class="mini-icon" id="btn-prev-specimen" aria-label="Previous specimen" title="Previous specimen">
+            <svg viewBox="0 0 24 24" fill="none"><path d="m14.5 6-6 6 6 6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </button>
+        </div>
+
+        <div class="specimen-tags">
+          <span id="tag-diet">Omnivore</span>
+          <span id="tag-plan">Quadruped</span>
+          <span class="tag-alive" id="tag-status">Stable</span>
+        </div>
+
+        <div class="fitness-block">
+          <div class="fitness-ring" id="fitness-ring">
+            <div><strong id="specimen-fitness">00</strong><span>fitness</span></div>
+          </div>
+          <div class="fitness-breakdown" id="fitness-breakdown">
+            <div><span>Thermal</span><b id="fit-thermal">0</b></div>
+            <div><span>Foraging</span><b id="fit-forage">0</b></div>
+            <div><span>Defense</span><b id="fit-defense">0</b></div>
+            <div><span>Efficiency</span><b id="fit-energy">0</b></div>
+          </div>
+        </div>
+
+        <div class="section-label"><span>Trait expression</span><span>Alleles</span></div>
+        <div class="trait-list" id="trait-list"></div>
+
+        <div class="mutagen-row">
+          <div>
+            <span class="eyebrow">Mutagen reserve</span>
+            <div class="pips" id="mutagen-pips" aria-label="Mutagen charges"></div>
+          </div>
+          <button class="button button-quiet" id="btn-mutate">
+            <svg viewBox="0 0 24 24" fill="none"><path d="M9 3h6M10 3v5.2L5.5 17a2.4 2.4 0 0 0 2.1 3.5h8.8a2.4 2.4 0 0 0 2.1-3.5L14 8.2V3" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/><path d="M8.2 14h7.6" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/><circle cx="10.7" cy="16.7" r="1" fill="currentColor"/></svg>
+            Mutate
+          </button>
+        </div>
+      </aside>
+
+      <aside class="panel ecology-panel" id="ecology-panel" aria-label="Selective pressure controls">
+        <div class="panel-heading">
+          <span>Selective pressures</span>
+          <span class="panel-heading-tools">
+            <span class="panel-index">ENV / 01</span>
+            <button class="mini-icon sheet-close mobile-only" data-close-sheet aria-label="Close selective pressures">
+              <svg viewBox="0 0 24 24" fill="none"><path d="m7 7 10 10M17 7 7 17" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+            </button>
+          </span>
+        </div>
+
+        <p class="panel-intro">Tune the basin. Each generation, the fittest bodies shape the next.</p>
+
+        <div class="env-block">
+          <div class="env-title"><span>Climate</span><span id="climate-readout">Temperate</span></div>
+          <div class="segmented" id="climate-control" role="group" aria-label="Climate">
+            <button data-value="0"><i class="dot-cold"></i>Frigid</button>
+            <button data-value="1" class="active"><i class="dot-mild"></i>Temperate</button>
+            <button data-value="2"><i class="dot-hot"></i>Arid</button>
+          </div>
+        </div>
+
+        <div class="env-block">
+          <div class="env-title"><span>Forage</span><span id="food-readout">Balanced</span></div>
+          <div class="segmented" id="food-control" role="group" aria-label="Forage abundance">
+            <button data-value="0"><i class="dot-cold"></i>Sparse</button>
+            <button data-value="1" class="active"><i class="dot-mild"></i>Balanced</button>
+            <button data-value="2"><i class="dot-hot"></i>Lush</button>
+          </div>
+        </div>
+
+        <div class="env-block">
+          <div class="env-title"><span>Predation</span><span id="predator-readout">Stalking</span></div>
+          <div class="segmented" id="predator-control" role="group" aria-label="Predation pressure">
+            <button data-value="0"><i class="dot-cold"></i>Absent</button>
+            <button data-value="1" class="active"><i class="dot-mild"></i>Stalking</button>
+            <button data-value="2"><i class="dot-hot"></i>Rampant</button>
+          </div>
+        </div>
+
+        <div class="outlook">
+          <div class="outlook-icon" id="outlook-icon">
+            <svg viewBox="0 0 24 24" fill="none"><path d="M12 3v10.1a3.4 3.4 0 1 0 2 0V3h-2Z" stroke="currentColor" stroke-width="1.6"/><path d="M12 10v5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+          </div>
+          <div>
+            <span class="eyebrow">Ecological outlook</span>
+            <p id="outlook-text">Stable temperatures reward generalists. Predators favor speed and armor.</p>
+          </div>
+        </div>
+
+        <div class="selection-weights">
+          <div class="section-label"><span>Selection weights</span><span>Applied</span></div>
+          <div class="weight-row"><span>Thermal</span><div class="weight-track"><i id="weight-thermal"></i></div><b id="weight-thermal-value">0%</b></div>
+          <div class="weight-row"><span>Forage</span><div class="weight-track"><i id="weight-forage"></i></div><b id="weight-forage-value">0%</b></div>
+          <div class="weight-row"><span>Defense</span><div class="weight-track"><i id="weight-defense"></i></div><b id="weight-defense-value">0%</b></div>
+          <div class="weight-row"><span>Energy</span><div class="weight-track"><i id="weight-energy"></i></div><b id="weight-energy-value">0%</b></div>
+        </div>
+
+        <button class="button button-primary" id="btn-evolve">
+          <span>Advance generation</span>
+          <svg viewBox="0 0 24 24" fill="none"><path d="M5 12h13m-5-5 5 5-5 5" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </button>
+        <p class="footnote"><kbd>E</kbd> Evolve &nbsp;·&nbsp; <kbd>M</kbd> Mutate &nbsp;·&nbsp; <kbd>Space</kbd> Auto</p>
+      </aside>
+
+      <section class="glass log-panel" id="log-panel" aria-label="Field log">
+        <div class="log-heading">
+          <span>Field log</span>
+          <span class="pulse-dot"></span>
+        </div>
+        <div id="log-list" class="log-list"></div>
+      </section>
+
+      <section class="glass chart-panel" id="chart-panel" aria-label="Fitness history">
+        <div class="chart-heading">
+          <div>
+            <span>Lineage fitness</span>
+            <strong id="chart-current">0.0</strong>
+          </div>
+          <span class="delta" id="chart-delta">GEN 01</span>
+        </div>
+        <canvas id="fitness-chart" width="540" height="128" aria-hidden="true"></canvas>
+        <div class="chart-scale"><span>GEN 01</span><span id="chart-end">NOW</span></div>
+      </section>
+
+      <div class="control-dock" id="control-dock">
+        <div class="dock-pop">
+          <span class="eyebrow">Population</span>
+          <div class="pop-dots" id="pop-dots"></div>
+        </div>
+        <div class="dock-divider"></div>
+        <button class="auto-button" id="btn-auto">
+          <span class="auto-icon">
+            <svg class="icon-play" viewBox="0 0 24 24" fill="none"><path d="m9 7 8 5-8 5V7Z" fill="currentColor"/></svg>
+            <svg class="icon-pause" viewBox="0 0 24 24" fill="none"><path d="M9 7v10M15 7v10" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/></svg>
+          </span>
+          <span><small>Evolution</small><b id="auto-label">Auto-evolve</b></span>
+        </button>
+        <div class="speed-group" id="speed-control" role="group" aria-label="Simulation speed">
+          <button data-speed="1" class="active">1×</button>
+          <button data-speed="2">2×</button>
+          <button data-speed="4">4×</button>
+        </div>
+        <div class="dock-divider"></div>
+        <div class="dock-actions">
+          <button class="dock-icon" id="btn-orbit" title="Toggle automatic orbit" aria-label="Toggle automatic orbit">
+            <svg viewBox="0 0 24 24" fill="none"><path d="M4 12a8 8 0 1 0 2.3-5.6" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/><path d="M4 4v4h4" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/><circle cx="12" cy="12" r="2.2" fill="currentColor"/></svg>
+          </button>
+          <button class="dock-icon mobile-only" id="btn-sheet-specimen" title="Specimen" aria-label="Open specimen dossier">
+            <svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="8" r="3.2" stroke="currentColor" stroke-width="1.7"/><path d="M5.5 19c.7-3.3 3.2-5 6.5-5s5.8 1.7 6.5 5" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg>
+          </button>
+          <button class="dock-icon mobile-only" id="btn-sheet-eco" title="Pressures" aria-label="Open selective pressures">
+            <svg viewBox="0 0 24 24" fill="none"><path d="M5 8h14M8 12h8M10 16h4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><circle cx="7" cy="8" r="1.7" fill="currentColor"/><circle cx="16" cy="12" r="1.7" fill="currentColor"/><circle cx="12" cy="16" r="1.7" fill="currentColor"/></svg>
+          </button>
+        </div>
+      </div>
+
+      <div class="scene-caption" id="scene-caption">
+        <span class="caption-line"></span>
+        <span>Verdant Basin · enclosure 03</span>
+      </div>
+
+      <div class="creature-tag" id="creature-tag" aria-hidden="true">
+        <span class="creature-tag-dot"></span>
+        <div>
+          <strong id="creature-tag-name">Moss Crest</strong>
+          <span id="creature-tag-meta">K-01 · fitness 80</span>
+        </div>
+      </div>
+
+      <div class="toast" id="toast" role="status" aria-live="polite">
+        <span class="toast-mark" id="toast-mark">✦</span>
+        <div><strong id="toast-title">Mutation expressed</strong><span id="toast-text">HOX-7 regulatory shift</span></div>
+      </div>
+
+      <div class="hint" id="hint">
+        <div class="hint-icon">?</div>
+        <p><strong>Your basin is alive.</strong> Select a creature, tune the pressures, then advance a generation. Survivors pass on mutated traits.</p>
+        <button id="hint-dismiss" aria-label="Dismiss tip">Got it</button>
+      </div>
+
+      <div class="sheet-scrim" id="sheet-scrim"></div>
+
+      <div class="modal" id="help-modal" aria-hidden="true" role="dialog" aria-modal="true" aria-labelledby="help-title">
+        <div class="modal-card">
+          <button class="modal-close" id="btn-help-close" aria-label="Close field guide">
+            <svg viewBox="0 0 24 24" fill="none"><path d="m7 7 10 10M17 7 7 17" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+          </button>
+          <span class="eyebrow">HELIX field guide / 03</span>
+          <h2 id="help-title">Evolution you can see.</h2>
+          <p class="modal-lede">Every body in this terrarium is built from a 10-gene genome. The basin decides which bodies survive.</p>
+          <div class="guide-grid">
+            <div>
+              <span class="guide-num">01</span>
+              <h3>Read the pressures</h3>
+              <p>Climate selects body size and heat exchange. Sparse forage favors reach. Predators favor speed and armor. Change the basin and the optimum changes.</p>
+            </div>
+            <div>
+              <span class="guide-num">02</span>
+              <h3>Choose a survivor</h3>
+              <p>Click any creature or step through the population. The dossier shows the four fitness components currently under selection.</p>
+            </div>
+            <div>
+              <span class="guide-num">03</span>
+              <h3>Evolve the lineage</h3>
+              <p>Advance a generation. The six strongest genomes recombine, mutate, and hatch. Mutagen lets you steer one allele by hand.</p>
+            </div>
+            <div>
+              <span class="guide-num">04</span>
+              <h3>Real rules, strange bodies</h3>
+              <p>Large bodies hold heat (Bergmann's rule), long extremities shed it (Allen's rule), and armor trades feeding efficiency for survival.</p>
+            </div>
+          </div>
+          <div class="guide-footer">
+            <span><kbd>Space</kbd> auto-evolve</span><span><kbd>E</kbd> next generation</span><span><kbd>M</kbd> mutate</span><span><kbd>R</kbd> reset study</span>
+            <button class="button button-quiet" id="btn-reset">Reset study</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </body>
+</html>
