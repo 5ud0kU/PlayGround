@@ -230,13 +230,20 @@ export class Creature {
       return;
     }
 
-    // Proportions: raw genes become an actual biological body plan.
-    const bodyLen = 0.9;
-    const bodyW = 0.29 + this.systems.fat * 0.1;
-    const bodyH = 0.32 + this.systems.fat * 0.11;
+    // Alleles shape the body plan directly; systemic expression modifies the tissues.
+    const bodyLen = 0.62 + g.bodySize * 0.62;
+    const bodyW = 0.19 + g.bodySize * 0.12 + this.systems.fat * 0.15;
+    const bodyH = 0.18 + g.bodySize * 0.12 + this.systems.fat * 0.13;
     const legLen = 0.53 + g.legs * 0.8;
-    const neckLen = 0.15 + g.neck * 0.9;
-    const tailLen = 0.24 + g.tail * 1.02;
+    const neckLen = 0.12 + g.neck * 1.0;
+    const tailLen = 0.2 + g.tail * 1.06;
+    this.morphology = {
+      torsoLength: bodyLen,
+      torsoWidth: bodyW,
+      torsoHeight: bodyH,
+      limbThickness: 0.045 + g.bodySize * 0.035 + this.systems.muscle * 0.035,
+      headScale: 0.14 + g.bodySize * 0.12 + g.crest * 0.04,
+    };
     const bodyY = legLen + bodyH * 0.26 + 0.03;
     this.dimensions = { bodyLen, bodyW, bodyH, legLen, neckLen, tailLen, bodyY };
     this.bodyY = bodyY;
@@ -307,7 +314,7 @@ export class Creature {
     neckGroup.add(headGroup);
     this.headGroup = headGroup;
 
-    const headR = 0.205 + g.crest * 0.026;
+    const headR = this.morphology.headScale;
     const cranium = new THREE.Mesh(this.torsoGeo, this.bodyMat);
     cranium.scale.set(headR * 1.02, headR * 0.9, headR * 1.28);
     cranium.castShadow = true;
@@ -436,9 +443,9 @@ export class Creature {
 
   buildLegs({ bodyLen, bodyW, bodyH, bodyY, legLen }) {
     const g = this.genome;
-    const upperLen = legLen * 0.55;
-    const lowerLen = legLen * 0.48;
-    const legRadius = (0.052 + g.bodySize * 0.026) * (0.78 + this.systems.muscle * 0.42);
+    const upperLen = legLen * (0.48 + g.legs * 0.1);
+    const lowerLen = legLen * (0.52 - g.legs * 0.1);
+    const legRadius = this.morphology.limbThickness;
     const positions = [
       { x: -bodyW * 0.82, z: bodyLen * 0.47, front: true, phase: 0 },
       { x: bodyW * 0.82, z: bodyLen * 0.47, front: true, phase: Math.PI },
