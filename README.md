@@ -16,3 +16,9 @@
 - 👤 [Explore the creator's projects](https://go.ondev.store/5ud0kU).
 - 🌍 [Create with OMGithub](https://go.ondev.store/).
 <!-- omgithub:readme:end -->
+
+## GENESIS
+
+GENESIS is a procedurally generated microbial-world game. Each run builds a new environment and population, then explores how inherited variation and environmental pressures shape the organisms over time.
+
+GENESIS is a **game, not a laboratory simulator or predictive educational model**. It borrows concepts such as DNA inheritance, mutation, gene expression, cell division, and natural selection, but turns them into simplified game rules that do not predict real organisms. Landscapes, resource fields, visual cell structures, timelines, procedures, and readouts are gameplay abstractions; all procedure outputs are simulated proxies, not laboratory work or measurements of an organism’s actual genome. Cellular-part archive entries are educational game proxies—not real organelles, treatments, or transferable biological material.
