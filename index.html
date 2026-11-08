@@ -26,7 +26,9 @@
       <nav class="nav-list" aria-label="Knowledge navigation">
         <button class="nav-item" data-view="notebook"><span class="nav-icon">▤</span>Research notes</button>
         <button class="nav-item" data-view="archive"><span class="nav-icon">▦</span>Genome archive <i class="archive-count" id="archive-count">0</i></button>
+        <button class="nav-item" data-view="codex" id="codex-nav" aria-label="DNA Codex locked"><span class="nav-icon">⌬</span>DNA Codex <i class="nav-count" id="codex-nav-status">LOCKED</i></button>
       </nav>
+      <div class="player-progress" id="player-progress" aria-label="Player experience"><div><span>RESEARCHER LEVEL <b id="player-level">1</b></span><strong id="player-xp">0 XP</strong></div><div class="xp-track"><i id="player-xp-bar"></i></div></div>
       <div class="sidebar-spacer"></div>
       <div class="protocol-card"><div class="protocol-eyebrow"><span class="pulse-dot"></span><span id="simulation-status">SIMULATION PAUSED</span></div><div class="protocol-title">A closed, living world.</div><p>Every observation leaves a trace. Every generation writes another line.</p><div class="protocol-foot"><span>MODEL v0.4.1</span><span>● LOCAL</span></div></div>
       <div class="sidebar-bottom"><span class="avatar">DR</span><span>Researcher<br><small>Independent lab</small></span><button class="icon-button" id="settings-btn" title="Simulation settings">⚙</button></div>
