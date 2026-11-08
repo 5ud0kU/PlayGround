@@ -478,8 +478,6 @@ export class World {
     if (mode === 'habitat') this.refreshSelectionRing()
   }
 
-  onModeChange
-
   setSelected(id) {
     this.selectedId = id
     this.refreshSelectionRing()

@@ -347,10 +347,10 @@ export function buildCreature(genome, opts = {}) {
     headGroup.rotation.y = Math.sin(t * 0.6) * 0.13
     headGroup.rotation.z = Math.sin(t * 0.9) * 0.02
 
-    for (const seg of tailSegs) {
-      seg.rotation.y = Math.sin(t * 1.6 + seg.id * 0.4) * 0.12 + Math.sin(t * 0.7) * 0.05
+    tailSegs.forEach((seg, i) => {
+      seg.rotation.y = Math.sin(t * 1.6 + i * 0.4) * 0.12 + Math.sin(t * 0.7) * 0.05
       seg.rotation.x = Math.sin(t * 1.2 + 0.6) * 0.035
-    }
+    })
     for (let i = 0; i < wings.length; i++) {
       const side = i === 0 ? -1 : 1
       wings[i].rotation.z = side * (0.12 + Math.sin(t * 2.3) * 0.18) + side * walkAmt * 0.12
@@ -384,9 +384,6 @@ export function buildCreature(genome, opts = {}) {
     for (const m of materials) m.dispose()
     root.removeFromParent()
   }
-
-  // store tail ids for animation phase
-  tailSegs.forEach((seg, i) => { seg.id = i })
 
   root.userData = { update, flash, dispose, phenotype: p, materials }
   root.scale.setScalar(opts.scale ?? 1)
