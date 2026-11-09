@@ -254,7 +254,8 @@ export function movesFor(creature) {
     tag: 'GUARD', desc: 'Plant your feet. Halve the next hit, recover stamina.',
     fx: 'guard',
   })
-  return moves.slice(0, 6)
+  // Keep Brace available even when every DNA-gated attack is unlocked.
+  return moves
 }
 
 // ─── breeding ──────────────────────────────────────────────────────────────

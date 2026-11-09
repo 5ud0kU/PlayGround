@@ -365,6 +365,8 @@ function playerTurn(moveId) {
   const move=movesFor(battle.player).find(m=>m.id===moveId); if(!move)return
   battle.busy=true; renderBattle()
   applyMove('player','foe',move,()=>{
+    // An attack animation may finish after the player has returned to the habitat.
+    if(!battle||battle.finished)return
     if(battle.hp.foe<=0)return finishBattle('player')
     setTimeout(enemyTurn,650)
   })
@@ -374,6 +376,8 @@ function enemyTurn() {
   const choices=movesFor(battle.foe).filter(m=>m.type==='strike'&&battle.sta.foe>=m.cost)
   const move=choices[Math.floor(Math.random()*choices.length)]||movesFor(battle.foe).find(m=>m.type==='defend')
   battle.turn++; applyMove('foe','player',move,()=>{
+    // Ignore late animation callbacks after leaving the arena.
+    if(!battle||battle.finished)return
     if(battle.hp.player<=0)return finishBattle('foe')
     battle.busy=false; renderBattle()
   })
