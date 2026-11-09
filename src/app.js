@@ -24,7 +24,7 @@ function loadGame() {
     const saved = JSON.parse(localStorage.getItem(SAVE))
     if (saved?.creatures?.length) {
       saved.creatures.forEach(c => { c.needs ||= freshNeeds(78); c.wins ||= 0; c.battles ||= 0; c.born ||= Date.now() })
-      return { creatures: saved.creatures, selected: saved.selected || saved.creatures[0].id, coins: saved.coins ?? 120, food: saved.food ?? 8, wins: saved.wins ?? 0 }
+      return { creatures: saved.creatures, selected: saved.selected || saved.creatures[0].id, coins: saved.coins ?? 120, food: saved.food ?? 8, wins: saved.wins ?? 0, archives: Array.isArray(saved.archives) ? saved.archives : [] }
     }
   } catch (e) { console.warn('Save could not be loaded', e) }
   const creatures = [
@@ -33,7 +33,7 @@ function loadGame() {
     generateStarter(173, { hueA: .47, hueB: .1, armor: .79, bone: .78, size: .77, muscle: .55, wings: .1 }),
   ]
   ;['Cinderhorn', 'Glimmerwing', 'Mossback'].forEach((n, i) => { creatures[i].name = n; creatures[i].needs = freshNeeds(86 - i * 5) })
-  return { creatures, selected: creatures[0].id, coins: 120, food: 8, wins: 0 }
+  return { creatures, selected: creatures[0].id, coins: 120, food: 8, wins: 0, archives: [] }
 }
 const game = loadGame()
 let mode = 'habitat', tab = 'overview', world, battle = null, toastTimer
@@ -45,7 +45,7 @@ app.innerHTML = `
 <aside class="left-rail"><div class="section-label">YOUR SANCTUARY <span id="roster-count">03</span></div><div class="roster" id="roster"></div><button class="discover" data-action="discover">＋ DISCOVER CREATURE <small>60 ✧</small></button><div class="rail-spacer"></div><div class="sanctuary-card"><div class="sanctuary-orb">✳</div><div><b>THE HOLLOW</b><span>Habitat level 01</span></div><i class="live-tag">LIVE</i><p>Creatures wander, rest and recover here.</p><div class="harmony"><i></i></div><small>SANCTUARY HARMONY <b>78%</b></small></div><div class="rail-footer">BUILD 1.0 · AUTOSAVED</div></aside>
 <section class="stage-column"><div class="stage-head"><div><div class="eyebrow" id="stage-kicker">◌ OPEN HABITAT</div><h1 id="stage-title">The Verdant Hollow</h1></div><div class="stage-controls"><span class="creature-count"><i></i><b id="stage-count">3</b> CREATURES</span><button class="view-btn active" data-mode="habitat">◉ HABITAT</button><button class="view-btn" data-mode="arena">⚔ ARENA</button></div></div>
 <div class="viewport-wrap"><div class="viewport" id="viewport"></div><div class="viewport-vignette"></div><div class="scene-tag"><i class="live-dot"></i><span id="scene-tag-text">ECOSYSTEM ACTIVE</span></div><div class="camera-hint">DRAG TO ORBIT <b>·</b> SCROLL TO ZOOM</div><div id="battle-hud" class="battle-hud hidden"></div><div id="battle-result" class="battle-result hidden"></div></div>
-<div class="stage-bottom"><div class="world-note"><span>✦</span><div><b id="world-note-title">THE HOLLOW IS ALIVE</b><small id="world-note-copy">Traits and temperament are written in every creature's DNA.</small></div></div><div class="stage-actions"><button class="secondary-btn" data-action="breed">♧ BREED</button><button class="primary-btn" data-action="arena">⚔ ENTER ARENA <b>↗</b></button></div></div></section>
+<div class="stage-bottom"><div class="world-note"><span>✦</span><div><b id="world-note-title">THE HOLLOW IS ALIVE</b><small id="world-note-copy">Traits and temperament are written in every creature's DNA.</small></div></div><div class="stage-actions"><button class="secondary-btn" data-action="archives">▤ DNA ARCHIVE</button><button class="secondary-btn" data-action="breed">♧ BREED</button><button class="primary-btn" data-action="arena">⚔ ENTER ARENA <b>↗</b></button></div></div></section>
 <aside class="right-panel" id="right-panel"></aside>
 </main><nav class="mobile-nav"><button data-action="sanctuary">◈<span>Sanctuary</span></button><button data-action="habitat">◉<span>Habitat</span></button><button data-action="profile">◎<span>Profile</span></button></nav><div class="toast" id="toast" role="status"></div><div class="modal-layer hidden" id="modal-layer"><div class="modal" id="modal"></div></div></div>`
 
@@ -53,7 +53,7 @@ const viewport = $('#viewport')
 world = new World(viewport, { onSelect: selectCreature, onBackground: () => mode === 'habitat' && toast('Select a creature to inspect its genome.') })
 
 function persist() {
-  try { localStorage.setItem(SAVE, JSON.stringify({ creatures: game.creatures, selected: game.selected, coins: game.coins, food: game.food, wins: game.wins })) } catch (e) { console.warn('Save failed', e) }
+  try { localStorage.setItem(SAVE, JSON.stringify({ creatures: game.creatures, selected: game.selected, coins: game.coins, food: game.food, wins: game.wins, archives: game.archives })) } catch (e) { console.warn('Save failed', e) }
   $('#coins').textContent = game.coins; $('#food').textContent = game.food
 }
 function selected() { return game.creatures.find(c => c.id === game.selected) || game.creatures[0] }
@@ -123,6 +123,78 @@ function discoverConfirm() {
   if(mode==='habitat') { world.addCreature(c,{position:[(Math.random()-.5)*5,0,(Math.random()-.5)*5]}); world.setSelected(c.id) }
   persist(); renderRoster(); renderProfile(); toast(`${c.name} joined with ${selectedTraits.length} adaptation${selectedTraits.length===1?'':'s'}; +4 nectar replenished.`)
 }
+function copyGenome(genome) {
+  return Object.fromEntries(GENES.map(g => {
+    const alleles = genome?.[g.key] || [0.5, 0.5]
+    return [g.key, [clamp(Number(alleles[0]) || 0, 0, 1), clamp(Number(alleles[1]) || 0, 0, 1)]]
+  }))
+}
+function archivesDialog() {
+  const items = game.archives.map(entry => {
+    const p = phenotype(entry.genome)
+    return `<article class="archive-card"><div class="archive-swatch" style="--creature-color:${p.bodyColor};--creature-accent:${p.accentColor}"><i></i></div><div class="archive-info"><b>${esc(entry.name)}</b><small>${esc(entry.sourceName || 'Unknown specimen')} · ${new Date(entry.savedAt || Date.now()).toLocaleDateString()}</small><code>${dnaSequence(entry.genome).slice(0, 18)}…</code></div><div class="archive-actions"><button class="text-action" data-action="archive-edit" data-archive-id="${esc(entry.id)}">EDIT</button><button class="text-action" data-action="archive-create" data-archive-id="${esc(entry.id)}">HATCH ↗</button><button class="archive-delete" data-action="archive-delete" data-archive-id="${esc(entry.id)}" aria-label="Delete ${esc(entry.name)}">×</button></div></article>`
+  }).join('')
+  showModal(`<button class="modal-close" data-action="close" aria-label="Close DNA archive">×</button><div class="eyebrow">GENOME VAULT · ${game.archives.length} STORED</div><h2>DNA archive</h2><p>Preserve a creature’s genome, edit individual alleles, or hatch a new creature from any archived sequence.</p><div class="archive-list">${items || '<div class="archive-empty">No genomes archived yet. Save your selected creature to begin a lineage library.</div>'}</div><div class="modal-actions archive-modal-actions"><button class="secondary-btn" data-action="close">CLOSE</button><button class="primary-btn" data-action="archive-save-dialog">＋ ARCHIVE SELECTED DNA</button></div>`)
+}
+function archiveSaveDialog() {
+  const c = selected()
+  showModal(`<button class="modal-close" data-action="archives">×</button><div class="eyebrow">GENOME VAULT · NEW RECORD</div><h2>Preserve this genome</h2><p>A copy of ${esc(c.name)}’s DNA will be stored independently, so edits to the archive will not alter the living creature.</p><label class="field-label">ARCHIVE NAME<input id="archive-name" maxlength="28" value="${esc(c.name + ' DNA')}"></label><div class="modal-actions"><button class="secondary-btn" data-action="archives">BACK</button><button class="primary-btn" data-action="archive-save">SAVE TO ARCHIVE</button></div>`)
+  $('#archive-name').focus(); $('#archive-name').select()
+}
+function saveArchive() {
+  const c = selected(), name = $('#archive-name')?.value.trim()
+  if (!name) return toast('Give this archive record a name.')
+  game.archives.unshift({ id: cryptoId(), name, sourceName: c.name, sourceId: c.id, generation: c.generation || 0, genome: copyGenome(c.genome), savedAt: Date.now() })
+  persist(); archivesDialog(); toast(`${name} saved to the DNA archive.`)
+}
+function editArchive(id) {
+  const entry = game.archives.find(item => item.id === id)
+  if (!entry) return archivesDialog()
+  const groups = { frame:'FRAME', limb:'LIMBS', weapon:'ADAPTATIONS', adapt:'ANIMAL ADAPTATIONS', core:'CORE', form:'BODY PLAN', coat:'PIGMENT' }
+  const rows = Object.entries(groups).map(([group, label]) => `<section class="archive-gene-group"><h3>${label}</h3>${GENES.filter(g => g.group === group).map(g => {
+    const [a, b] = entry.genome?.[g.key] || [0.5, 0.5]
+    return `<div class="archive-gene-row"><label for="allele-${g.key}-0">${esc(g.label)}</label><input id="allele-${g.key}-0" aria-label="${esc(g.label)} allele A" type="number" min="0" max="1" step="0.01" value="${Number(a).toFixed(2)}" data-gene="${g.key}" data-allele="0"><input aria-label="${esc(g.label)} allele B" type="number" min="0" max="1" step="0.01" value="${Number(b).toFixed(2)}" data-gene="${g.key}" data-allele="1"></div>`
+  }).join('')}</section>`).join('')
+  showModal(`<button class="modal-close" data-action="archives" aria-label="Back to archive">×</button><div class="eyebrow">GENOME EDITOR · MANUAL ALLELE CONTROL</div><h2>Edit archived DNA</h2><label class="field-label">RECORD NAME<input id="archive-edit-name" maxlength="28" value="${esc(entry.name)}"></label><p>Set each allele from 0.00 to 1.00. Changes affect this archive record only.</p><div class="archive-editor-scroll">${rows}</div><div class="modal-actions"><button class="secondary-btn" data-action="archives">CANCEL</button><button class="primary-btn" data-action="archive-update" data-archive-id="${esc(entry.id)}">SAVE DNA EDITS</button></div>`)
+}
+function updateArchive(id) {
+  const entry = game.archives.find(item => item.id === id)
+  if (!entry) return archivesDialog()
+  const name = $('#archive-edit-name')?.value.trim()
+  if (!name) return toast('Give this archive record a name.')
+  const genome = copyGenome(entry.genome)
+  document.querySelectorAll('#modal [data-gene][data-allele]').forEach(input => {
+    const old = genome[input.dataset.gene][Number(input.dataset.allele)]
+    const value = input.value.trim() === '' ? old : Number(input.value)
+    genome[input.dataset.gene][Number(input.dataset.allele)] = clamp(Number.isFinite(value) ? value : old, 0, 1)
+  })
+  entry.name = name; entry.genome = genome; entry.editedAt = Date.now()
+  persist(); archivesDialog(); toast(`${name} updated.`)
+}
+function createFromArchiveDialog(id) {
+  const entry = game.archives.find(item => item.id === id)
+  if (!entry) return archivesDialog()
+  const p = phenotype(entry.genome)
+  showModal(`<button class="modal-close" data-action="archives">×</button><div class="eyebrow">GENOME VAULT · SEQUENCE HATCH</div><h2>Create from archived DNA</h2><p>This creates a new, independent creature with the exact archived genome. The archived record remains unchanged.</p><div class="parent-preview"><div class="parent-chip"><i style="--creature-color:${p.bodyColor}"></i><span><b>${esc(entry.name)}</b><small>${esc(p.speciesType.toUpperCase())} · ARCHIVED DNA</small></span></div></div><label class="field-label">NEW CREATURE NAME<input id="archive-creature-name" maxlength="20" value="${esc(makeName(entry.genome))}"></label><div class="modal-actions"><button class="secondary-btn" data-action="archives">CANCEL</button><button class="primary-btn" data-action="archive-create-confirm" data-archive-id="${esc(entry.id)}">HATCH CREATURE ↗</button></div>`)
+  $('#archive-creature-name').focus(); $('#archive-creature-name').select()
+}
+function createFromArchive(id) {
+  const entry = game.archives.find(item => item.id === id)
+  const name = $('#archive-creature-name')?.value.trim()
+  if (!entry) return archivesDialog()
+  if (!name) return toast('A creature name cannot be empty.')
+  const creature = { id: cryptoId(), name, genome: copyGenome(entry.genome), sex: sexOf(), needs: freshNeeds(92), wins: 0, battles: 0, born: Date.now(), generation: entry.generation || 0, archivedFrom: entry.id }
+  game.creatures.push(creature); game.selected = creature.id; closeModal()
+  if (mode === 'habitat') { world.addCreature(creature, { position: [(Math.random() - .5) * 5, 0, (Math.random() - .5) * 5] }); world.setSelected(creature.id) }
+  persist(); renderRoster(); renderProfile(); toast(`${creature.name} hatched from archived DNA.`)
+}
+function deleteArchive(id) {
+  const index = game.archives.findIndex(item => item.id === id)
+  if (index < 0) return archivesDialog()
+  const [removed] = game.archives.splice(index, 1)
+  persist(); archivesDialog(); toast(`${removed.name} removed from the archive.`)
+}
+
 function breedDialog() {
   if(game.creatures.length<2)return toast('You need two creatures to breed.')
   const a=selected(), others=game.creatures.filter(c=>c.id!==a.id)
@@ -218,10 +290,18 @@ function finishBattle(winner) {
   persist(); renderBattle(); renderRoster()
 }
 function exitBattle() { battle=null; world.exitArena(); mode='habitat'; updateModeUI(); populateWorld(); renderBattle(); renderProfile() }
-function dispatch(action) {
+function dispatch(action, id) {
   if(action==='close')closeModal()
   else if(action==='discover')discover()
   else if(action==='discover-confirm')discoverConfirm()
+  else if(action==='archives')archivesDialog()
+  else if(action==='archive-save-dialog')archiveSaveDialog()
+  else if(action==='archive-save')saveArchive()
+  else if(action==='archive-edit')editArchive(id)
+  else if(action==='archive-update')updateArchive(id)
+  else if(action==='archive-create')createFromArchiveDialog(id)
+  else if(action==='archive-create-confirm')createFromArchive(id)
+  else if(action==='archive-delete')deleteArchive(id)
   else if(action==='breed')breedDialog()
   else if(action==='breed-confirm')breed()
   else if(action==='rename')renameDialog()
@@ -241,8 +321,9 @@ document.addEventListener('change',e=>{
   $('#adapt-count').textContent=`${document.querySelectorAll('input[name="adaptation"]:checked').length} / 3 SELECTED`
 })
 document.addEventListener('click',e=>{
-  const action=e.target.closest('[data-action]')?.dataset.action
-  if(action){dispatch(action);return}
+  const actionTarget=e.target.closest('[data-action]')
+  const action=actionTarget?.dataset.action
+  if(action){dispatch(action,actionTarget.dataset.archiveId);return}
   const creature=e.target.closest('[data-creature]')?.dataset.creature
   if(creature){selectCreature(creature);return}
   const tabButton=e.target.closest('[data-tab]')
