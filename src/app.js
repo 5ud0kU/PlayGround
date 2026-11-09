@@ -100,7 +100,7 @@ function renderAbilities(c) {
 }
 function care(action) {
   const c=selected()
-  if(action==='feed') { if(game.food<1)return toast('You are out of nectar. Discover a creature to restock.'); if(c.needs.hunger>94)return toast(`${c.name} is already full.`); game.food--; c.needs.hunger=clamp(c.needs.hunger+38,0,100); c.needs.energy=clamp(c.needs.energy+5,0,100); toast(`${c.name} enjoyed a nectar fruit.`) }
+  if(action==='feed') { if(game.food<1)return toast('You are out of nectar. Discover a creature to receive 4 more.'); if(c.needs.hunger>94)return toast(`${c.name} is already full.`); game.food--; c.needs.hunger=clamp(c.needs.hunger+38,0,100); c.needs.energy=clamp(c.needs.energy+5,0,100); toast(`${c.name} enjoyed a nectar fruit.`) }
   else if(action==='play') { if(c.needs.energy<12)return toast(`${c.name} is too tired to play. Let them rest.`); c.needs.fun=clamp(c.needs.fun+30,0,100); c.needs.energy=Math.max(0,c.needs.energy-8); toast(`${c.name} had a lovely play session.`) }
   else { c.needs.energy=clamp(c.needs.energy+36,0,100); c.needs.hygiene=clamp(c.needs.hygiene+8,0,100); toast(`${c.name} took a restorative nap.`) }
   persist(); renderProfile(); renderRoster()
@@ -109,18 +109,19 @@ function showModal(content) { $('#modal').innerHTML=content; $('#modal-layer').c
 function closeModal() { $('#modal-layer').classList.add('hidden') }
 function discover() {
   if(game.coins<60)return toast('You need 60 shards to discover a creature.')
-  showModal(`<button class="modal-close" data-action="close" aria-label="Close discovery">×</button><div class="eyebrow">VERDANT HOLLOW · FIELD FIND</div><h2>Shape a new foundling</h2><p>Choose up to three adaptations to guarantee in this creature’s DNA. Every pick grows into a visible body part.</p><div class="adapt-grid">${ADAPTATIONS.map(a=>`<label class="adapt-option"><input type="checkbox" name="adaptation" value="${a.key}"><span class="adapt-icon">${a.icon}</span><span class="adapt-copy"><b>${a.name}</b><small>${a.source}</small><em>${a.note}</em></span><i class="adapt-check">＋</i></label>`).join('')}</div><div class="adapt-footer"><span id="adapt-count">0 / 3 SELECTED</span><small>DISCOVERY COST · 60 ✧</small></div><div class="modal-actions"><button class="secondary-btn" data-action="close">CANCEL</button><button class="primary-btn" data-action="discover-confirm">SEARCH THE HOLLOW ↗</button></div>`)
+  showModal(`<button class="modal-close" data-action="close" aria-label="Close discovery">×</button><div class="eyebrow">VERDANT HOLLOW · FIELD FIND</div><h2>Shape a new foundling</h2><p>Choose up to three adaptations to guarantee in this creature’s DNA. Every pick grows into a visible body part.</p><div class="adapt-grid">${ADAPTATIONS.map(a=>`<label class="adapt-option"><input type="checkbox" name="adaptation" value="${a.key}"><span class="adapt-icon">${a.icon}</span><span class="adapt-copy"><b>${a.name}</b><small>${a.source}</small><em>${a.note}</em></span><i class="adapt-check">＋</i></label>`).join('')}</div><div class="adapt-footer"><span id="adapt-count">0 / 3 SELECTED</span><small>60 ✧ · +4 NECTAR</small></div><div class="modal-actions"><button class="secondary-btn" data-action="close">CANCEL</button><button class="primary-btn" data-action="discover-confirm">SEARCH THE HOLLOW ↗</button></div>`)
 }
 function discoverConfirm() {
   if(game.coins<60)return toast('You need 60 shards to discover a creature.')
   const selectedTraits=[...document.querySelectorAll('input[name="adaptation"]:checked')].map(input=>input.value).filter(key=>ADAPTATIONS.some(a=>a.key===key)).slice(0,3)
   game.coins-=60
+  game.food+=4
   const c=generateWild()
   for(const adaptation of ADAPTATIONS) c.genome[adaptation.key]=selectedTraits.includes(adaptation.key)?[0.88,0.96]:[0.04,0.12]
   c.needs=freshNeeds(82)
   game.creatures.push(c); game.selected=c.id; closeModal()
   if(mode==='habitat') { world.addCreature(c,{position:[(Math.random()-.5)*5,0,(Math.random()-.5)*5]}); world.setSelected(c.id) }
-  persist(); renderRoster(); renderProfile(); toast(`${c.name} joined your sanctuary with ${selectedTraits.length} adaptation${selectedTraits.length===1?'':'s'}.`)
+  persist(); renderRoster(); renderProfile(); toast(`${c.name} joined with ${selectedTraits.length} adaptation${selectedTraits.length===1?'':'s'}; +4 nectar replenished.`)
 }
 function breedDialog() {
   if(game.creatures.length<2)return toast('You need two creatures to breed.')
@@ -185,11 +186,11 @@ function applyMove(attacker, defender, move, done) {
   if(move.crit&&Math.random()<move.crit)damage=Math.round(damage*1.5)
   if(battle.guard[defender]&&!move.pierce){damage=Math.ceil(damage*.48);battle.guard[defender]=false;toast(`${battle[defender].name} guarded the hit!`)}
   battle.hp[defender]=Math.max(0,battle.hp[defender]-damage)
-  if(attacker==='player')world.battleLunge('player',()=>world.hitReact('foe'));else world.battleLunge('foe',()=>world.hitReact('player'))
+  const defenderSide=attacker==='player'?'foe':'player'
+  world.battleLunge(attacker,()=>world.hitReact(defenderSide,done))
   world.burst?.({x:attacker==='player'?2: -2,y:1.5,z:.3},phenotype(battle[attacker].genome).accentColor,15)
   toast(`${move.name} dealt ${damage} damage.`)
   if(move.buff==='evade')battle.guard[attacker]=true
-  done()
 }
 function playerTurn(moveId) {
   if(!battle||battle.busy||battle.finished)return
@@ -211,6 +212,7 @@ function enemyTurn() {
 }
 function finishBattle(winner) {
   battle.finished=true; battle.winner=winner; battle.busy=false
+  world.faint(winner==='player'?'foe':'player')
   battle.player.battles=(battle.player.battles||0)+1; battle.foe.battles=(battle.foe.battles||0)+1
   if(winner==='player'){battle.player.wins=(battle.player.wins||0)+1;game.wins++;game.coins+=25;toast('Victory! +25 shards and a new experience point.')}else toast(`${battle.foe.name} wins this round. Your creature will be ready for another bout.`)
   persist(); renderBattle(); renderRoster()

@@ -593,16 +593,17 @@ export class World {
     tick()
   }
 
-  hitReact(who) {
-    if (!this.fighters) return
+  hitReact(who, done) {
+    if (!this.fighters) { done?.(); return }
     const mesh = who === 'player' ? this.fighters.player : this.fighters.foe
     mesh.userData.flash?.('#ff7a6b', 0.22)
     this.shake(0.22)
     const start = mesh.position.clone()
     const t0 = performance.now()
     const tick = () => {
+      if (this.fighters?.[who] !== mesh) return
       const k = (performance.now() - t0) / 300
-      if (k >= 1) { mesh.position.copy(start); return }
+      if (k >= 1) { mesh.position.copy(start); done?.(); return }
       const e = Math.sin(Math.min(1, k) * Math.PI) * 0.24
       mesh.position.x = start.x + (who === 'player' ? -e : e)
       requestAnimationFrame(tick)
@@ -614,16 +615,19 @@ export class World {
   faint(who) {
     if (!this.fighters) return
     const mesh = who === 'player' ? this.fighters.player : this.fighters.foe
+    const start = { x: mesh.position.x, y: mesh.position.y, z: mesh.position.z, rotation: mesh.rotation.z }
+    const direction = who === 'player' ? 1 : -1
     const t0 = performance.now()
-    const startY = mesh.rotation.z
     const tick = () => {
-      const k = (performance.now() - t0) / 700
-      if (k >= 1) return
-      mesh.rotation.z = startY + (who === 'player' ? 1 : -1) * Math.min(1, k) * 1.1
-      tickFall()
-      requestAnimationFrame(tick)
+      if (this.fighters?.[who] !== mesh) return
+      const k = clamp((performance.now() - t0) / 700, 0, 1)
+      const ease = 1 - (1 - k) ** 3
+      mesh.rotation.z = start.rotation + direction * ease * 1.12
+      mesh.position.x = start.x + direction * ease * 0.18
+      mesh.position.y = start.y - ease * 0.3
+      if (k < 1) requestAnimationFrame(tick)
     }
-    const tickFall = () => {}
+    this.burst({ x: start.x, y: 1.05, z: start.z }, '#ffd27a', 30)
     tick()
   }
 
