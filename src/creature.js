@@ -177,17 +177,34 @@ export function buildCreature(genome, opts = {}) {
 
   const s = 0.78 + p.size * 0.52
   const species = Math.min(3, Math.floor(p.archetype * 4))
-  const biped = p.posture > 0.58
+  const bodyPlan = p.bodyPlanKey
+  const fish = bodyPlan === 'fish'
+  const insect = bodyPlan === 'insect'
+  const bird = bodyPlan === 'bird'
+  const biped = bodyPlan === 'biped'
+  const quadruped = bodyPlan === 'quadruped'
+  const upright = p.posture > 0.58
   const typeWidth = [1, 1.16, 0.78, 1.27][species]
   const typeLength = [1, 1.12, 0.86, 1.08][species]
-  const torsoRY = (0.5 + p.girth * 0.3) * s * [1, 0.98, 0.82, 1.2][species]
-  const torsoRX = (0.52 + p.girth * 0.48) * s * typeWidth
-  const torsoRZ = (0.62 + p.length * 0.55) * s * typeLength
-  const legLen = (0.34 + p.legs * 0.62) * s * [1, 0.9, 1.22, 0.82][species] * (biped ? 1.04 : 1)
-  const legThick = (0.09 + p.stance * 0.12) * [1, 0.9, 0.78, 1.42][species]
+  const planWidth = fish ? 0.9 : insect ? 1.08 : bird ? 0.82 : 1
+  const planLength = fish ? 1.32 : insect ? 0.92 : bird ? 0.9 : 1
+  const torsoRY = (0.5 + p.girth * 0.3) * s * [1, 0.98, 0.82, 1.2][species] * (fish ? 0.78 : 1)
+  const torsoRX = (0.52 + p.girth * 0.48) * s * typeWidth * planWidth
+  const torsoRZ = (0.62 + p.length * 0.55) * s * typeLength * planLength
+  const legLen = fish ? 0 : (0.34 + p.legs * 0.62) * s * [1, 0.9, 1.22, 0.82][species] * (biped ? 1.04 : bird ? 0.82 : insect ? 0.55 : 1)
+  const legThick = (0.09 + p.stance * 0.12) * [1, 0.9, 0.78, 1.42][species] * (insect ? 0.55 : bird ? 0.82 : 1)
   const hipY = legLen + torsoRY * 0.42
-  const headScale = (0.34 + p.head * 0.36) * s * [1, 1.05, 0.88, 1.22][species]
-  const bodyY = legLen + torsoRY * (biped ? 0.62 : 0.55)
+  const headScale = (0.34 + p.head * 0.36) * s * [1, 1.05, 0.88, 1.22][species] * (fish ? 0.9 : 1)
+  const bodyY = fish ? torsoRY * 1.12 : legLen + torsoRY * (biped ? 0.62 : upright ? 0.58 : 0.52)
+  const finLevel = fish ? Math.max(p.fins, 0.62) : p.fins
+  const shellLevel = insect ? Math.max(p.carapace, 0.62) : p.carapace
+  const antennaLevel = insect ? Math.max(p.antennae, 0.5) : p.antennae
+  const wingLevel = bird ? Math.max(p.wings, 0.64) : p.wings
+  const gillLevel = fish ? Math.max(p.gills, 0.56) : p.gills
+  const tailLevel = fish ? Math.max(p.tail, 0.68) : p.tail
+  const insectLegs = insect
+    ? [-0.62, 0, 0.62].flatMap(z => [-1, 1].map(x => ({ x, z, front: z > 0, middle: z === 0 })))
+    : null
 
   const coat = coatTexture(p, 'body')
   const bodyMat = mat(0xffffff, { map: coat, roughness: 0.66 })
@@ -204,7 +221,7 @@ export function buildCreature(genome, opts = {}) {
   model.add(bodyGroup)
 
   const torsoGeo = new THREE.IcosahedronGeometry(1, 2)
-  const torsoTilt = biped ? -0.62 : 0
+  const torsoTilt = fish ? 0 : biped ? -0.62 : upright ? -0.16 : 0
   const torso = addMesh(bodyGroup, torsoGeo, bodyMat, [0, 0, 0], [torsoTilt, 0, 0], [torsoRX, torsoRY, torsoRZ])
   // belly plate follows the body plan's torso angle.
   addMesh(bodyGroup, new THREE.IcosahedronGeometry(1, 1), mat(p.accentColor, { roughness: 0.7 }), [0, -torsoRY * 0.55, torsoRZ * 0.05], [torsoTilt, 0, 0], [torsoRX * 0.8, torsoRY * 0.42, torsoRZ * 0.86])
@@ -223,19 +240,32 @@ export function buildCreature(genome, opts = {}) {
   const skull = addMesh(headGroup, new THREE.IcosahedronGeometry(1, 2), bodyMat, [0, 0, 0], [0, 0, 0], [headScale, headScale * 0.82, headScale * 1.02])
   // jaw / snout
   const snoutLen = headScale * (0.72 + p.snout * 0.78)
-  addMesh(headGroup, new THREE.CapsuleGeometry(headScale * 0.41, snoutLen, 3, 8), darkMat,
-    [0, -headScale * 0.18, headScale * 0.62 + snoutLen * 0.34], [Math.PI / 2, 0, 0], [1, 1, 0.8])
-  addMesh(headGroup, new THREE.CapsuleGeometry(headScale * 0.3, snoutLen * 0.68, 3, 8), bodyMat,
-    [0, -headScale * 0.38, headScale * 0.7 + snoutLen * 0.24], [Math.PI / 2, 0, 0], [1, 1, 0.6])
-  // teeth
-  const toothGeo = new THREE.ConeGeometry(headScale * 0.055, headScale * 0.19, 4)
-  for (let i = 0; i < 4; i++) {
-    addMesh(headGroup, toothGeo, boneMat, [(i - 1.5) * headScale * 0.16, -headScale * 0.48, headScale * 0.72 + snoutLen * 0.4 + (i % 2) * 0.02], [Math.PI, 0, 0])
+  if (bird) {
+    addMesh(headGroup, new THREE.ConeGeometry(headScale * 0.3, snoutLen * 1.35, 5), accentMat,
+      [0, -headScale * 0.12, headScale * 0.88], [Math.PI / 2, 0, 0], [1, 0.72, 1.15])
+    addMesh(headGroup, new THREE.ConeGeometry(headScale * 0.2, snoutLen * 0.82, 5), darkMat,
+      [0, -headScale * 0.31, headScale * 0.94], [-Math.PI / 2, 0, 0], [1, 0.6, 1])
+  } else if (fish) {
+    addMesh(headGroup, new THREE.IcosahedronGeometry(1, 1), bodyMat,
+      [0, -headScale * 0.12, headScale * 0.74 + snoutLen * 0.2], [0, 0, 0], [headScale * 0.44, headScale * 0.34, snoutLen * 0.62])
+    addMesh(headGroup, new THREE.BoxGeometry(headScale * 0.42, headScale * 0.08, headScale * 0.16), darkMat,
+      [0, -headScale * 0.27, headScale * 1.16 + snoutLen * 0.42])
+  } else {
+    addMesh(headGroup, new THREE.CapsuleGeometry(headScale * 0.41, snoutLen, 3, 8), darkMat,
+      [0, -headScale * 0.18, headScale * 0.62 + snoutLen * 0.34], [Math.PI / 2, 0, 0], [1, 1, 0.8])
+    addMesh(headGroup, new THREE.CapsuleGeometry(headScale * 0.3, snoutLen * 0.68, 3, 8), bodyMat,
+      [0, -headScale * 0.38, headScale * 0.7 + snoutLen * 0.24], [Math.PI / 2, 0, 0], [1, 1, 0.6])
+    if (!insect) {
+      const toothGeo = new THREE.ConeGeometry(headScale * 0.055, headScale * 0.19, 4)
+      for (let i = 0; i < 4; i++) {
+        addMesh(headGroup, toothGeo, boneMat, [(i - 1.5) * headScale * 0.16, -headScale * 0.48, headScale * 0.72 + snoutLen * 0.4 + (i % 2) * 0.02], [Math.PI, 0, 0])
+      }
+    }
   }
-  // eyes
-  const eyeR = headScale * (0.13 + p.eyes * 0.1)
+  // Eyes sit wide on aquatic and insect heads for distinct silhouettes.
+  const eyeR = headScale * (0.13 + p.eyes * 0.1) * (insect ? 1.42 : 1)
   for (const side of [-1, 1]) {
-    const ex = side * headScale * 0.58, ey = headScale * 0.16, ez = headScale * 0.62
+    const ex = side * headScale * (insect || fish ? 0.76 : 0.58), ey = headScale * 0.16, ez = headScale * 0.62
     addMesh(headGroup, new THREE.SphereGeometry(eyeR, 14, 10), eyeMat, [ex, ey, ez], [0, 0, 0], [1, 1, 0.7])
     addMesh(headGroup, new THREE.SphereGeometry(eyeR * 0.48, 10, 8), pupilMat, [ex + side * eyeR * 0.35, ey, ez + eyeR * 0.5], [0, 0, 0], [1, 1, 0.5])
   }
@@ -265,14 +295,14 @@ export function buildCreature(genome, opts = {}) {
       addBone(headGroup, [side * headScale * 1.24, headScale * 1.2, headScale * 0.02], [side * headScale * 1.35, headScale * 1.52, -headScale * 0.02], headScale * 0.055, boneMat)
     }
   }
-  if (p.antennae > 0.24) {
+  if (antennaLevel > 0.24) {
     for (const side of [-1, 1]) {
       const base = [side * headScale * 0.32, headScale * 0.68, -headScale * 0.12]
-      const bend = [side * headScale * (0.65 + p.antennae * 0.24), headScale * (1.18 + p.antennae * 0.2), -headScale * 0.2]
-      const tip = [side * headScale * (0.98 + p.antennae * 0.38), headScale * (1.34 + p.antennae * 0.32), -headScale * 0.27]
+      const bend = [side * headScale * (0.65 + antennaLevel * 0.24), headScale * (1.18 + antennaLevel * 0.2), -headScale * 0.2]
+      const tip = [side * headScale * (0.98 + antennaLevel * 0.38), headScale * (1.34 + antennaLevel * 0.32), -headScale * 0.27]
       addBone(headGroup, base, bend, headScale * 0.045, darkMat)
       addBone(headGroup, bend, tip, headScale * 0.035, darkMat)
-      addMesh(headGroup, new THREE.SphereGeometry(headScale * (0.085 + p.antennae * 0.035), 8, 6), accentMat, tip)
+      addMesh(headGroup, new THREE.SphereGeometry(headScale * (0.085 + antennaLevel * 0.035), 8, 6), accentMat, tip)
     }
   }
 
@@ -440,7 +470,7 @@ export function buildCreature(genome, opts = {}) {
 
   // ── legs & biped arms ──
   const legs = []
-  const hips = biped
+  const hips = fish ? [] : insect ? insectLegs : bird || biped
     ? [{ x: -1, z: -0.06, front: true }, { x: 1, z: -0.06, front: true }]
     : [
         { x: -1, z: 0.48, front: true }, { x: 1, z: 0.48, front: true },

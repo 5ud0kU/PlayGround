@@ -27,8 +27,10 @@ export const GENES = [
   { key: 'brain',     label: 'Neural Mass',    group: 'core',   desc: 'Tactics & learning' },
   { key: 'metabolism',label: 'Metabolism',     group: 'core',   desc: 'Appetite & recovery' },
   { key: 'eyes',      label: 'Photoreceptors', group: 'core',   desc: 'Accuracy & threat read' },
-  { key: 'posture',   label: 'Body Plan',      group: 'form',   desc: 'Quadruped to upright biped stance' },
+  { key: 'posture',   label: 'Stance',         group: 'form',   desc: 'Four-legged to upright posture' },
+  { key: 'bodyPlan',  label: 'Body Type',      group: 'form',   desc: 'Fish, insect, bird, quadruped, or biped anatomy' },
   { key: 'archetype', label: 'Species Type',   group: 'form',   desc: 'Distinct body and facial structure' },
+
   { key: 'hueA',      label: 'Pigment A',      group: 'coat',   desc: 'Primary chromatophore' },
   { key: 'hueB',      label: 'Pigment B',      group: 'coat',   desc: 'Secondary chromatophore' },
   { key: 'pattern',   label: 'Dermal Pattern', group: 'coat',   desc: 'Spots, stripes, rosettes, mottling' },
@@ -36,6 +38,14 @@ export const GENES = [
 ]
 
 export const GENE_MAP = Object.fromEntries(GENES.map(g => [g.key, g]))
+
+export const BODY_PLANS = [
+  { key: 'fish', label: 'Fish', icon: '≋', source: 'Reef · river', note: 'Streamlined swimmer with fins and gills' },
+  { key: 'insect', label: 'Insect', icon: '⌘', source: 'Beetle · moth', note: 'Six-legged frame with shell and feelers' },
+  { key: 'bird', label: 'Bird', icon: '⌁', source: 'Raptor · songbird', note: 'Feathered wings, beak, and two legs' },
+  { key: 'quadruped', label: 'Quadruped', icon: '♧', source: 'Stag · wolf', note: 'Grounded four-legged body plan' },
+  { key: 'biped', label: 'Biped', icon: '♙', source: 'Primate · drake', note: 'Upright stance with grasping forelimbs' },
+]
 
 const clamp = (v, a = 0, b = 1) => Math.max(a, Math.min(b, v))
 export const clamp01 = v => clamp(v)
@@ -100,10 +110,13 @@ export function phenotype(genome) {
   p.eyeColor = `hsl(${(p.hueAccent + 38) % 360} 100% ${62 + p.brain * 10}%)`
   p.speciesType = ['Drake', 'Mireling', 'Skykin', 'Goliath'][Math.min(3, Math.floor(p.archetype * 4))]
   p.skinType = ['Velvet hide', 'Scaled hide', 'Plated hide', 'Crystal hide'][Math.min(3, Math.floor(p.hide * 4))]
-  p.postureName = p.posture > 0.58 ? 'Biped' : 'Quadruped'
+  p.postureName = p.posture > 0.58 ? 'Upright' : 'Grounded'
+  const bodyPlanIndex = Math.min(BODY_PLANS.length - 1, Math.floor(p.bodyPlan * BODY_PLANS.length))
+  p.bodyPlanKey = BODY_PLANS[bodyPlanIndex].key
+  p.bodyPlanName = BODY_PLANS[bodyPlanIndex].label
   p.skinRoughness = 0.9 - p.hide * 0.62
   p.horniness = p.horns
-  p.limbCount = 4
+  p.limbCount = { fish: 0, insect: 6, bird: 2, quadruped: 4, biped: 2 }[p.bodyPlanKey]
   return p
 }
 
