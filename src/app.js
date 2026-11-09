@@ -30,7 +30,7 @@ function loadGame() {
     const saved = JSON.parse(localStorage.getItem(SAVE))
     if (saved?.creatures?.length) {
       saved.creatures.forEach(c => { c.needs ||= freshNeeds(78); c.wins ||= 0; c.battles ||= 0; c.born ||= Date.now() })
-      return { creatures: saved.creatures, selected: saved.selected || saved.creatures[0].id, coins: saved.coins ?? 120, food: saved.food ?? 8, wins: saved.wins ?? 0, archives: Array.isArray(saved.archives) ? saved.archives : [] }
+      return { creatures: saved.creatures, selected: saved.selected || saved.creatures[0].id, coins: saved.coins ?? 120, food: saved.food ?? 8, wins: saved.wins ?? 0, archives: Array.isArray(saved.archives) ? saved.archives : [], xp: Math.max(0, Math.floor(Number(saved.xp) || 0)), xpClaims: Array.isArray(saved.xpClaims) ? saved.xpClaims : [] }
     }
   } catch (e) { console.warn('Save could not be loaded', e) }
   const creatures = [
@@ -39,14 +39,14 @@ function loadGame() {
     generateStarter(173, { hueA: .47, hueB: .1, armor: .79, bone: .78, size: .77, muscle: .55, wings: .1 }),
   ]
   ;['Cinderhorn', 'Glimmerwing', 'Mossback'].forEach((n, i) => { creatures[i].name = n; creatures[i].needs = freshNeeds(86 - i * 5) })
-  return { creatures, selected: creatures[0].id, coins: 120, food: 8, wins: 0, archives: [] }
+  return { creatures, selected: creatures[0].id, coins: 120, food: 8, wins: 0, archives: [], xp: 0, xpClaims: [] }
 }
 const game = loadGame()
 let mode = 'habitat', tab = 'overview', world, battle = null, toastTimer
 const app = $('#app')
 app.innerHTML = `
 <div class="shell">
-<header class="topbar"><a class="brand" href="#"><span class="brand-mark">H<span>↗</span></span><span class="brand-copy">HELIX<span>FORGE</span></span></a><div class="top-status"><i class="live-dot"></i> GENOME SANCTUARY <span class="season">SEASON 01 · THE VERDANT</span></div><div class="resources"><div class="resource"><span>✧</span><b id="coins">120</b><small>SHARDS</small></div><div class="resource"><span>◉</span><b id="food">8</b><small>NECTAR</small></div></div></header>
+<header class="topbar"><a class="brand" href="#"><span class="brand-mark">H<span>↗</span></span><span class="brand-copy">HELIX<span>FORGE</span></span></a><div class="top-status"><i class="live-dot"></i> GENOME SANCTUARY <span class="season">SEASON 01 · THE VERDANT</span></div><div class="header-actions"><button class="player-chip" data-action="player-profile" aria-label="Open player profile"><span class="player-level" id="player-level">01</span><span class="player-progress"><b>PLAYER</b><i><em id="player-xp-bar"></em></i><small id="player-xp-label">LV 1 · 0 / 100 XP</small></span></button><button class="guide-btn" data-action="guide" aria-label="How to play">? <span>GUIDE</span></button><div class="resources"><div class="resource"><span>✧</span><b id="coins">120</b><small>SHARDS</small></div><div class="resource"><span>◉</span><b id="food">8</b><small>NECTAR</small></div></div></div></header>
 <main class="workspace">
 <aside class="left-rail"><div class="section-label">YOUR SANCTUARY <span id="roster-count">03</span></div><div class="roster" id="roster"></div><button class="discover" data-action="discover">＋ DISCOVER CREATURE <small>60 ✧</small></button><div class="rail-spacer"></div><div class="sanctuary-card"><div class="sanctuary-orb">✳</div><div><b>THE HOLLOW</b><span>Habitat level 01</span></div><i class="live-tag">LIVE</i><p>Creatures wander, rest and recover here.</p><div class="harmony"><i></i></div><small>SANCTUARY HARMONY <b>78%</b></small></div><div class="rail-footer">BUILD 1.0 · AUTOSAVED</div></aside>
 <section class="stage-column"><div class="stage-head"><div><div class="eyebrow" id="stage-kicker">◌ OPEN HABITAT</div><h1 id="stage-title">The Verdant Hollow</h1></div><div class="stage-controls"><span class="creature-count"><i></i><b id="stage-count">3</b> CREATURES</span><button class="view-btn active" data-mode="habitat">◉ HABITAT</button><button class="view-btn" data-mode="arena">⚔ ARENA</button></div></div>
@@ -58,9 +58,27 @@ app.innerHTML = `
 const viewport = $('#viewport')
 world = new World(viewport, { onSelect: selectCreature, onBackground: () => mode === 'habitat' && toast('Select a creature to inspect its genome.') })
 
+function xpForNextLevel(level) { return 100 + (level - 1) * 25 }
+function levelInfo(total = game.xp) {
+  let level = 1, remaining = Math.max(0, Math.floor(total))
+  while (remaining >= xpForNextLevel(level)) { remaining -= xpForNextLevel(level); level++ }
+  return { level, current: remaining, needed: xpForNextLevel(level), percent: Math.min(100, remaining / xpForNextLevel(level) * 100) }
+}
+function awardXP(amount, reason, claimKey = null) {
+  if (claimKey && game.xpClaims.includes(claimKey)) return false
+  const reward = Math.max(0, Math.floor(Number(amount) || 0))
+  if (!reward) return false
+  if (claimKey) game.xpClaims.push(claimKey)
+  game.xp += reward
+  return true
+}
 function persist() {
-  try { localStorage.setItem(SAVE, JSON.stringify({ creatures: game.creatures, selected: game.selected, coins: game.coins, food: game.food, wins: game.wins, archives: game.archives })) } catch (e) { console.warn('Save failed', e) }
+  try { localStorage.setItem(SAVE, JSON.stringify({ creatures: game.creatures, selected: game.selected, coins: game.coins, food: game.food, wins: game.wins, archives: game.archives, xp: game.xp, xpClaims: game.xpClaims })) } catch (e) { console.warn('Save failed', e) }
   $('#coins').textContent = game.coins; $('#food').textContent = game.food
+  const progress = levelInfo()
+  $('#player-level').textContent = String(progress.level).padStart(2, '0')
+  $('#player-xp-bar').style.width = `${progress.percent}%`
+  $('#player-xp-label').textContent = `LV ${progress.level} · ${progress.current} / ${progress.needed} XP`
 }
 function selected() { return game.creatures.find(c => c.id === game.selected) || game.creatures[0] }
 function toast(text) { const el = $('#toast'); el.textContent = text; el.classList.add('show'); clearTimeout(toastTimer); toastTimer = setTimeout(() => el.classList.remove('show'), 2600) }
@@ -106,13 +124,20 @@ function renderAbilities(c) {
 }
 function care(action) {
   const c=selected()
-  if(action==='feed') { if(game.food<1)return toast('You are out of nectar. Discover a creature to receive 4 more.'); if(c.needs.hunger>94)return toast(`${c.name} is already full.`); game.food--; c.needs.hunger=clamp(c.needs.hunger+38,0,100); c.needs.energy=clamp(c.needs.energy+5,0,100); toast(`${c.name} enjoyed a nectar fruit.`) }
-  else if(action==='play') { if(c.needs.energy<12)return toast(`${c.name} is too tired to play. Let them rest.`); c.needs.fun=clamp(c.needs.fun+30,0,100); c.needs.energy=Math.max(0,c.needs.energy-8); toast(`${c.name} had a lovely play session.`) }
-  else { c.needs.energy=clamp(c.needs.energy+36,0,100); c.needs.hygiene=clamp(c.needs.hygiene+8,0,100); toast(`${c.name} took a restorative nap.`) }
+  if(action==='feed') { if(game.food<1)return toast('You are out of nectar. Discover a creature to receive 4 more.'); if(c.needs.hunger>94)return toast(`${c.name} is already full.`); game.food--; c.needs.hunger=clamp(c.needs.hunger+38,0,100); c.needs.energy=clamp(c.needs.energy+5,0,100); toast(`${c.name} enjoyed a nectar fruit.${awardXP(3, 'care', `care:${c.id}:feed`) ? ' +3 XP.' : ''}`) }
+  else if(action==='play') { if(c.needs.energy<12)return toast(`${c.name} is too tired to play. Let them rest.`); c.needs.fun=clamp(c.needs.fun+30,0,100); c.needs.energy=Math.max(0,c.needs.energy-8); toast(`${c.name} had a lovely play session.${awardXP(3, 'care', `care:${c.id}:play`) ? ' +3 XP.' : ''}`) }
+  else { c.needs.energy=clamp(c.needs.energy+36,0,100); c.needs.hygiene=clamp(c.needs.hygiene+8,0,100); toast(`${c.name} took a restorative nap.${awardXP(3, 'care', `care:${c.id}:rest`) ? ' +3 XP.' : ''}`) }
   persist(); renderProfile(); renderRoster()
 }
 function showModal(content) { $('#modal').innerHTML=content; $('#modal-layer').classList.remove('hidden') }
 function closeModal() { $('#modal-layer').classList.add('hidden') }
+function playerDialog() {
+  const progress = levelInfo()
+  showModal(`<button class="modal-close" data-action="close" aria-label="Close player profile">×</button><div class="eyebrow">SANCTUARY RECORD · PLAYER PROFILE</div><h2>Your field journal</h2><p>Every experiment and bout builds your legacy. Levels keep rising forever; each new level takes a little more experience.</p><div class="player-level-card"><span class="player-level player-level-large">${String(progress.level).padStart(2, '0')}</span><div><b>LEVEL ${progress.level} · GENOME NATURALIST</b><div class="player-xp-track"><i style="width:${progress.percent}%"></i></div><small>${progress.current} / ${progress.needed} XP TO LEVEL ${progress.level + 1}</small></div><strong>${game.xp.toLocaleString()}<small>TOTAL XP</small></strong></div><div class="journal-stats"><div><b>${game.wins}</b><small>ARENA WINS</small></div><div><b>${game.archives.length}</b><small>DNA RECORDS</small></div><div><b>${game.creatures.length}</b><small>CREATURES</small></div></div><h3 class="guide-subtitle">WAYS TO EARN EXPERIENCE</h3><div class="xp-rewards"><div><b>⚔ Win an arena bout</b><span>+35 XP · +25 shards</span></div><div><b>♧ Breed a new lineage</b><span>+25 XP per parent pairing</span></div><div><b>▤ Archive a genome</b><span>+15 XP per saved record</span></div><div><b>✦ Complete a DNA contract</b><span>+20 XP and +12 shards each</span></div><div><b>◈ Discover or hatch</b><span>+20 XP · archive hatch +10 XP</span></div><div><b>♡ Care for a creature</b><span>+3 XP for each care type, once per creature</span></div></div><p class="guide-footnote">Progress is saved on this device. Repeating one-time journal discoveries will not pay XP again.</p><div class="modal-actions"><button class="primary-btn" data-action="close">BACK TO THE HOLLOW</button></div>`)
+}
+function guideDialog() {
+  showModal(`<button class="modal-close" data-action="close" aria-label="Close guide">×</button><div class="eyebrow">FIELD MANUAL · HELIX FORGE</div><h2>How to play</h2><p>Raise a living collection, shape its inherited traits, and put your designs to the test.</p><div class="guide-grid"><article><span>◈</span><div><b>Sanctuary & care</b><p>Select a creature to read its dossier. Feed with nectar, play to lift enrichment, and rest to restore energy. Needs slowly change while you are in the habitat.</p></div></article><article><span>✧</span><div><b>Discover specimens</b><p>Spend 60 shards to search the Hollow. Pick up to three adaptations to guarantee visible features in your new creature; each discovery also brings 4 nectar.</p></div></article><article><span>♧</span><div><b>Breed a lineage</b><p>Choose two creatures to combine their DNA. Offspring inherit a new genome, may mutate, and gain a generation number.</p></div></article><article><span>⚔</span><div><b>Enter the Crucible</b><p>Choose an opponent and use DNA-shaped abilities. Manage stamina: defending recovers it, while stronger attacks cost more. Victories award shards and XP.</p></div></article><article><span>▤</span><div><b>Archive & forge DNA</b><p>Save an independent copy from the DNA Archive. Edit both alleles in the Forge; the live preview updates as you tune traits. Saving a design never changes its source creature.</p></div></article><article><span>✦</span><div><b>Research contracts</b><p>Meet the paired trait targets shown on a forged record, then save it to claim that record’s one-time shard and XP rewards. Hatch any archived sequence as a separate creature.</p></div></article><article><span>◎</span><div><b>Grow your profile</b><p>Earn XP through battles, breeding, discovery, archives, contracts, hatching, and creature care. Your level has no cap; the XP needed rises gradually each level.</p></div></article></div><div class="modal-actions"><button class="primary-btn" data-action="close">GOT IT — LET’S PLAY</button></div>`)
+}
 function discover() {
   if(game.coins<60)return toast('You need 60 shards to discover a creature.')
   showModal(`<button class="modal-close" data-action="close" aria-label="Close discovery">×</button><div class="eyebrow">VERDANT HOLLOW · FIELD FIND</div><h2>Shape a new foundling</h2><p>Choose up to three adaptations to guarantee in this creature’s DNA. Every pick grows into a visible body part.</p><div class="adapt-grid">${ADAPTATIONS.map(a=>`<label class="adapt-option"><input type="checkbox" name="adaptation" value="${a.key}"><span class="adapt-icon">${a.icon}</span><span class="adapt-copy"><b>${a.name}</b><small>${a.source}</small><em>${a.note}</em></span><i class="adapt-check">＋</i></label>`).join('')}</div><div class="adapt-footer"><span id="adapt-count">0 / 3 SELECTED</span><small>60 ✧ · +4 NECTAR</small></div><div class="modal-actions"><button class="secondary-btn" data-action="close">CANCEL</button><button class="primary-btn" data-action="discover-confirm">SEARCH THE HOLLOW ↗</button></div>`)
@@ -127,7 +152,8 @@ function discoverConfirm() {
   c.needs=freshNeeds(82)
   game.creatures.push(c); game.selected=c.id; closeModal()
   if(mode==='habitat') { world.addCreature(c,{position:[(Math.random()-.5)*5,0,(Math.random()-.5)*5]}); world.setSelected(c.id) }
-  persist(); renderRoster(); renderProfile(); toast(`${c.name} joined with ${selectedTraits.length} adaptation${selectedTraits.length===1?'':'s'}; +4 nectar replenished.`)
+  awardXP(20, 'discovery', `discover:${c.id}`)
+  persist(); renderRoster(); renderProfile(); toast(`${c.name} joined with ${selectedTraits.length} adaptation${selectedTraits.length===1?'':'s'}; +4 nectar and +20 XP.`)
 }
 function copyGenome(genome) {
   return Object.fromEntries(GENES.map(g => {
@@ -150,8 +176,10 @@ function archiveSaveDialog() {
 function saveArchive() {
   const c = selected(), name = $('#archive-name')?.value.trim()
   if (!name) return toast('Give this archive record a name.')
-  game.archives.unshift({ id: cryptoId(), name, sourceName: c.name, sourceId: c.id, generation: c.generation || 0, genome: copyGenome(c.genome), savedAt: Date.now() })
-  persist(); archivesDialog(); toast(`${name} saved to the DNA archive.`)
+  const entry = { id: cryptoId(), name, sourceName: c.name, sourceId: c.id, generation: c.generation || 0, genome: copyGenome(c.genome), savedAt: Date.now() }
+  game.archives.unshift(entry)
+  awardXP(15, 'archive', `archive:${entry.id}`)
+  persist(); archivesDialog(); toast(`${name} saved to the DNA archive. +15 XP.`)
 }
 function editArchive(id) {
   const entry = game.archives.find(item => item.id === id)
@@ -208,8 +236,9 @@ function updateArchive(id) {
   entry.claimedContracts.push(...rewards.map(contract => contract.id))
   entry.name = name; entry.genome = genome; entry.editedAt = Date.now()
   game.coins += rewards.length * 12
+  rewards.forEach(contract => awardXP(20, 'DNA contract', `contract:${entry.id}:${contract.id}`))
   persist(); archivesDialog()
-  toast(rewards.length ? `${rewards.length} DNA contract${rewards.length === 1 ? '' : 's'} completed! +${rewards.length * 12} shards.` : `${name} design saved.`)
+  toast(rewards.length ? `${rewards.length} DNA contract${rewards.length === 1 ? '' : 's'} completed! +${rewards.length * 12} shards and +${rewards.length * 20} XP.` : `${name} design saved.`)
 }
 function createFromArchiveDialog(id) {
   const entry = game.archives.find(item => item.id === id)
@@ -226,7 +255,8 @@ function createFromArchive(id) {
   const creature = { id: cryptoId(), name, genome: copyGenome(entry.genome), sex: sexOf(), needs: freshNeeds(92), wins: 0, battles: 0, born: Date.now(), generation: entry.generation || 0, archivedFrom: entry.id }
   game.creatures.push(creature); game.selected = creature.id; closeModal()
   if (mode === 'habitat') { world.addCreature(creature, { position: [(Math.random() - .5) * 5, 0, (Math.random() - .5) * 5] }); world.setSelected(creature.id) }
-  persist(); renderRoster(); renderProfile(); toast(`${creature.name} hatched from archived DNA.`)
+  const earnedXP = awardXP(10, 'archive hatch', `hatch:${entry.id}`)
+  persist(); renderRoster(); renderProfile(); toast(`${creature.name} hatched from archived DNA.${earnedXP ? ' +10 XP.' : ''}`)
 }
 function deleteArchive(id) {
   const index = game.archives.findIndex(item => item.id === id)
@@ -246,7 +276,9 @@ function breed() {
   const {genome,mutations}=breedGenomes(parent.genome,mate.genome)
   const child={id:cryptoId(),name:makeName(genome,[parent,mate]),genome,sex:sexOf(),needs:freshNeeds(90),wins:0,battles:0,born:Date.now(),generation:Math.max(parent.generation||0,mate.generation||0)+1,parents:[parent.id,mate.id]}
   game.creatures.push(child); game.selected=child.id; closeModal(); if(mode==='habitat') { world.addCreature(child,{position:[0,0,0]}); world.setSelected(child.id) }
-  persist(); renderRoster(); renderProfile(); toast(`${child.name} hatched with ${mutations.length} mutated gene${mutations.length===1?'':'s'}!`)
+  const pairKey = `breed:${[parent.id, mate.id].sort().join(':')}`
+  const earnedXP = awardXP(25, 'breeding', pairKey)
+  persist(); renderRoster(); renderProfile(); toast(`${child.name} hatched with ${mutations.length} mutated gene${mutations.length===1?'':'s'}!${earnedXP ? ' +25 XP.' : ''}`)
 }
 function renameDialog() {
   const c=selected(); showModal(`<button class="modal-close" data-action="close">×</button><div class="eyebrow">CREATURE DOSSIER</div><h2>Rename specimen</h2><label class="field-label">SPECIMEN NAME<input id="rename-input" maxlength="20" value="${esc(c.name)}"></label><div class="modal-actions"><button class="secondary-btn" data-action="close">CANCEL</button><button class="primary-btn" data-action="rename-confirm">SAVE NAME</button></div>`)
@@ -326,7 +358,7 @@ function finishBattle(winner) {
   battle.finished=true; battle.winner=winner; battle.busy=false
   world.faint(winner==='player'?'foe':'player')
   battle.player.battles=(battle.player.battles||0)+1; battle.foe.battles=(battle.foe.battles||0)+1
-  if(winner==='player'){battle.player.wins=(battle.player.wins||0)+1;game.wins++;game.coins+=25;toast('Victory! +25 shards and a new experience point.')}else toast(`${battle.foe.name} wins this round. Your creature will be ready for another bout.`)
+  if(winner==='player'){battle.player.wins=(battle.player.wins||0)+1;game.wins++;game.coins+=25;awardXP(35, 'arena victory');toast('Victory! +25 shards and +35 XP.')}else toast(`${battle.foe.name} wins this round. Your creature will be ready for another bout.`)
   persist(); renderBattle(); renderRoster()
 }
 function exitBattle() { battle=null; world.exitArena(); mode='habitat'; updateModeUI(); populateWorld(); renderBattle(); renderProfile() }
@@ -349,6 +381,8 @@ function dispatch(action, id) {
   else if(action==='arena')mode==='arena'?exitBattle():arenaDialog()
   else if(action==='battle-start')startBattle()
   else if(action==='battle-exit')exitBattle()
+  else if(action==='guide')guideDialog()
+  else if(action==='player-profile')playerDialog()
   else if(action==='sanctuary'){window.scrollTo({top:0,behavior:'smooth'});toast('Sanctuary roster is ready.')}
   else if(action==='habitat'){if(mode==='arena')exitBattle();else toast('You are in the Verdant Hollow.')}
   else if(action==='profile'){document.querySelector('.right-panel').scrollIntoView({behavior:'smooth',block:'start'})}
