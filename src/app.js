@@ -10,6 +10,14 @@ const $ = (s, root = document) => root.querySelector(s)
 const clamp = (n, a, b) => Math.max(a, Math.min(b, n))
 const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c])
 const SAVE = 'helix-forge-save-v1'
+const ADAPTATIONS = [
+  { key: 'antlers', icon: '♧', name: 'Branching antlers', source: 'Stag · elk', note: 'A branching crown of bone' },
+  { key: 'fins', icon: '≋', name: 'Dorsal fins', source: 'Fish · rays', note: 'Sails along the spine' },
+  { key: 'gills', icon: '❋', name: 'Gill fans', source: 'Axolotl · reef fish', note: 'Frilled cheek fans' },
+  { key: 'antennae', icon: '⌁', name: 'Antennae', source: 'Moth · beetle', note: 'Curious sensory feelers' },
+  { key: 'carapace', icon: '⬡', name: 'Carapace', source: 'Beetle · crab', note: 'A glossy protective shell' },
+  { key: 'pincers', icon: '⚯', name: 'Pincers', source: 'Crab · scorpion', note: 'Paired grasping claws' },
+]
 
 function loadGame() {
   try {
@@ -83,7 +91,7 @@ function renderOverview(c,p,s) {
   <section class="temperament"><span>✺</span><div><b>INSTINCT PROFILE</b><p>${p.brain>.67?'A keen strategist with a curious streak.':p.speed>.67?'Restless and quick to answer a challenge.':p.muscle>.68?'A bold powerhouse who thrives on action.':'An adaptable soul, ready to find its own path.'}</p></div></section><div class="record-line"><span>RECORD <b>${c.wins||0}W — ${Math.max(0,(c.battles||0)-(c.wins||0))}L</b></span><span>AGE <b>${formatAge(c.born)}</b></span></div>`
 }
 function renderGenome(c) {
-  const groups = { frame:'FRAME', limb:'LIMBS', weapon:'ADAPTATIONS', core:'CORE', form:'BODY PLAN', coat:'PIGMENT' }
+  const groups = { frame:'FRAME', limb:'LIMBS', weapon:'ADAPTATIONS', adapt:'ANIMAL ADAPTATIONS', core:'CORE', form:'BODY PLAN', coat:'PIGMENT' }
   return `<div class="genome-summary"><small>DNA SEQUENCE<br><b>${dnaSequence(c.genome).slice(0,22)}…</b></small><span>GEN ${c.generation||0}</span></div>${Object.entries(groups).map(([group,label])=>`<section class="gene-group"><div class="gene-group-title">${label}<span>${GENES.filter(g=>g.group===group).length} LOCI</span></div>${GENES.filter(g=>g.group===group).map(g=>{const [a,b]=c.genome?.[g.key]||[0.5,0.5];return `<div class="gene-line" title="${esc(g.desc)}"><span>${g.label}</span><span class="alleles"><i style="width:${a*100}%"></i><i style="width:${b*100}%"></i></span><b>${Math.round((a+b)*50)}</b></div>`}).join('')}</section>`).join('')}`
 }
 function renderAbilities(c) {
@@ -101,10 +109,18 @@ function showModal(content) { $('#modal').innerHTML=content; $('#modal-layer').c
 function closeModal() { $('#modal-layer').classList.add('hidden') }
 function discover() {
   if(game.coins<60)return toast('You need 60 shards to discover a creature.')
+  showModal(`<button class="modal-close" data-action="close" aria-label="Close discovery">×</button><div class="eyebrow">VERDANT HOLLOW · FIELD FIND</div><h2>Shape a new foundling</h2><p>Choose up to three adaptations to guarantee in this creature’s DNA. Every pick grows into a visible body part.</p><div class="adapt-grid">${ADAPTATIONS.map(a=>`<label class="adapt-option"><input type="checkbox" name="adaptation" value="${a.key}"><span class="adapt-icon">${a.icon}</span><span class="adapt-copy"><b>${a.name}</b><small>${a.source}</small><em>${a.note}</em></span><i class="adapt-check">＋</i></label>`).join('')}</div><div class="adapt-footer"><span id="adapt-count">0 / 3 SELECTED</span><small>DISCOVERY COST · 60 ✧</small></div><div class="modal-actions"><button class="secondary-btn" data-action="close">CANCEL</button><button class="primary-btn" data-action="discover-confirm">SEARCH THE HOLLOW ↗</button></div>`)
+}
+function discoverConfirm() {
+  if(game.coins<60)return toast('You need 60 shards to discover a creature.')
+  const selectedTraits=[...document.querySelectorAll('input[name="adaptation"]:checked')].map(input=>input.value).filter(key=>ADAPTATIONS.some(a=>a.key===key)).slice(0,3)
   game.coins-=60
-  const c=generateWild(); c.needs=freshNeeds(82)
-  game.creatures.push(c); game.selected=c.id; if(mode==='habitat') { world.addCreature(c,{position:[(Math.random()-.5)*5,0,(Math.random()-.5)*5]}); world.setSelected(c.id) }
-  persist(); renderRoster(); renderProfile(); toast(`${c.name} joined your sanctuary.`)
+  const c=generateWild()
+  for(const adaptation of ADAPTATIONS) c.genome[adaptation.key]=selectedTraits.includes(adaptation.key)?[0.88,0.96]:[0.04,0.12]
+  c.needs=freshNeeds(82)
+  game.creatures.push(c); game.selected=c.id; closeModal()
+  if(mode==='habitat') { world.addCreature(c,{position:[(Math.random()-.5)*5,0,(Math.random()-.5)*5]}); world.setSelected(c.id) }
+  persist(); renderRoster(); renderProfile(); toast(`${c.name} joined your sanctuary with ${selectedTraits.length} adaptation${selectedTraits.length===1?'':'s'}.`)
 }
 function breedDialog() {
   if(game.creatures.length<2)return toast('You need two creatures to breed.')
@@ -203,6 +219,7 @@ function exitBattle() { battle=null; world.exitArena(); mode='habitat'; updateMo
 function dispatch(action) {
   if(action==='close')closeModal()
   else if(action==='discover')discover()
+  else if(action==='discover-confirm')discoverConfirm()
   else if(action==='breed')breedDialog()
   else if(action==='breed-confirm')breed()
   else if(action==='rename')renameDialog()
@@ -214,6 +231,13 @@ function dispatch(action) {
   else if(action==='habitat'){if(mode==='arena')exitBattle();else toast('You are in the Verdant Hollow.')}
   else if(action==='profile'){document.querySelector('.right-panel').scrollIntoView({behavior:'smooth',block:'start'})}
 }
+document.addEventListener('change',e=>{
+  const input=e.target.closest('input[name="adaptation"]')
+  if(!input)return
+  const checked=[...document.querySelectorAll('input[name="adaptation"]:checked')]
+  if(checked.length>3){input.checked=false;toast('Choose up to three adaptations.')}
+  $('#adapt-count').textContent=`${document.querySelectorAll('input[name="adaptation"]:checked').length} / 3 SELECTED`
+})
 document.addEventListener('click',e=>{
   const action=e.target.closest('[data-action]')?.dataset.action
   if(action){dispatch(action);return}

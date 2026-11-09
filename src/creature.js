@@ -156,6 +156,18 @@ function addMesh(parent, geo, material, pos = [0, 0, 0], rot = [0, 0, 0], scl = 
   return m
 }
 
+function addBone(parent, start, end, radius, material) {
+  const a = new THREE.Vector3(...start), b = new THREE.Vector3(...end)
+  const direction = b.clone().sub(a)
+  const mesh = new THREE.Mesh(new THREE.CylinderGeometry(radius * 0.62, radius, direction.length(), 6), material)
+  mesh.position.copy(a).add(b).multiplyScalar(0.5)
+  mesh.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), direction.normalize())
+  mesh.castShadow = true
+  mesh.receiveShadow = true
+  parent.add(mesh)
+  return mesh
+}
+
 // ─── creature mesh ─────────────────────────────────────────────────────────
 export function buildCreature(genome, opts = {}) {
   const p = phenotype(genome)
@@ -241,6 +253,29 @@ export function buildCreature(genome, opts = {}) {
       horn.castShadow = true
     }
   }
+  // Animal adaptations are independent loci so inherited combinations reshape the silhouette.
+  if (p.antlers > 0.24) {
+    for (const side of [-1, 1]) {
+      const root = [side * headScale * 0.38, headScale * 0.61, headScale * 0.02]
+      const crown = [side * headScale * (0.82 + p.antlers * 0.3), headScale * (1.18 + p.antlers * 0.5), -headScale * 0.08]
+      const fork = [side * headScale * (0.96 + p.antlers * 0.32), headScale * (1.65 + p.antlers * 0.48), -headScale * 0.12]
+      addBone(headGroup, root, crown, headScale * 0.105, boneMat)
+      addBone(headGroup, crown, fork, headScale * 0.075, boneMat)
+      addBone(headGroup, [side * headScale * 0.62, headScale * 0.95, 0], [side * headScale * 1.24, headScale * 1.2, headScale * 0.02], headScale * 0.07, boneMat)
+      addBone(headGroup, [side * headScale * 1.24, headScale * 1.2, headScale * 0.02], [side * headScale * 1.35, headScale * 1.52, -headScale * 0.02], headScale * 0.055, boneMat)
+    }
+  }
+  if (p.antennae > 0.24) {
+    for (const side of [-1, 1]) {
+      const base = [side * headScale * 0.32, headScale * 0.68, -headScale * 0.12]
+      const bend = [side * headScale * (0.65 + p.antennae * 0.24), headScale * (1.18 + p.antennae * 0.2), -headScale * 0.2]
+      const tip = [side * headScale * (0.98 + p.antennae * 0.38), headScale * (1.34 + p.antennae * 0.32), -headScale * 0.27]
+      addBone(headGroup, base, bend, headScale * 0.045, darkMat)
+      addBone(headGroup, bend, tip, headScale * 0.035, darkMat)
+      addMesh(headGroup, new THREE.SphereGeometry(headScale * (0.085 + p.antennae * 0.035), 8, 6), accentMat, tip)
+    }
+  }
+
   // crest / ear fins
   if (p.wings > 0.3) {
     for (const side of [-1, 1]) {
@@ -260,6 +295,72 @@ export function buildCreature(genome, opts = {}) {
         [0, torsoRY * (0.72 - Math.abs(t - 0.4) * 0.5), torsoRZ * (0.62 - t * 1.25)],
         [-0.24, 0, 0], [1, 1, 1])
       spike.castShadow = true
+    }
+  }
+  // Animal-inspired body structures follow the torso proportions and remain visible at portrait scale.
+  if (p.carapace > 0.24) {
+    const shellY = torsoRY * 0.34
+    const shell = addMesh(bodyGroup,
+      new THREE.SphereGeometry(1, 20, 12, 0, Math.PI * 2, 0, Math.PI / 2),
+      mat(p.accentColor, { roughness: 0.34, metalness: 0.16 }),
+      [0, shellY, -torsoRZ * 0.02], [torsoTilt, 0, 0],
+      [torsoRX * 0.94, torsoRY * (0.72 + p.carapace * 0.16), torsoRZ * 0.78])
+    shell.material.side = THREE.DoubleSide
+    addMesh(bodyGroup, new THREE.TorusGeometry(1, 0.045, 5, 28), darkMat,
+      [0, shellY, -torsoRZ * 0.02], [Math.PI / 2 + torsoTilt, 0, 0],
+      [torsoRX * 0.94, torsoRZ * 0.78, 1])
+    for (const side of [-1, 1]) {
+      addMesh(bodyGroup, new THREE.IcosahedronGeometry(1, 1), accentMat,
+        [side * torsoRX * 0.57, shellY + torsoRY * 0.13, -torsoRZ * 0.06],
+        [0, 0, side * 0.28], [torsoRX * 0.28, torsoRY * 0.36, torsoRZ * 0.62])
+    }
+  }
+  if (p.fins > 0.24) {
+    const count = 3 + Math.round(p.fins * 3)
+    for (let i = 0; i < count; i++) {
+      const t = i / (count - 1)
+      const z = torsoRZ * (0.72 - t * 1.48)
+      const height = torsoRY * (0.32 + p.fins * 0.72) * (0.7 + Math.sin(t * Math.PI) * 0.3)
+      const width = torsoRZ * (0.12 + p.fins * 0.04)
+      const finShape = new THREE.Shape()
+      finShape.moveTo(-width * 0.5, 0)
+      finShape.quadraticCurveTo(-width * 0.28, height * 0.72, width * 0.02, height)
+      finShape.quadraticCurveTo(width * 0.12, height * 0.5, width * 0.5, 0)
+      finShape.closePath()
+      const fin = addMesh(bodyGroup, new THREE.ShapeGeometry(finShape, 8), wingMat,
+        [0, torsoRY * (0.78 - t * 0.08), z], [0, Math.PI / 2, 0])
+      fin.material = wingMat
+      addBone(bodyGroup, [0, torsoRY * (0.78 - t * 0.08), z + width * 0.42],
+        [0, torsoRY * (0.78 - t * 0.08) + height * 0.78, z - width * 0.02], torsoRX * 0.025, accentMat)
+    }
+  }
+  if (p.gills > 0.24) {
+    for (const side of [-1, 1]) {
+      const baseX = side * headScale * 0.68
+      const baseY = -headScale * 0.08
+      const baseZ = headScale * 0.16
+      for (let i = 0; i < 4; i++) {
+        const spread = (i - 1.5) / 1.5
+        const length = headScale * (0.38 + p.gills * 0.48)
+        const start = [baseX, baseY + spread * headScale * 0.08, baseZ - i * headScale * 0.035]
+        const end = [side * (headScale * 1.08 + length * 0.34), baseY + spread * length * 0.62, baseZ - length * (0.48 + i * 0.035)]
+        const tip = [side * (headScale * 1.1 + length * 0.46), baseY + spread * length * 0.78, baseZ - length * (0.55 + i * 0.035)]
+        addBone(headGroup, start, end, headScale * 0.052, accentMat)
+        addBone(headGroup, end, tip, headScale * 0.034, boneMat)
+      }
+    }
+  }
+  if (p.pincers > 0.24) {
+    for (const side of [-1, 1]) {
+      const reach = torsoRX * (0.35 + p.pincers * 0.28)
+      const shoulder = [side * torsoRX * 0.76, torsoRY * 0.08, torsoRZ * 0.48]
+      const elbow = [side * (torsoRX + reach * 0.45), torsoRY * 0.02, torsoRZ * 0.7]
+      const palm = [side * (torsoRX + reach * 0.62), torsoRY * 0.02, torsoRZ * 0.82]
+      addBone(bodyGroup, shoulder, elbow, legThick * 0.48, darkMat)
+      addBone(bodyGroup, elbow, palm, legThick * 0.4, clawMat)
+      const clawLength = torsoRZ * (0.16 + p.pincers * 0.12)
+      addBone(bodyGroup, palm, [side * (torsoRX + reach * 0.9), torsoRY * 0.18, torsoRZ * 0.82 + clawLength], legThick * 0.34, clawMat)
+      addBone(bodyGroup, palm, [side * (torsoRX + reach * 0.95), -torsoRY * 0.14, torsoRZ * 0.82 + clawLength * 0.88], legThick * 0.34, clawMat)
     }
   }
   // shoulder scutes
