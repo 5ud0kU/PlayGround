@@ -82,7 +82,7 @@ function persist() {
 }
 function selected() { return game.creatures.find(c => c.id === game.selected) || game.creatures[0] }
 function toast(text) { const el = $('#toast'); el.textContent = text; el.classList.add('show'); clearTimeout(toastTimer); toastTimer = setTimeout(() => el.classList.remove('show'), 2600) }
-function selectCreature(id) { if (!game.creatures.some(c => c.id === id)) return; game.selected = id; world.setSelected(id); renderRoster(); renderProfile(); persist() }
+function selectCreature(id) { if (mode === 'arena') return toast('Return to the Hollow before changing your active creature.'); if (!game.creatures.some(c => c.id === id)) return; game.selected = id; world.setSelected(id); renderRoster(); renderProfile(); persist() }
 function populateWorld() {
   world.clearCreatures()
   const spots = [[-2.7,0,.5],[.4,0,-1.5],[2.4,0,1.7],[-1.4,0,3.2],[3.2,0,-2.3],[0,0,2.8]]
@@ -92,7 +92,7 @@ function populateWorld() {
 function renderRoster() {
   $('#roster').innerHTML = game.creatures.map((c,i) => {
     const p = phenotype(c.genome), vitality = Object.values(c.needs).reduce((a,b) => a+b,0)/4
-    return `<button class="roster-card ${c.id === game.selected ? 'selected' : ''}" data-creature="${esc(c.id)}"><span class="roster-num">0${i+1}</span><span class="roster-avatar" style="--creature-color:${p.bodyColor};--creature-accent:${p.accentColor}"><i></i></span><span class="roster-info"><b>${esc(c.name)}</b><small>GEN ${c.generation || 0} <i>·</i> ${c.sex === 'F' ? '♀' : '♂'}</small><span class="roster-mini"><i style="width:${vitality}%"></i></span></span><span class="roster-rating">${statsOf(c).power}</span></button>`
+    return `<button class="roster-card ${c.id === game.selected ? 'selected' : ''}" data-creature="${esc(c.id)}" ${mode === 'arena' ? 'disabled title="Return to the Hollow before changing your active creature."' : ''}><span class="roster-num">0${i+1}</span><span class="roster-avatar" style="--creature-color:${p.bodyColor};--creature-accent:${p.accentColor}"><i></i></span><span class="roster-info"><b>${esc(c.name)}</b><small>GEN ${c.generation || 0} <i>·</i> ${c.sex === 'F' ? '♀' : '♂'}</small><span class="roster-mini"><i style="width:${vitality}%"></i></span></span><span class="roster-rating">${statsOf(c).power}</span></button>`
   }).join('')
   $('#roster-count').textContent = String(game.creatures.length).padStart(2,'0'); $('#stage-count').textContent = game.creatures.length
 }
@@ -319,7 +319,7 @@ function startBattle() {
   const player=selected(), foe=game.creatures.find(c=>c.id===$('#foe-select')?.value)
   if(!foe)return closeModal()
   closeModal(); mode='arena'; tab='overview'
-  battle={player,foe,hp:{player:maxHpOf(player),foe:maxHpOf(foe)},maxHp:{player:maxHpOf(player),foe:maxHpOf(foe)},sta:{player:maxStaminaOf(player),foe:maxStaminaOf(foe)},maxSta:{player:maxStaminaOf(player),foe:maxStaminaOf(foe)},guard:{player:false,foe:false},busy:false,turn:1}
+  battle={player,foe,hp:{player:maxHpOf(player),foe:maxHpOf(foe)},maxHp:{player:maxHpOf(player),foe:maxHpOf(foe)},sta:{player:maxStaminaOf(player),foe:maxStaminaOf(foe)},maxSta:{player:maxStaminaOf(player),foe:maxStaminaOf(foe)},guard:{player:false,foe:false},status:{player:{staggered:false,accuracyDown:false},foe:{staggered:false,accuracyDown:false}},busy:false,turn:1}
   world.enterArena(player,foe); updateModeUI(); renderProfile(); renderBattle()
 }
 function updateModeUI() {
@@ -330,18 +330,27 @@ function updateModeUI() {
   $('.creature-count').style.display=mode==='arena'?'none':''
   $('[data-action="arena"]').innerHTML=mode==='arena'?'↩ RETURN TO HOLLOW <b>↗</b>':'⚔ ENTER ARENA <b>↗</b>'
   $('[data-action="breed"]').disabled=mode==='arena'
+  renderRoster()
 }
 function renderBattle() {
   const hud=$('#battle-hud'), result=$('#battle-result')
   if(!battle) { hud.classList.add('hidden'); result.classList.add('hidden'); return }
   hud.classList.remove('hidden')
-  const bar=(who,label)=>`<div class="fighter-hud ${who}"><div class="fighter-label"><b>${esc(battle[who].name)}</b><span>${label}</span></div><div class="fight-meter hp"><i style="width:${battle.hp[who]/battle.maxHp[who]*100}%"></i></div><small>HP ${battle.hp[who]} / ${battle.maxHp[who]}</small><div class="fight-meter stamina"><i style="width:${battle.sta[who]/battle.maxSta[who]*100}%"></i></div><small>STA ${battle.sta[who]} / ${battle.maxSta[who]}</small></div>`
+  const bar=(who,label)=>{const effects=[battle.status[who].staggered?'STAGGERED':'',battle.status[who].accuracyDown?'OFF-BALANCE':''].filter(Boolean);return `<div class="fighter-hud ${who}"><div class="fighter-label"><b>${esc(battle[who].name)}</b><span>${label}</span></div>${effects.length?`<small class="battle-effects">${effects.join(' · ')}</small>`:''}<div class="fight-meter hp"><i style="width:${battle.hp[who]/battle.maxHp[who]*100}%"></i></div><small>HP ${battle.hp[who]} / ${battle.maxHp[who]}</small><div class="fight-meter stamina"><i style="width:${battle.sta[who]/battle.maxSta[who]*100}%"></i></div><small>STA ${battle.sta[who]} / ${battle.maxSta[who]}</small></div>`}
   hud.innerHTML=`${bar('player','YOUR CREATURE')}<div class="battle-turn">ROUND ${battle.turn}<small>${battle.busy?'ACTION IN PROGRESS':'CHOOSE AN ABILITY'}</small></div>${bar('foe','OPPONENT')}`
   if(battle.finished) { result.classList.remove('hidden'); result.innerHTML=`<div class="result-stamp">${battle.winner==='player'?'VICTORY':'DEFEAT'}</div><b>${esc(battle.winner==='player'?battle.player.name:battle.foe.name)} ${battle.winner==='player'?'wins the bout':'takes the round'}</b><button class="primary-btn" data-action="battle-exit">RETURN TO HOLLOW</button>` } else result.classList.add('hidden')
   renderProfile()
 }
 function applyMove(attacker, defender, move, done) {
   if(!battle||battle.finished)return
+  const status=battle.status[attacker]
+  if(status.staggered) {
+    status.staggered=false
+    battle.guard[attacker]=false
+    battle.sta[attacker]=Math.min(battle.maxSta[attacker],battle.sta[attacker]+8)
+    toast(`${battle[attacker].name} is staggered and loses the turn.`)
+    done(); return
+  }
   if(move.type==='defend') {
     battle.guard[attacker]=true; battle.sta[attacker]=Math.min(battle.maxSta[attacker],battle.sta[attacker]+Math.abs(move.cost));
     toast(`${battle[attacker].name} braces and recovers stamina.`); done(); return
@@ -349,15 +358,20 @@ function applyMove(attacker, defender, move, done) {
   const cost=Math.max(0,move.cost)
   if(battle.sta[attacker]<cost) { battle.sta[attacker]=Math.min(battle.maxSta[attacker],battle.sta[attacker]+12); toast(`${battle[attacker].name} is winded and recovers 12 stamina.`); done(); return }
   battle.sta[attacker]-=cost
-  if(Math.random()>move.acc) { toast(`${move.name} missed!`); done(); return }
+  const accuracy=Math.max(0.1,move.acc-(status.accuracyDown?0.25:0))
+  status.accuracyDown=false
+  if(Math.random()>accuracy) { toast(`${move.name} missed!`); done(); return }
   let damage=Math.round((10+move.power*16)*(0.78+statsOf(battle[attacker]).power/180)*(0.82+Math.random()*.36))
   if(move.crit&&Math.random()<move.crit)damage=Math.round(damage*1.5)
-  if(battle.guard[defender]&&!move.pierce){damage=Math.ceil(damage*.48);battle.guard[defender]=false;toast(`${battle[defender].name} guarded the hit!`)}
+  if(battle.guard[defender]){if(!move.pierce){damage=Math.ceil(damage*.48);toast(`${battle[defender].name} guarded the hit!`)}battle.guard[defender]=false}
   battle.hp[defender]=Math.max(0,battle.hp[defender]-damage)
+  const landedEffects=[]
+  if(move.stagger&&Math.random()<move.stagger){battle.status[defender].staggered=true;landedEffects.push('staggered')}
+  if(move.debuff==='acc'){battle.status[defender].accuracyDown=true;landedEffects.push('off-balance')}
   const defenderSide=attacker==='player'?'foe':'player'
   world.battleLunge(attacker,()=>world.hitReact(defenderSide,done))
   world.burst?.({x:attacker==='player'?2: -2,y:1.5,z:.3},phenotype(battle[attacker].genome).accentColor,15)
-  toast(`${move.name} dealt ${damage} damage.`)
+  toast(`${move.name} dealt ${damage} damage${landedEffects.length?` and left ${battle[defender].name} ${landedEffects.join(' and ')}.`:'.'}`)
   if(move.buff==='evade')battle.guard[attacker]=true
 }
 function playerTurn(moveId) {
@@ -365,6 +379,7 @@ function playerTurn(moveId) {
   const move=movesFor(battle.player).find(m=>m.id===moveId); if(!move)return
   battle.busy=true; renderBattle()
   applyMove('player','foe',move,()=>{
+    if(!battle||battle.finished)return
     if(battle.hp.foe<=0)return finishBattle('player')
     setTimeout(enemyTurn,650)
   })
@@ -374,6 +389,7 @@ function enemyTurn() {
   const choices=movesFor(battle.foe).filter(m=>m.type==='strike'&&battle.sta.foe>=m.cost)
   const move=choices[Math.floor(Math.random()*choices.length)]||movesFor(battle.foe).find(m=>m.type==='defend')
   battle.turn++; applyMove('foe','player',move,()=>{
+    if(!battle||battle.finished)return
     if(battle.hp.player<=0)return finishBattle('foe')
     battle.busy=false; renderBattle()
   })

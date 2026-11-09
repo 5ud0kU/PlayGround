@@ -254,7 +254,7 @@ export function movesFor(creature) {
     tag: 'GUARD', desc: 'Plant your feet. Halve the next hit, recover stamina.',
     fx: 'guard',
   })
-  return moves.slice(0, 6)
+  return [...moves.filter(move => move.type === 'strike').slice(0, 5), moves.find(move => move.type === 'defend')]
 }
 
 // ─── breeding ──────────────────────────────────────────────────────────────
