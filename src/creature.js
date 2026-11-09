@@ -141,7 +141,7 @@ function mat(color, opts = {}) {
     transparent: opts.transparent ?? false,
     opacity: opts.opacity ?? 1,
     side: opts.side ?? THREE.FrontSide,
-    map: opts.map,
+    ...(opts.map ? { map: opts.map } : {}),
   })
 }
 
