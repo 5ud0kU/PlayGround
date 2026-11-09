@@ -18,6 +18,12 @@ const ADAPTATIONS = [
   { key: 'carapace', icon: '⬡', name: 'Carapace', source: 'Beetle · crab', note: 'A glossy protective shell' },
   { key: 'pincers', icon: '⚯', name: 'Pincers', source: 'Crab · scorpion', note: 'Paired grasping claws' },
 ]
+const DNA_CONTRACTS = [
+  { id: 'bulwark', icon: '⬡', name: 'Living Bulwark', note: 'Armor ≥ 75% · Bone ≥ 65%', goals: [['armor', .75], ['bone', .65]] },
+  { id: 'skybound', icon: '≋', name: 'Skybound', note: 'Wings ≥ 72% · Speed ≥ 58%', goals: [['wings', .72], ['speed', .58]] },
+  { id: 'colossus', icon: '⬤', name: 'Colossus', note: 'Stature ≥ 72% · Muscle ≥ 65%', goals: [['size', .72], ['muscle', .65]] },
+  { id: 'mosaic', icon: '✦', name: 'Wild Mosaic', note: 'Pattern ≥ 70% · Skin ≥ 70%', goals: [['pattern', .70], ['hide', .70]] },
+]
 
 function loadGame() {
   try {
@@ -153,23 +159,57 @@ function editArchive(id) {
   const groups = { frame:'FRAME', limb:'LIMBS', weapon:'ADAPTATIONS', adapt:'ANIMAL ADAPTATIONS', core:'CORE', form:'BODY PLAN', coat:'PIGMENT' }
   const rows = Object.entries(groups).map(([group, label]) => `<section class="archive-gene-group"><h3>${label}</h3>${GENES.filter(g => g.group === group).map(g => {
     const [a, b] = entry.genome?.[g.key] || [0.5, 0.5]
-    return `<div class="archive-gene-row"><label for="allele-${g.key}-0">${esc(g.label)}</label><input id="allele-${g.key}-0" aria-label="${esc(g.label)} allele A" type="number" min="0" max="1" step="0.01" value="${Number(a).toFixed(2)}" data-gene="${g.key}" data-allele="0"><input aria-label="${esc(g.label)} allele B" type="number" min="0" max="1" step="0.01" value="${Number(b).toFixed(2)}" data-gene="${g.key}" data-allele="1"></div>`
+    return `<div class="archive-gene-row"><label>${esc(g.label)}</label><div class="allele-control"><small>A</small><input aria-label="${esc(g.label)} allele A" type="range" min="0" max="1" step="0.01" value="${Number(a)}" data-gene="${g.key}" data-allele="0"><output>${Math.round(a * 100)}%</output></div><div class="allele-control"><small>B</small><input aria-label="${esc(g.label)} allele B" type="range" min="0" max="1" step="0.01" value="${Number(b)}" data-gene="${g.key}" data-allele="1"><output>${Math.round(b * 100)}%</output></div></div>`
   }).join('')}</section>`).join('')
-  showModal(`<button class="modal-close" data-action="archives" aria-label="Back to archive">×</button><div class="eyebrow">GENOME EDITOR · MANUAL ALLELE CONTROL</div><h2>Edit archived DNA</h2><label class="field-label">RECORD NAME<input id="archive-edit-name" maxlength="28" value="${esc(entry.name)}"></label><p>Set each allele from 0.00 to 1.00. Changes affect this archive record only.</p><div class="archive-editor-scroll">${rows}</div><div class="modal-actions"><button class="secondary-btn" data-action="archives">CANCEL</button><button class="primary-btn" data-action="archive-update" data-archive-id="${esc(entry.id)}">SAVE DNA EDITS</button></div>`)
+  const p = phenotype(entry.genome)
+  const contracts = DNA_CONTRACTS.map(contract => {
+    const progress = contractProgress(contract, entry.genome)
+    const claimed = (entry.claimedContracts || []).includes(contract.id)
+    return `<article class="dna-contract ${progress.complete ? 'complete' : ''} ${claimed ? 'claimed' : ''}" data-contract="${contract.id}"><span class="contract-icon">${contract.icon}</span><div class="contract-copy"><b>${contract.name}</b><small>${contract.note}</small><div class="contract-meter"><i style="width:${progress.percent}%"></i></div></div><strong>${claimed ? '✓ CLAIMED' : progress.complete ? '+12 ✧' : `${progress.percent}%`}</strong></article>`
+  }).join('')
+  showModal(`<button class="modal-close" data-action="archives" aria-label="Back to archive">×</button><div class="eyebrow">GENOME FORGE · DESIGN A LINEAGE</div><h2>Engineer archived DNA</h2><label class="field-label">RECORD NAME<input id="archive-edit-name" maxlength="28" value="${esc(entry.name)}"></label><div class="forge-preview"><i id="forge-swatch" style="--creature-color:${p.bodyColor};--creature-accent:${p.accentColor}"></i><div><b id="forge-species">${esc(p.speciesType)} · ${esc(p.bodyPlanName)}</b><small>Live phenotype preview · edits stay in this archive</small></div><span id="forge-sequence">${dnaSequence(entry.genome).slice(0,10)}…</span></div><section class="contract-board"><div class="forge-section-title"><span>RESEARCH CONTRACTS</span><small>COMPLETE & SAVE · +12 ✧ EACH</small></div>${contracts}</section><p class="forge-instructions">Tune paired alleles to complete contracts, then save your design. Each contract pays once per archive record.</p><div class="archive-editor-scroll">${rows}</div><div class="modal-actions"><button class="secondary-btn" data-action="archives">CANCEL</button><button class="primary-btn" data-action="archive-update" data-archive-id="${esc(entry.id)}">SAVE DNA DESIGN ↗</button></div>`)
+}
+function contractProgress(contract, genome) {
+  const ratios = contract.goals.map(([key, target]) => Math.min(1, ((genome?.[key] || [0.5, 0.5]).reduce((sum, allele) => sum + Number(allele || 0), 0) / 2) / target))
+  const percent = Math.round(ratios.reduce((sum, ratio) => sum + ratio, 0) / ratios.length * 100)
+  return { percent, complete: ratios.every(ratio => ratio >= 1) }
+}
+function draftArchiveGenome() {
+  const genome = {}
+  GENES.forEach(g => { genome[g.key] = [0.5, 0.5] })
+  document.querySelectorAll('#modal [data-gene][data-allele]').forEach(input => { genome[input.dataset.gene][Number(input.dataset.allele)] = Number(input.value) })
+  return genome
+}
+function refreshForgePreview() {
+  const genome = draftArchiveGenome(), p = phenotype(genome)
+  const swatch = $('#forge-swatch')
+  if (swatch) { swatch.style.setProperty('--creature-color', p.bodyColor); swatch.style.setProperty('--creature-accent', p.accentColor) }
+  const species = $('#forge-species')
+  if (species) species.textContent = `${p.speciesType} · ${p.bodyPlanName}`
+  const sequence = $('#forge-sequence')
+  if (sequence) sequence.textContent = `${dnaSequence(genome).slice(0, 10)}…`
+  DNA_CONTRACTS.forEach(contract => {
+    const card = $(`[data-contract="${contract.id}"]`)
+    if (!card) return
+    const progress = contractProgress(contract, genome), claimed = card.classList.contains('claimed')
+    card.classList.toggle('complete', progress.complete)
+    card.querySelector('.contract-meter i').style.width = `${progress.percent}%`
+    card.querySelector('strong').textContent = claimed ? '✓ CLAIMED' : progress.complete ? '+12 ✧' : `${progress.percent}%`
+  })
 }
 function updateArchive(id) {
   const entry = game.archives.find(item => item.id === id)
   if (!entry) return archivesDialog()
   const name = $('#archive-edit-name')?.value.trim()
   if (!name) return toast('Give this archive record a name.')
-  const genome = copyGenome(entry.genome)
-  document.querySelectorAll('#modal [data-gene][data-allele]').forEach(input => {
-    const old = genome[input.dataset.gene][Number(input.dataset.allele)]
-    const value = input.value.trim() === '' ? old : Number(input.value)
-    genome[input.dataset.gene][Number(input.dataset.allele)] = clamp(Number.isFinite(value) ? value : old, 0, 1)
-  })
+  const genome = copyGenome(draftArchiveGenome())
+  const rewards = DNA_CONTRACTS.filter(contract => !(entry.claimedContracts || []).includes(contract.id) && contractProgress(contract, genome).complete)
+  entry.claimedContracts ||= []
+  entry.claimedContracts.push(...rewards.map(contract => contract.id))
   entry.name = name; entry.genome = genome; entry.editedAt = Date.now()
-  persist(); archivesDialog(); toast(`${name} updated.`)
+  game.coins += rewards.length * 12
+  persist(); archivesDialog()
+  toast(rewards.length ? `${rewards.length} DNA contract${rewards.length === 1 ? '' : 's'} completed! +${rewards.length * 12} shards.` : `${name} design saved.`)
 }
 function createFromArchiveDialog(id) {
   const entry = game.archives.find(item => item.id === id)
@@ -313,6 +353,13 @@ function dispatch(action, id) {
   else if(action==='habitat'){if(mode==='arena')exitBattle();else toast('You are in the Verdant Hollow.')}
   else if(action==='profile'){document.querySelector('.right-panel').scrollIntoView({behavior:'smooth',block:'start'})}
 }
+document.addEventListener('input', e => {
+  const slider = e.target.closest('#modal input[type="range"][data-gene][data-allele]')
+  if (!slider) return
+  const output = slider.parentElement.querySelector('output')
+  if (output) output.textContent = `${Math.round(Number(slider.value) * 100)}%`
+  refreshForgePreview()
+})
 document.addEventListener('change',e=>{
   const input=e.target.closest('input[name="adaptation"]')
   if(!input)return
