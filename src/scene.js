@@ -250,6 +250,8 @@ export class World {
     this.setMode('habitat', true)
     this.bindPointer()
     this.resize()
+    this.resizeObserver = new ResizeObserver(() => this.resize())
+    this.resizeObserver.observe(this.container)
     window.addEventListener('resize', () => this.resize())
 
     this.clock = new THREE.Clock()

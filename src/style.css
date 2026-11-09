@@ -33,7 +33,7 @@
 .topbar{position:fixed;inset:0 0 auto;height:68px;padding:0 24px;background:linear-gradient(180deg,#0b120feF,#0d1511d9);backdrop-filter:blur(14px);border-bottom:1px solid #91a98126;z-index:10}
 .workspace{position:fixed;inset:0;display:block;min-height:0;max-width:none;margin:0;z-index:1;pointer-events:none}
 .stage-column{position:static;padding:0;min-width:0;pointer-events:none}
-.viewport-wrap{position:fixed;inset:0;width:100vw;height:100dvh;min-height:0;border:0;border-radius:0;box-shadow:none;z-index:0;pointer-events:auto}
+.viewport-wrap{position:fixed;inset:0;width:auto;height:auto;min-height:0;border:0;border-radius:0;box-shadow:none;z-index:0;pointer-events:auto}
 .viewport-vignette{background:linear-gradient(0deg,#0b120d80,transparent 30%,#0b120d40),radial-gradient(ellipse,transparent 42%,#07100b78)}
 .stage-head{position:fixed;top:83px;left:50%;transform:translateX(-50%);z-index:5;display:flex;align-items:center;gap:25px;margin:0;padding:10px 14px;border:1px solid #83947b35;border-radius:8px;background:#101813bd;box-shadow:0 12px 35px #0005;backdrop-filter:blur(12px);pointer-events:auto;white-space:nowrap}
 .stage-head h1{font-size:18px;margin:4px 0 0}.stage-head .eyebrow{font-size:8px}.stage-controls{gap:5px}.view-btn{background:#17221bd9;padding:8px 9px}.creature-count{margin-right:3px}
