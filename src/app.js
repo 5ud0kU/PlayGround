@@ -30,7 +30,7 @@ function loadGame() {
     const saved = JSON.parse(localStorage.getItem(SAVE))
     if (saved?.creatures?.length) {
       saved.creatures.forEach(c => { c.needs ||= freshNeeds(78); c.wins ||= 0; c.battles ||= 0; c.born ||= Date.now() })
-      return { creatures: saved.creatures, selected: saved.selected || saved.creatures[0].id, coins: saved.coins ?? 120, food: saved.food ?? 8, wins: saved.wins ?? 0, archives: Array.isArray(saved.archives) ? saved.archives : [], xp: Math.max(0, Math.floor(Number(saved.xp) || 0)), xpClaims: Array.isArray(saved.xpClaims) ? saved.xpClaims : [] }
+      return { creatures: saved.creatures, selected: saved.selected || saved.creatures[0].id, coins: saved.coins ?? 120, food: saved.food ?? 8, wins: saved.wins ?? 0, archives: Array.isArray(saved.archives) ? saved.archives : [], xp: Math.max(0, Math.floor(Number(saved.xp) || 0)), xpClaims: Array.isArray(saved.xpClaims) ? saved.xpClaims : [], roadLevel: Math.max(1, Math.floor(Number(saved.roadLevel) || 1)) }
     }
   } catch (e) { console.warn('Save could not be loaded', e) }
   const creatures = [
@@ -39,7 +39,7 @@ function loadGame() {
     generateStarter(173, { hueA: .47, hueB: .1, armor: .79, bone: .78, size: .77, muscle: .55, wings: .1 }),
   ]
   ;['Cinderhorn', 'Glimmerwing', 'Mossback'].forEach((n, i) => { creatures[i].name = n; creatures[i].needs = freshNeeds(86 - i * 5) })
-  return { creatures, selected: creatures[0].id, coins: 120, food: 8, wins: 0, archives: [], xp: 0, xpClaims: [] }
+  return { creatures, selected: creatures[0].id, coins: 120, food: 8, wins: 0, archives: [], xp: 0, xpClaims: [], roadLevel: 1 }
 }
 const game = loadGame()
 let mode = 'habitat', tab = 'overview', world, battle = null, toastTimer, releaseTargetId = null
@@ -73,7 +73,7 @@ function awardXP(amount, reason, claimKey = null) {
   return true
 }
 function persist() {
-  try { localStorage.setItem(SAVE, JSON.stringify({ creatures: game.creatures, selected: game.selected, coins: game.coins, food: game.food, wins: game.wins, archives: game.archives, xp: game.xp, xpClaims: game.xpClaims })) } catch (e) { console.warn('Save failed', e) }
+  try { localStorage.setItem(SAVE, JSON.stringify({ creatures: game.creatures, selected: game.selected, coins: game.coins, food: game.food, wins: game.wins, archives: game.archives, xp: game.xp, xpClaims: game.xpClaims, roadLevel: game.roadLevel })) } catch (e) { console.warn('Save failed', e) }
   $('#coins').textContent = game.coins; $('#food').textContent = game.food
   const progress = levelInfo()
   $('#player-level').textContent = String(progress.level).padStart(2, '0')
@@ -313,23 +313,28 @@ function releaseCreature() {
   toast(`${creature.name} has been released from the sanctuary.`)
 }
 function arenaDialog() {
-  if(game.creatures.length<2)return toast('Discover another creature before entering the arena.')
   const player=selected(), foes=game.creatures.filter(c=>c.id!==player.id)
   const foe=[...foes].sort((a,b)=>Math.abs(statsOf(a).power-statsOf(player).power)-Math.abs(statsOf(b).power-statsOf(player).power))[0]
-  showModal(`<button class="modal-close" data-action="close">×</button><div class="eyebrow">THE CRUCIBLE · FRIENDLY MATCH</div><h2>Ready for a bout?</h2><p>Choose your opponent. Battles are turn-based; abilities and stamina are shaped by each creature's DNA.</p><div class="fight-preview"><div class="fight-side"><i style="--creature-color:${phenotype(player.genome).bodyColor}"></i><b>${esc(player.name)}</b><small>POWER ${statsOf(player).power}</small></div><span>VS</span><select id="foe-select">${foes.map(c=>`<option value="${esc(c.id)}" ${c.id===foe.id?'selected':''}>${esc(c.name)} · POW ${statsOf(c).power}</option>`).join('')}</select></div><div class="modal-actions"><button class="secondary-btn" data-action="close">CANCEL</button><button class="primary-btn" data-action="battle-start">BEGIN BOUT ↗</button></div>`)
+  showModal(`<button class="modal-close" data-action="close" aria-label="Close">×</button><div class="eyebrow">THE CRUCIBLE · BATTLE GATE</div><h2>Choose your challenge</h2><p>Your selected creature enters turn-based combat. Abilities and stamina are shaped by its DNA.</p><section class="road-card"><div class="eyebrow">ENDLESS ROAD · LEVEL ${game.roadLevel}${game.roadLevel%10===0?' · BOSS':''}</div><b>One wild genome. Every level.</b><p>Face a totally random creature, with tougher opponents each level and an Apex boss every tenth level. Progress is saved.</p><button class="primary-btn" data-action="road-start">${game.roadLevel%10===0?'FACE THE BOSS':'START LEVEL '+game.roadLevel} ↗</button></section><div class="friendly-gate"><div class="eyebrow">FRIENDLY MATCH</div>${foe?`<div class="fight-preview"><div class="fight-side"><i style="--creature-color:${phenotype(player.genome).bodyColor}"></i><b>${esc(player.name)}</b><small>POWER ${statsOf(player).power}</small></div><span>VS</span><select id="foe-select">${foes.map(c=>`<option value="${esc(c.id)}" ${c.id===foe.id?'selected':''}>${esc(c.name)} · POW ${statsOf(c).power}</option>`).join('')}</select></div><button class="secondary-btn" data-action="battle-start">BEGIN FRIENDLY BOUT</button>`:`<p>Discover another creature to unlock friendly matches.</p>`}</div>`)
 }
-function startBattle() {
-  const player=selected(), foe=game.creatures.find(c=>c.id===$('#foe-select')?.value)
+function startBattle(roadLevel=null, carry=null) {
+  const player=selected()
+  const foe=roadLevel==null?game.creatures.find(c=>c.id===$('#foe-select')?.value):generateWild()
   if(!foe)return closeModal()
+  const boss=roadLevel!=null&&roadLevel%10===0
+  if(boss)foe.name=`Apex ${foe.name}`
   closeModal(); mode='arena'; tab='overview'
-  battle={player,foe,hp:{player:maxHpOf(player),foe:maxHpOf(foe)},maxHp:{player:maxHpOf(player),foe:maxHpOf(foe)},sta:{player:maxStaminaOf(player),foe:maxStaminaOf(foe)},maxSta:{player:maxStaminaOf(player),foe:maxStaminaOf(foe)},guard:{player:false,foe:false},status:{player:{staggered:false,accuracyDown:false},foe:{staggered:false,accuracyDown:false}},busy:false,turn:1}
+  const maxHp={player:maxHpOf(player),foe:maxHpOf(foe)}, maxSta={player:maxStaminaOf(player),foe:maxStaminaOf(foe)}
+  const enemyHpScale=roadLevel==null?1:1+(roadLevel-1)*0.035+(boss?0.55:0)
+  battle={player,foe,challenge:roadLevel==null?null:{level:roadLevel,boss},hp:{player:maxHp.player,foe:Math.round(maxHp.foe*enemyHpScale)},maxHp:{...maxHp,foe:Math.round(maxHp.foe*enemyHpScale)},sta:{player:maxSta.player,foe:maxSta.foe},maxSta,guard:{player:false,foe:false},status:{player:{staggered:false,accuracyDown:false},foe:{staggered:false,accuracyDown:false}},busy:false,turn:1}
+  if(carry){battle.hp.player=Math.min(maxHp.player,carry.hp+Math.round(maxHp.player*0.28));battle.sta.player=Math.min(maxSta.player,carry.sta+Math.round(maxSta.player*0.45))}
   world.enterArena(player,foe); updateModeUI(); renderProfile(); renderBattle()
 }
 function updateModeUI() {
   document.querySelectorAll('[data-mode]').forEach(b=>b.classList.toggle('active',b.dataset.mode===mode))
-  $('#stage-title').textContent=mode==='arena'?'The Crucible':'The Verdant Hollow'
-  $('#stage-kicker').textContent=mode==='arena'?'⚔ COMBAT ARENA':'◌ OPEN HABITAT'
-  $('#scene-tag-text').textContent=mode==='arena'?'BATTLE IN PROGRESS':'ECOSYSTEM ACTIVE'
+  $('#stage-title').textContent=mode==='arena'?(battle?.challenge?`Endless Road · Level ${battle.challenge.level}`:'The Crucible'):'The Verdant Hollow'
+  $('#stage-kicker').textContent=mode==='arena'?(battle?.challenge?(battle.challenge.boss?'☠ APEX BOSS':'⚔ ENDLESS CHALLENGE'):'⚔ COMBAT ARENA'):'◌ OPEN HABITAT'
+  $('#scene-tag-text').textContent=mode==='arena'?(battle?.challenge?(battle.challenge.boss?'BOSS ENCOUNTER':'ROAD CHALLENGE'):'BATTLE IN PROGRESS'):'ECOSYSTEM ACTIVE'
   $('.creature-count').style.display=mode==='arena'?'none':''
   $('[data-action="arena"]').innerHTML=mode==='arena'?'↩ RETURN TO HOLLOW <b>↗</b>':'⚔ ENTER ARENA <b>↗</b>'
   $('[data-action="breed"]').disabled=mode==='arena'
@@ -340,8 +345,15 @@ function renderBattle() {
   if(!battle) { hud.classList.add('hidden'); result.classList.add('hidden'); return }
   hud.classList.remove('hidden')
   const bar=(who,label)=>{const effects=[battle.status[who].staggered?'STAGGERED':'',battle.status[who].accuracyDown?'OFF-BALANCE':''].filter(Boolean);return `<div class="fighter-hud ${who}"><div class="fighter-label"><b>${esc(battle[who].name)}</b><span>${label}</span></div>${effects.length?`<small class="battle-effects">${effects.join(' · ')}</small>`:''}<div class="fight-meter hp"><i style="width:${battle.hp[who]/battle.maxHp[who]*100}%"></i></div><small>HP ${battle.hp[who]} / ${battle.maxHp[who]}</small><div class="fight-meter stamina"><i style="width:${battle.sta[who]/battle.maxSta[who]*100}%"></i></div><small>STA ${battle.sta[who]} / ${battle.maxSta[who]}</small></div>`}
-  hud.innerHTML=`${bar('player','YOUR CREATURE')}<div class="battle-turn">ROUND ${battle.turn}<small>${battle.busy?'ACTION IN PROGRESS':'CHOOSE AN ABILITY'}</small></div>${bar('foe','OPPONENT')}`
-  if(battle.finished) { result.classList.remove('hidden'); result.innerHTML=`<div class="result-stamp">${battle.winner==='player'?'VICTORY':'DEFEAT'}</div><b>${esc(battle.winner==='player'?battle.player.name:battle.foe.name)} ${battle.winner==='player'?'wins the bout':'takes the round'}</b><button class="primary-btn" data-action="battle-exit">RETURN TO HOLLOW</button>` } else result.classList.add('hidden')
+  const center=battle.challenge?`LEVEL ${battle.challenge.level}${battle.challenge.boss?' · BOSS':''}<small>${battle.busy?'ACTION IN PROGRESS':'ROUND '+battle.turn}</small>`:`ROUND ${battle.turn}<small>${battle.busy?'ACTION IN PROGRESS':'CHOOSE AN ABILITY'}</small>`
+  hud.innerHTML=`${bar('player','YOUR CREATURE')}<div class="battle-turn">${center}</div>${bar('foe',battle.challenge?(battle.challenge.boss?'APEX BOSS':'WILD CHALLENGER'):'OPPONENT')}`
+  if(battle.finished) {
+    result.classList.remove('hidden')
+    const road=battle.challenge, won=battle.winner==='player'
+    const heading=road?(won?`Level ${road.level} cleared${road.boss?' · boss defeated':''}`:`Run ended at level ${road.level}`):(won?'wins the bout':'takes the round')
+    const buttons=road?`${won?'<button class="primary-btn" data-action="road-next">NEXT LEVEL ↗</button>':'<button class="primary-btn" data-action="road-retry">RETRY LEVEL ↻</button>'}<button class="secondary-btn" data-action="battle-exit">RETURN TO HOLLOW</button>`:'<button class="primary-btn" data-action="battle-exit">RETURN TO HOLLOW</button>'
+    result.innerHTML=`<div class="result-stamp">${won?'VICTORY':'DEFEAT'}</div><b>${esc(road?heading:`${won?battle.player.name:battle.foe.name} ${heading}`)}</b><div class="result-actions">${buttons}</div>`
+  } else result.classList.add('hidden')
   renderProfile()
 }
 function applyMove(attacker, defender, move, done) {
@@ -364,7 +376,8 @@ function applyMove(attacker, defender, move, done) {
   const accuracy=Math.max(0.1,move.acc-(status.accuracyDown?0.25:0))
   status.accuracyDown=false
   if(Math.random()>accuracy) { toast(`${move.name} missed!`); done(); return }
-  let damage=Math.round((10+move.power*16)*(0.78+statsOf(battle[attacker]).power/180)*(0.82+Math.random()*.36))
+  const roadScale=attacker==='foe'&&battle.challenge?(1+(battle.challenge.level-1)*0.022+(battle.challenge.boss?0.28:0)):1
+  let damage=Math.round((10+move.power*16)*(0.78+statsOf(battle[attacker]).power/180)*(0.82+Math.random()*.36)*roadScale)
   if(move.crit&&Math.random()<move.crit)damage=Math.round(damage*1.5)
   if(battle.guard[defender]){if(!move.pierce){damage=Math.ceil(damage*.48);toast(`${battle[defender].name} guarded the hit!`)}battle.guard[defender]=false}
   battle.hp[defender]=Math.max(0,battle.hp[defender]-damage)
@@ -401,10 +414,16 @@ function finishBattle(winner) {
   battle.finished=true; battle.winner=winner; battle.busy=false
   world.faint(winner==='player'?'foe':'player')
   battle.player.battles=(battle.player.battles||0)+1; battle.foe.battles=(battle.foe.battles||0)+1
-  if(winner==='player'){battle.player.wins=(battle.player.wins||0)+1;game.wins++;game.coins+=25;awardXP(35, 'arena victory');toast('Victory! +25 shards and +35 XP.')}else toast(`${battle.foe.name} wins this round. Your creature will be ready for another bout.`)
+  if(winner==='player'){battle.player.wins=(battle.player.wins||0)+1;game.wins++;game.coins+=battle.challenge?35+Math.min(100,battle.challenge.level*2):25;awardXP(battle.challenge?45+Math.min(200,battle.challenge.level*5):35, 'arena victory');if(battle.challenge)game.roadLevel=battle.challenge.level+1;toast(battle.challenge?'Road victory! Rewards claimed.':'Victory! +25 shards and +35 XP.')}else toast(`${battle.foe.name} wins this round. Your creature will be ready for another bout.`)
   persist(); renderBattle(); renderRoster()
 }
-function exitBattle() { battle=null; world.exitArena(); mode='habitat'; updateModeUI(); populateWorld(); renderBattle(); renderProfile() }
+function exitBattle() { if(battle?.busy&&!battle.finished)return toast('Wait for the current battle animation to finish.'); battle=null; world.exitArena(); mode='habitat'; updateModeUI(); populateWorld(); renderBattle(); renderProfile() }
+function advanceRoad(retry=false) {
+  if(!battle?.challenge||!battle.finished||battle.winner!=='player'&&!retry)return
+  const previous=battle, level=retry?previous.challenge.level:previous.challenge.level+1
+  if(!retry){game.roadLevel=level;persist()}
+  startBattle(level,{hp:previous.hp.player,sta:previous.sta.player})
+}
 function dispatch(action, id) {
   if(action==='close')closeModal()
   else if(action==='discover')discover()
@@ -425,6 +444,9 @@ function dispatch(action, id) {
   else if(action==='release-confirm')releaseCreature()
   else if(action==='arena')mode==='arena'?exitBattle():arenaDialog()
   else if(action==='battle-start')startBattle()
+  else if(action==='road-start')startBattle(game.roadLevel)
+  else if(action==='road-next')advanceRoad()
+  else if(action==='road-retry')advanceRoad(true)
   else if(action==='battle-exit')exitBattle()
   else if(action==='guide')guideDialog()
   else if(action==='player-profile')playerDialog()
