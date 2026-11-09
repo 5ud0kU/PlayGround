@@ -21,7 +21,7 @@ function rng(seed) {
 }
 
 function coatTexture(p, key) {
-  const cacheKey = `${p.bodyColor}|${p.darkColor}|${p.accentColor}|${p.pattern.toFixed(2)}|${key}`
+  const cacheKey = `${p.bodyColor}|${p.darkColor}|${p.accentColor}|${p.pattern.toFixed(2)}|${p.hide.toFixed(2)}|${key}`
   if (texCache.has(cacheKey)) return texCache.get(cacheKey)
   const size = 256
   const canvas = document.createElement('canvas')
@@ -40,45 +40,75 @@ function coatTexture(p, key) {
   }
   ctx.globalAlpha = 1
 
-  const mode = p.pattern < 0.34 ? 'spots' : p.pattern < 0.68 ? 'bands' : 'dapple'
+  const mode = Math.min(3, Math.floor(p.pattern * 4))
   ctx.fillStyle = p.darkColor
-  if (mode === 'spots') {
-    ctx.globalAlpha = 0.5
-    for (let i = 0; i < 34; i++) {
-      const x = r() * size, y = r() * size, rad = 3 + r() * 8
-      ctx.beginPath(); ctx.arc(x, y, rad, 0, Math.PI * 2); ctx.fill()
+  if (mode === 0) {
+    // High-contrast spots
+    ctx.globalAlpha = 0.48
+    for (let i = 0; i < 42; i++) {
+      const x = r() * size, y = r() * size, rad = 3 + r() * 9
+      ctx.beginPath(); ctx.ellipse(x, y, rad * (0.7 + r() * 0.7), rad, r() * Math.PI, 0, Math.PI * 2); ctx.fill()
     }
-    ctx.globalAlpha = 0.3
-    ctx.fillStyle = p.accentColor
-    for (let i = 0; i < 16; i++) {
-      ctx.beginPath(); ctx.arc(r() * size, r() * size, 1.5 + r() * 3, 0, Math.PI * 2); ctx.fill()
-    }
-  } else if (mode === 'bands') {
-    ctx.globalAlpha = 0.4
-    for (let i = 0; i < 6; i++) {
-      const y = i * 44 + 10 + r() * 8
+  } else if (mode === 1) {
+    // Flowing bands
+    ctx.globalAlpha = 0.42
+    for (let i = 0; i < 7; i++) {
+      const y = i * 39 + 6 + r() * 10
       ctx.beginPath(); ctx.moveTo(0, y)
       ctx.bezierCurveTo(70, y - 12, 170, y + 12, size, y - 4)
       ctx.lineTo(size, y + 12 + r() * 8)
       ctx.bezierCurveTo(170, y + 24, 70, y + 2, 0, y + 18)
       ctx.closePath(); ctx.fill()
     }
-    ctx.globalAlpha = 0.25
-    ctx.fillStyle = p.accentColor
-    for (let i = 0; i < 5; i++) {
-      const y = i * 52 + 30
-      ctx.fillRect(0, y, size, 2)
+  } else if (mode === 2) {
+    // Rosettes with a lighter center
+    for (let i = 0; i < 24; i++) {
+      const x = r() * size, y = r() * size, rad = 5 + r() * 11
+      ctx.globalAlpha = 0.52
+      ctx.beginPath(); ctx.arc(x, y, rad, 0, Math.PI * 2); ctx.fill()
+      ctx.globalAlpha = 0.58
+      ctx.fillStyle = p.accentColor
+      ctx.beginPath(); ctx.arc(x, y, rad * 0.48, 0, Math.PI * 2); ctx.fill()
+      ctx.fillStyle = p.darkColor
     }
   } else {
-    ctx.globalAlpha = 0.36
-    for (let i = 0; i < 70; i++) {
-      const x = r() * size, y = r() * size, rad = 4 + r() * 14
+    // Fine dapple
+    ctx.globalAlpha = 0.34
+    for (let i = 0; i < 96; i++) {
+      const x = r() * size, y = r() * size, rad = 2 + r() * 7
       ctx.beginPath(); ctx.arc(x, y, rad, 0, Math.PI * 2); ctx.fill()
     }
-    ctx.globalAlpha = 0.3
+  }
+
+  // Skin-specific surface detail makes hide alleles apparent on the model.
+  ctx.globalAlpha = p.hide < 0.25 ? 0.28 : 0.38
+  if (p.hide < 0.25) {
+    // Velvet/fur: short directional fibers
+    ctx.strokeStyle = p.accentColor; ctx.lineWidth = 1
+    for (let i = 0; i < 700; i++) {
+      const x = r() * size, y = r() * size, len = 2 + r() * 5
+      ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x + len * 0.35, y + len); ctx.stroke()
+    }
+  } else if (p.hide < 0.5) {
+    // Scaled hide: overlapping scale arcs
+    ctx.strokeStyle = p.darkColor; ctx.lineWidth = 1.4
+    for (let y = -8; y < size + 12; y += 12) for (let x = -8 + ((y / 12) % 2) * 7; x < size + 12; x += 14) {
+      ctx.beginPath(); ctx.arc(x, y, 7, 0.15, Math.PI - 0.15); ctx.stroke()
+    }
+  } else if (p.hide < 0.75) {
+    // Plated hide: angular overlapping scutes
+    ctx.fillStyle = p.accentColor; ctx.strokeStyle = p.darkColor; ctx.lineWidth = 2
+    for (let y = 0; y < size; y += 32) for (let x = (y % 64 ? 0 : 16); x < size; x += 32) {
+      ctx.globalAlpha = 0.24 + r() * 0.16
+      ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x + 13, y + 3); ctx.lineTo(x + 16, y + 17); ctx.lineTo(x + 8, y + 23); ctx.lineTo(x, y + 17); ctx.closePath(); ctx.fill(); ctx.stroke()
+    }
+  } else {
+    // Crystal hide: bright crystalline facets
     ctx.fillStyle = p.accentColor
-    for (let i = 0; i < 26; i++) {
-      ctx.beginPath(); ctx.arc(r() * size, r() * size, 1 + r() * 2.5, 0, Math.PI * 2); ctx.fill()
+    for (let i = 0; i < 34; i++) {
+      const x = r() * size, y = r() * size, rad = 4 + r() * 13
+      ctx.globalAlpha = 0.22 + r() * 0.3
+      ctx.beginPath(); ctx.moveTo(x, y - rad); ctx.lineTo(x + rad * 0.65, y + rad * 0.35); ctx.lineTo(x, y + rad); ctx.lineTo(x - rad * 0.65, y + rad * 0.35); ctx.closePath(); ctx.fill()
     }
   }
   ctx.globalAlpha = 0.18
@@ -134,14 +164,18 @@ export function buildCreature(genome, opts = {}) {
   root.add(model)
 
   const s = 0.78 + p.size * 0.52
-  const torsoRY = (0.5 + p.girth * 0.3) * s
-  const torsoRX = (0.52 + p.girth * 0.48) * s
-  const torsoRZ = (0.62 + p.length * 0.55) * s
-  const legLen = (0.34 + p.legs * 0.62) * s
-  const legThick = 0.09 + p.stance * 0.12
+  const species = Math.min(3, Math.floor(p.archetype * 4))
+  const biped = p.posture > 0.58
+  const typeWidth = [1, 1.16, 0.78, 1.27][species]
+  const typeLength = [1, 1.12, 0.86, 1.08][species]
+  const torsoRY = (0.5 + p.girth * 0.3) * s * [1, 0.98, 0.82, 1.2][species]
+  const torsoRX = (0.52 + p.girth * 0.48) * s * typeWidth
+  const torsoRZ = (0.62 + p.length * 0.55) * s * typeLength
+  const legLen = (0.34 + p.legs * 0.62) * s * [1, 0.9, 1.22, 0.82][species] * (biped ? 1.04 : 1)
+  const legThick = (0.09 + p.stance * 0.12) * [1, 0.9, 0.78, 1.42][species]
   const hipY = legLen + torsoRY * 0.42
-  const headScale = (0.34 + p.head * 0.36) * s
-  const bodyY = legLen + torsoRY * 0.55
+  const headScale = (0.34 + p.head * 0.36) * s * [1, 1.05, 0.88, 1.22][species]
+  const bodyY = legLen + torsoRY * (biped ? 0.62 : 0.55)
 
   const coat = coatTexture(p, 'body')
   const bodyMat = mat(0xffffff, { map: coat, roughness: 0.66 })
@@ -158,15 +192,16 @@ export function buildCreature(genome, opts = {}) {
   model.add(bodyGroup)
 
   const torsoGeo = new THREE.IcosahedronGeometry(1, 2)
-  const torso = addMesh(bodyGroup, torsoGeo, bodyMat, [0, 0, 0], [0, 0, 0], [torsoRX, torsoRY, torsoRZ])
-  // belly plate
-  addMesh(bodyGroup, new THREE.IcosahedronGeometry(1, 1), mat(p.accentColor, { roughness: 0.7 }), [0, -torsoRY * 0.55, torsoRZ * 0.05], [0, 0, 0], [torsoRX * 0.8, torsoRY * 0.42, torsoRZ * 0.86])
+  const torsoTilt = biped ? -0.62 : 0
+  const torso = addMesh(bodyGroup, torsoGeo, bodyMat, [0, 0, 0], [torsoTilt, 0, 0], [torsoRX, torsoRY, torsoRZ])
+  // belly plate follows the body plan's torso angle.
+  addMesh(bodyGroup, new THREE.IcosahedronGeometry(1, 1), mat(p.accentColor, { roughness: 0.7 }), [0, -torsoRY * 0.55, torsoRZ * 0.05], [torsoTilt, 0, 0], [torsoRX * 0.8, torsoRY * 0.42, torsoRZ * 0.86])
 
   // ── neck & head ──
   const neckBase = new THREE.Group()
-  neckBase.position.set(0, torsoRY * 0.3, torsoRZ * 0.62)
+  neckBase.position.set(0, torsoRY * (biped ? 0.36 : 0.3), torsoRZ * 0.62)
   bodyGroup.add(neckBase)
-  const neckLen = (0.16 + p.neck * 0.62) * s
+  const neckLen = (0.16 + p.neck * 0.62) * s * [1, 1.34, 1.08, 0.76][species]
   const neckGeo = new THREE.CapsuleGeometry(0.17 * s, neckLen, 3, 8)
   addMesh(neckBase, neckGeo, bodyMat, [0, neckLen * 0.34, 0.06 * s], [-0.62 + p.neck * 0.2, 0, 0], [1, 1, 1.05 + p.neck * 0.3])
 
@@ -232,6 +267,20 @@ export function buildCreature(genome, opts = {}) {
     addMesh(bodyGroup, new THREE.IcosahedronGeometry(1, 0), darkMat,
       [side * torsoRX * 0.72, torsoRY * 0.34, torsoRZ * 0.3], [0, 0, side * 0.4], [torsoRX * 0.26, torsoRY * 0.2, torsoRZ * 0.42])
   }
+  // Species-specific silhouette details make the four archetypes readable at a glance.
+  if (species === 1) { // Mireling: paired cheek/gill frills along a broad ribcage.
+    for (let i = 0; i < 3; i++) for (const side of [-1, 1]) {
+      addMesh(bodyGroup, new THREE.ConeGeometry(torsoRY * 0.16, torsoRY * 0.68, 5), accentMat,
+        [side * torsoRX * 0.88, torsoRY * (0.28 - i * 0.08), torsoRZ * (0.42 - i * 0.48)],
+        [0, 0, side * -1.05], [0.72, 1, 0.48])
+    }
+  } else if (species === 2) { // Skykin: swept feather crest, even when wing membranes are small.
+    for (let i = 0; i < 3; i++) {
+      addMesh(headGroup, new THREE.ConeGeometry(headScale * 0.12, headScale * (0.52 + i * 0.12), 5), wingMat,
+        [(i - 1) * headScale * 0.2, headScale * 0.68, -headScale * (0.12 + i * 0.12)],
+        [-0.5, 0, (i - 1) * 0.16])
+    }
+  }
 
   // ── tail ──
   const tailSegs = []
@@ -242,8 +291,8 @@ export function buildCreature(genome, opts = {}) {
     const segCount = 4
     for (let i = 0; i < segCount; i++) {
       const seg = new THREE.Group()
-      const r = (0.2 - i * 0.032) * s * (0.7 + p.tail * 0.7)
-      const len = (0.32 + p.tail * 0.42) * s
+      const r = (0.2 - i * 0.032) * s * (0.7 + p.tail * 0.7) * [1, 0.88, 0.78, 1.32][species]
+      const len = (0.32 + p.tail * 0.42) * s * [1, 1.22, 1.08, 0.82][species]
       seg.position.z = i === 0 ? 0 : -len * 0.92
       const g = new THREE.CapsuleGeometry(Math.max(0.045, r), len, 2, 7)
       addMesh(seg, g, i % 2 === 0 ? bodyMat : darkMat, [0, 0, -len * 0.46], [Math.PI / 2, 0, 0])
@@ -262,8 +311,8 @@ export function buildCreature(genome, opts = {}) {
     const wingGroup = new THREE.Group()
     wingGroup.position.set(0, torsoRY * 0.5, torsoRZ * 0.05)
     bodyGroup.add(wingGroup)
-    const span = (0.9 + p.wings * 1.35) * s
-    const height = (0.6 + p.wings * 0.9) * s
+    const span = (0.9 + p.wings * 1.35) * s * [1, 0.92, 1.28, 1.05][species]
+    const height = (0.6 + p.wings * 0.9) * s * [1, 0.94, 1.22, 1.08][species]
     const shape = new THREE.Shape()
     shape.moveTo(0, 0)
     shape.quadraticCurveTo(span * 0.55, height * 0.7, span, height * 0.18)
@@ -288,37 +337,58 @@ export function buildCreature(genome, opts = {}) {
     }
   }
 
-  // ── legs ──
+  // ── legs & biped arms ──
   const legs = []
-  const hips = [
-    { x: -1, z: 0.48, front: true },
-    { x: 1, z: 0.48, front: true },
-    { x: -1, z: -0.5, front: false },
-    { x: 1, z: -0.5, front: false },
-  ]
+  const hips = biped
+    ? [{ x: -1, z: -0.06, front: true }, { x: 1, z: -0.06, front: true }]
+    : [
+        { x: -1, z: 0.48, front: true }, { x: 1, z: 0.48, front: true },
+        { x: -1, z: -0.5, front: false }, { x: 1, z: -0.5, front: false },
+      ]
   for (const hip of hips) {
     const leg = new THREE.Group()
-    leg.position.set(hip.x * torsoRX * 0.62, hipY, hip.z * torsoRZ * 0.86)
-    const scaleLeg = (hip.front ? 0.86 : 1) * (0.8 + p.legs * 0.34)
+    leg.position.set(hip.x * torsoRX * (biped ? 0.43 : 0.62), hipY, hip.z * torsoRZ * (biped ? 0.48 : 0.86))
+    const scaleLeg = (hip.front ? 0.86 : 1) * (0.8 + p.legs * 0.34) * (biped ? 1.14 : 1)
     const upper = legLen * 0.52 * scaleLeg
     const lower = legLen * 0.54 * scaleLeg
-    const thick = legThick * (hip.front ? 0.84 : 1.1)
-    addMesh(leg, new THREE.CapsuleGeometry(thick, upper, 2, 7), bodyMat, [0, -upper * 0.5, 0], [0, 0, 0], [1, 1, 1])
+    const thick = legThick * (hip.front ? (biped ? 1.12 : 0.84) : 1.1)
+    addMesh(leg, new THREE.CapsuleGeometry(thick, upper, 2, 7), bodyMat, [0, -upper * 0.5, 0])
     const knee = new THREE.Group()
     knee.position.y = -upper
     leg.add(knee)
     addMesh(knee, new THREE.SphereGeometry(thick * 1.15, 8, 6), darkMat)
     addMesh(knee, new THREE.CapsuleGeometry(thick * 0.78, lower * 0.82, 2, 7), darkMat, [0, -lower * 0.45, 0])
-    const foot = addMesh(knee, new THREE.IcosahedronGeometry(thick * 1.7, 1), darkMat, [0, -lower * 0.92, thick * 0.55], [0, 0, 0], [1.5, 0.55, 1.9])
+    const foot = addMesh(knee, new THREE.IcosahedronGeometry(thick * 1.7, 1), darkMat, [0, -lower * 0.92, thick * 0.55], [0, 0, 0], [biped ? 1.2 : 1.5, 0.55, biped ? 1.45 : 1.9])
     foot.castShadow = true
-    // claws
     for (let c = -1; c <= 1; c++) {
       addMesh(knee, new THREE.ConeGeometry(thick * 0.3, thick * 1.15, 4), clawMat,
         [c * thick * 0.7, -lower * 0.94, thick * 1.4], [Math.PI / 2.2, 0, 0])
     }
     leg.rotation.x = hip.front ? 0.06 : -0.06
-    legs.push({ group: leg, knee, front: hip.front, phase: hip.front ? (hip.x > 0 ? 0 : Math.PI) : (hip.x > 0 ? Math.PI : 0) })
+    legs.push({ group: leg, knee, front: hip.front, phase: hip.x > 0 ? 0 : Math.PI })
     model.add(leg)
+  }
+  const arms = []
+  if (biped) {
+    const armLen = legLen * 0.72
+    for (const side of [-1, 1]) {
+      const arm = new THREE.Group()
+      arm.position.set(side * torsoRX * 0.72, torsoRY * 0.52, torsoRZ * 0.18)
+      arm.rotation.z = side * 0.16
+      const upper = armLen * 0.54, fore = armLen * 0.48, thick = legThick * 0.68
+      addMesh(arm, new THREE.CapsuleGeometry(thick, upper, 2, 7), bodyMat, [0, -upper * 0.42, 0])
+      const elbow = new THREE.Group()
+      elbow.position.y = -upper * 0.84
+      arm.add(elbow)
+      addMesh(elbow, new THREE.CapsuleGeometry(thick * 0.76, fore, 2, 7), darkMat, [0, -fore * 0.42, torsoRZ * 0.025])
+      addMesh(elbow, new THREE.SphereGeometry(thick * 1.18, 8, 6), darkMat, [0, -fore * 0.86, torsoRZ * 0.04])
+      for (let c = -1; c <= 1; c++) {
+        addMesh(elbow, new THREE.ConeGeometry(thick * 0.2, thick * 0.72, 4), clawMat,
+          [c * thick * 0.54, -fore * 0.9, torsoRZ * 0.16], [Math.PI / 2, 0, 0])
+      }
+      bodyGroup.add(arm)
+      arms.push({ group: arm, side })
+    }
   }
 
   // ── ground fit ──
@@ -360,6 +430,9 @@ export function buildCreature(genome, opts = {}) {
       const phase = walkAmt > 0.02 ? Math.sin(t * 7.5 + leg.phase) : 0
       leg.group.rotation.x = (leg.front ? 0.06 : -0.06) + phase * 0.5 * walkAmt
       leg.knee.rotation.x = Math.max(0, -phase) * 0.6 * walkAmt
+    }
+    for (const arm of arms) {
+      arm.group.rotation.x = Math.sin(t * 7.5 + (arm.side < 0 ? Math.PI : 0)) * 0.16 * walkAmt
     }
     if (flashTime > 0) {
       flashTime -= dt

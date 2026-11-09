@@ -2,7 +2,7 @@ import './style.css'
 import { World } from './scene.js'
 import {
   GENES, phenotype, statsOf, maxHpOf, maxStaminaOf, movesFor,
-  freshNeeds, generateStarter, makeName, sexOf, breedGenomes,
+  freshNeeds, generateStarter, generateWild, makeName, sexOf, breedGenomes,
   geneticSimilarity, decayNeeds, formatAge, dnaSequence, cryptoId,
 } from './dna.js'
 
@@ -72,8 +72,8 @@ function renderProfile() {
   const combat = mode === 'arena' && battle && !battle.finished && c.id === battle.player.id ? `<section class="combat-actions"><div class="block-heading"><span>CHOOSE YOUR MOVE</span><small>${battle.busy?'TURN IN PROGRESS':'YOUR TURN'}</small></div><div class="combat-grid">${movesFor(c).map(m=>`<button data-move="${m.id}" ${battle.busy?'disabled':''}><b>${m.icon} ${esc(m.name)}</b><small>${m.type==='defend'?`+${Math.abs(m.cost)} STA`:`${Math.max(0,m.cost)} STA · ${Math.round((m.power||0)*20)} PWR`}</small></button>`).join('')}</div></section>` : ''
   const trait = p.horns > .62 ? 'HORNED' : p.wings > .62 ? 'WINGED' : p.armor > .62 ? 'ARMORED' : 'ADAPTIVE'
   $('#right-panel').innerHTML = `<div class="profile-heading"><div><div class="eyebrow">CREATURE DOSSIER</div><h2>FIELD NOTES</h2></div><button class="icon-btn" data-action="rename" title="Rename creature">···</button></div>
-  <div class="identity"><div class="identity-art" style="--creature-color:${p.bodyColor};--creature-accent:${p.accentColor}"><span class="art-creature"><i class="art-tail"></i><i class="art-horn"></i><i class="art-eye"></i></span><small>SPECIMEN 0${game.creatures.indexOf(c)+1}</small><b>${p.horns > .72 || p.wings > .75 ? '✦ RARE' : '◈ COMMON'}</b></div><div class="identity-copy"><div class="name-line"><h3>${esc(c.name)}</h3><span>${c.sex === 'F' ? '♀' : '♂'}</span></div><p>${c.generation ? `Generation ${c.generation} · offspring` : 'Foundling · Verdant Hollow'}</p><div class="trait-pills"><span>${trait}</span><span>LV ${Math.min(99,1+(c.wins||0))}</span></div></div></div>
-  <div class="profile-tabs"><button data-tab="overview" class="${tab==='overview'?'active':''}">OVERVIEW</button><button data-tab="genome" class="${tab==='genome'?'active':''}">GENOME <i>20</i></button><button data-tab="abilities" class="${tab==='abilities'?'active':''}">ABILITIES</button></div><div class="profile-content">${body}</div>${combat}
+  <div class="identity"><div class="identity-art" style="--creature-color:${p.bodyColor};--creature-accent:${p.accentColor}"><span class="art-creature"><i class="art-tail"></i><i class="art-horn"></i><i class="art-eye"></i></span><small>SPECIMEN 0${game.creatures.indexOf(c)+1}</small><b>${p.horns > .72 || p.wings > .75 ? '✦ RARE' : '◈ COMMON'}</b></div><div class="identity-copy"><div class="name-line"><h3>${esc(c.name)}</h3><span>${c.sex === 'F' ? '♀' : '♂'}</span></div><p>${c.generation ? `Generation ${c.generation} · offspring` : 'Foundling · Verdant Hollow'}</p><div class="trait-pills"><span>${esc(p.speciesType.toUpperCase())}</span><span>${p.postureName.toUpperCase()}</span><span>${trait}</span></div><small class="skin-note">${esc(p.skinType)}</small></div></div>
+  <div class="profile-tabs"><button data-tab="overview" class="${tab==='overview'?'active':''}">OVERVIEW</button><button data-tab="genome" class="${tab==='genome'?'active':''}">GENOME <i>${GENES.length}</i></button><button data-tab="abilities" class="${tab==='abilities'?'active':''}">ABILITIES</button></div><div class="profile-content">${body}</div>${combat}
   <div class="profile-footer"><button class="care-btn" data-care="feed"><span>◉</span><b>FEED</b><small>1 NECTAR</small></button><button class="care-btn" data-care="play"><span>♡</span><b>PLAY</b><small>+FUN</small></button><button class="care-btn" data-care="rest"><span>☾</span><b>REST</b><small>+ENERGY</small></button></div>`
 }
 function renderOverview(c,p,s) {
@@ -83,8 +83,8 @@ function renderOverview(c,p,s) {
   <section class="temperament"><span>✺</span><div><b>INSTINCT PROFILE</b><p>${p.brain>.67?'A keen strategist with a curious streak.':p.speed>.67?'Restless and quick to answer a challenge.':p.muscle>.68?'A bold powerhouse who thrives on action.':'An adaptable soul, ready to find its own path.'}</p></div></section><div class="record-line"><span>RECORD <b>${c.wins||0}W — ${Math.max(0,(c.battles||0)-(c.wins||0))}L</b></span><span>AGE <b>${formatAge(c.born)}</b></span></div>`
 }
 function renderGenome(c) {
-  const groups = { frame:'FRAME', limb:'LIMBS', weapon:'ADAPTATIONS', core:'CORE', coat:'PIGMENT' }
-  return `<div class="genome-summary"><small>DNA SEQUENCE<br><b>${dnaSequence(c.genome).slice(0,22)}…</b></small><span>GEN ${c.generation||0}</span></div>${Object.entries(groups).map(([group,label])=>`<section class="gene-group"><div class="gene-group-title">${label}<span>${GENES.filter(g=>g.group===group).length} LOCI</span></div>${GENES.filter(g=>g.group===group).map(g=>{const [a,b]=c.genome[g.key];return `<div class="gene-line" title="${esc(g.desc)}"><span>${g.label}</span><span class="alleles"><i style="width:${a*100}%"></i><i style="width:${b*100}%"></i></span><b>${Math.round((a+b)*50)}</b></div>`}).join('')}</section>`).join('')}`
+  const groups = { frame:'FRAME', limb:'LIMBS', weapon:'ADAPTATIONS', core:'CORE', form:'BODY PLAN', coat:'PIGMENT' }
+  return `<div class="genome-summary"><small>DNA SEQUENCE<br><b>${dnaSequence(c.genome).slice(0,22)}…</b></small><span>GEN ${c.generation||0}</span></div>${Object.entries(groups).map(([group,label])=>`<section class="gene-group"><div class="gene-group-title">${label}<span>${GENES.filter(g=>g.group===group).length} LOCI</span></div>${GENES.filter(g=>g.group===group).map(g=>{const [a,b]=c.genome?.[g.key]||[0.5,0.5];return `<div class="gene-line" title="${esc(g.desc)}"><span>${g.label}</span><span class="alleles"><i style="width:${a*100}%"></i><i style="width:${b*100}%"></i></span><b>${Math.round((a+b)*50)}</b></div>`}).join('')}</section>`).join('')}`
 }
 function renderAbilities(c) {
   const moves = movesFor(c)
@@ -102,7 +102,7 @@ function closeModal() { $('#modal-layer').classList.add('hidden') }
 function discover() {
   if(game.coins<60)return toast('You need 60 shards to discover a creature.')
   game.coins-=60
-  const c=generateStarter(Math.floor(Math.random()*100000),{}); c.needs=freshNeeds(82)
+  const c=generateWild(); c.needs=freshNeeds(82)
   game.creatures.push(c); game.selected=c.id; if(mode==='habitat') { world.addCreature(c,{position:[(Math.random()-.5)*5,0,(Math.random()-.5)*5]}); world.setSelected(c.id) }
   persist(); renderRoster(); renderProfile(); toast(`${c.name} joined your sanctuary.`)
 }

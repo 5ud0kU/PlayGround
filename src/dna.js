@@ -21,9 +21,12 @@ export const GENES = [
   { key: 'brain',     label: 'Neural Mass',    group: 'core',   desc: 'Tactics & learning' },
   { key: 'metabolism',label: 'Metabolism',     group: 'core',   desc: 'Appetite & recovery' },
   { key: 'eyes',      label: 'Photoreceptors', group: 'core',   desc: 'Accuracy & threat read' },
+  { key: 'posture',   label: 'Body Plan',      group: 'form',   desc: 'Quadruped to upright biped stance' },
+  { key: 'archetype', label: 'Species Type',   group: 'form',   desc: 'Distinct body and facial structure' },
   { key: 'hueA',      label: 'Pigment A',      group: 'coat',   desc: 'Primary chromatophore' },
   { key: 'hueB',      label: 'Pigment B',      group: 'coat',   desc: 'Secondary chromatophore' },
-  { key: 'pattern',   label: 'Dermal Pattern', group: 'coat',   desc: 'Bands, spots, dapple' },
+  { key: 'pattern',   label: 'Dermal Pattern', group: 'coat',   desc: 'Spots, stripes, rosettes, mottling' },
+  { key: 'hide',      label: 'Skin Type',      group: 'coat',   desc: 'Fur, scales, hide or crystalline sheen' },
 ]
 
 export const GENE_MAP = Object.fromEntries(GENES.map(g => [g.key, g]))
@@ -55,8 +58,11 @@ export function randomGenome(seed, bias = {}) {
     const center = clamp(b + (r() - 0.5) * spread, 0.06, 0.96)
     const alleleA = clamp(center + (r() - 0.5) * 0.3, 0.02, 0.98)
     const alleleB = clamp(center + (r() - 0.5) * 0.3, 0.02, 0.98)
+    // Wild finds span the full trait range; bred lineages remain centered on parents.
+    if (bias._wild) {
+      genome[gene.key] = [r(), r()]
     // Hue genes are stored as full-range values, not centred on 0.5
-    if (gene.key === 'hueA' || gene.key === 'hueB') {
+    } else if (gene.key === 'hueA' || gene.key === 'hueB') {
       genome[gene.key] = bias[gene.key] != null
         ? [clamp(b + (r() - 0.5) * 0.18), clamp(b + (r() - 0.5) * 0.18)]
         : [r(), r()]
@@ -71,20 +77,25 @@ export function randomGenome(seed, bias = {}) {
 export function phenotype(genome) {
   const p = {}
   for (const gene of GENES) {
-    const [a, b] = genome[gene.key]
+    // Older local saves predate newer appearance genes; keep them playable.
+    const [a = 0.5, b = 0.5] = genome[gene.key] || []
     p[gene.key] = (a + b) / 2
   }
   // Derived composite values used by the mesh builder.
   const size = p.size
   p.height = 0.72 + size * 0.62 + p.legs * 0.18
-  p.huePrimary = Math.round(lerp(18, 172, p.hueA) + 30)
-  p.hueAccent = Math.round(lerp(2, 318, p.hueB))
+  p.huePrimary = Math.round(lerp(0, 360, p.hueA))
+  p.hueAccent = Math.round(lerp(0, 360, p.hueB))
   p.sat = Math.round(38 + p.pattern * 34 + p.muscle * 10)
   p.lightness = Math.round(52 - p.bone * 12 + p.eyes * 4)
   p.bodyColor = `hsl(${p.huePrimary} ${p.sat}% ${p.lightness}%)`
   p.accentColor = `hsl(${p.hueAccent} ${Math.min(92, p.sat + 18)}% ${58 + p.eyes * 8}%)`
   p.darkColor = `hsl(${p.huePrimary - 12} ${p.sat + 6}% ${Math.max(18, p.lightness - 26)}%)`
   p.eyeColor = `hsl(${(p.hueAccent + 38) % 360} 100% ${62 + p.brain * 10}%)`
+  p.speciesType = ['Drake', 'Mireling', 'Skykin', 'Goliath'][Math.min(3, Math.floor(p.archetype * 4))]
+  p.skinType = ['Velvet hide', 'Scaled hide', 'Plated hide', 'Crystal hide'][Math.min(3, Math.floor(p.hide * 4))]
+  p.postureName = p.posture > 0.58 ? 'Biped' : 'Quadruped'
+  p.skinRoughness = 0.9 - p.hide * 0.62
   p.horniness = p.horns
   p.limbCount = 4
   return p
@@ -108,7 +119,7 @@ export function averageNeeds(needs) {
 export function heterozygosity(genome) {
   let sum = 0
   for (const gene of GENES) {
-    const [a, b] = genome[gene.key]
+    const [a = 0.5, b = 0.5] = genome?.[gene.key] || []
     sum += Math.abs(a - b)
   }
   return sum / GENES.length
@@ -231,8 +242,10 @@ export function movesFor(creature) {
 export function geneticSimilarity(a, b) {
   let sum = 0
   for (const gene of GENES) {
-    const pa = (a[gene.key][0] + a[gene.key][1]) / 2
-    const pb = (b[gene.key][0] + b[gene.key][1]) / 2
+    const allelesA = a?.[gene.key] || [0.5, 0.5]
+    const allelesB = b?.[gene.key] || [0.5, 0.5]
+    const pa = ((allelesA[0] ?? 0.5) + (allelesA[1] ?? 0.5)) / 2
+    const pb = ((allelesB[0] ?? 0.5) + (allelesB[1] ?? 0.5)) / 2
     sum += Math.abs(pa - pb)
   }
   return clamp01(1 - sum / GENES.length)
@@ -242,8 +255,10 @@ export function breedGenomes(genomeA, genomeB, mutationRate = 0.09) {
   const child = {}
   const mutations = []
   for (const gene of GENES) {
-    const pickA = Math.random() < 0.5 ? genomeA[gene.key][0] : genomeA[gene.key][1]
-    const pickB = Math.random() < 0.5 ? genomeB[gene.key][0] : genomeB[gene.key][1]
+    const allelesA = genomeA[gene.key] || [0.5, 0.5]
+    const allelesB = genomeB[gene.key] || [0.5, 0.5]
+    const pickA = Math.random() < 0.5 ? allelesA[0] : allelesA[1]
+    const pickB = Math.random() < 0.5 ? allelesB[0] : allelesB[1]
     let a = pickA, b = pickB
     if (Math.random() < mutationRate) {
       a = clamp(a + (Math.random() - 0.5) * 0.26)
@@ -279,7 +294,14 @@ export function sexOf() {
 }
 
 export function generateStarter(seed, bias) {
-  const genome = randomGenome(seed, bias)
+  return createCreature(randomGenome(seed, bias), seed)
+}
+
+export function generateWild(seed = Math.floor(Math.random() * 1000000000)) {
+  return createCreature(randomGenome(seed, { _wild: true }), seed)
+}
+
+function createCreature(genome, seed) {
   return {
     id: cryptoId(),
     name: makeName(genome),
@@ -303,9 +325,10 @@ export function dnaSequence(genome) {
   const bases = 'ACGT'
   let seq = ''
   for (const gene of GENES) {
-    for (const allele of genome[gene.key]) {
-      const n = Math.floor(allele * 4095)
-      for (let i = 0; i < 3; i++) seq += bases[(n >> (i * 2)) & 3]
+    const alleles = genome?.[gene.key] || [0.5, 0.5]
+    for (let i = 0; i < 2; i++) {
+      const n = Math.floor(clamp(alleles[i] ?? 0.5) * 4095)
+      for (let j = 0; j < 3; j++) seq += bases[(n >> (j * 2)) & 3]
     }
     seq += '·'
   }
