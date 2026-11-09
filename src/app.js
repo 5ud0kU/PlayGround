@@ -42,7 +42,7 @@ function loadGame() {
   return { creatures, selected: creatures[0].id, coins: 120, food: 8, wins: 0, archives: [], xp: 0, xpClaims: [] }
 }
 const game = loadGame()
-let mode = 'habitat', tab = 'overview', world, battle = null, toastTimer
+let mode = 'habitat', tab = 'overview', world, battle = null, toastTimer, releaseTargetId = null
 const app = $('#app')
 app.innerHTML = `
 <div class="shell">
@@ -106,7 +106,7 @@ function renderProfile() {
   $('#right-panel').innerHTML = `<div class="profile-heading"><div><div class="eyebrow">CREATURE DOSSIER</div><h2>FIELD NOTES</h2></div><button class="icon-btn" data-action="rename" title="Rename creature">···</button></div>
   <div class="identity"><div class="identity-art" style="--creature-color:${p.bodyColor};--creature-accent:${p.accentColor}"><span class="art-creature"><i class="art-tail"></i><i class="art-horn"></i><i class="art-eye"></i></span><small>SPECIMEN 0${game.creatures.indexOf(c)+1}</small><b>${p.horns > .72 || p.wings > .75 ? '✦ RARE' : '◈ COMMON'}</b></div><div class="identity-copy"><div class="name-line"><h3>${esc(c.name)}</h3><span>${c.sex === 'F' ? '♀' : '♂'}</span></div><p>${c.generation ? `Generation ${c.generation} · offspring` : 'Foundling · Verdant Hollow'}</p><div class="trait-pills"><span>${esc(p.speciesType.toUpperCase())}</span><span>${p.postureName.toUpperCase()}</span><span>${trait}</span></div><small class="skin-note">${esc(p.skinType)}</small></div></div>
   <div class="profile-tabs"><button data-tab="overview" class="${tab==='overview'?'active':''}">OVERVIEW</button><button data-tab="genome" class="${tab==='genome'?'active':''}">GENOME <i>${GENES.length}</i></button><button data-tab="abilities" class="${tab==='abilities'?'active':''}">ABILITIES</button></div><div class="profile-content">${body}</div>${combat}
-  <div class="profile-footer"><button class="care-btn" data-care="feed"><span>◉</span><b>FEED</b><small>1 NECTAR</small></button><button class="care-btn" data-care="play"><span>♡</span><b>PLAY</b><small>+FUN</small></button><button class="care-btn" data-care="rest"><span>☾</span><b>REST</b><small>+ENERGY</small></button></div>`
+  <div class="profile-footer"><button class="care-btn" data-care="feed"><span>◉</span><b>FEED</b><small>1 NECTAR</small></button><button class="care-btn" data-care="play"><span>♡</span><b>PLAY</b><small>+FUN</small></button><button class="care-btn" data-care="rest"><span>☾</span><b>REST</b><small>+ENERGY</small></button><button class="release-creature-btn" data-action="release" ${mode==='arena' || game.creatures.length <= 1 ? 'disabled' : ''} ${mode==='arena' ? 'title="Return to the habitat before releasing a creature."' : game.creatures.length <= 1 ? 'title="Your last creature must remain in the sanctuary."' : ''}>RELEASE CREATURE</button></div>`
 }
 function renderOverview(c,p,s) {
   const needs = [['Hunger',c.needs.hunger,'🥩'],['Energy',c.needs.energy,'☾'],['Hygiene',c.needs.hygiene,'✧'],['Enrichment',c.needs.fun,'♡']]
@@ -285,6 +285,30 @@ function renameDialog() {
   $('#rename-input').focus(); $('#rename-input').select()
 }
 function rename() { const input=$('#rename-input'), name=input?.value.trim(); if(!name)return toast('A name cannot be empty.'); selected().name=name; closeModal(); renderRoster(); renderProfile(); persist(); toast('Specimen renamed.') }
+function releaseDialog() {
+  if (mode === 'arena') return toast('Return to the habitat before releasing a creature.')
+  if (game.creatures.length <= 1) return toast('Your last creature must remain in the sanctuary.')
+  const c = selected()
+  if (!c) return
+  releaseTargetId = c.id
+  showModal(`<button class="modal-close" data-action="close" aria-label="Cancel release">×</button><div class="eyebrow">SANCTUARY · RELEASE SPECIMEN</div><h2>Release ${esc(c.name)}?</h2><p>This creature will leave your sanctuary permanently. This cannot be undone.</p><div class="modal-actions"><button class="secondary-btn" data-action="close">KEEP CREATURE</button><button class="release-confirm-btn" data-action="release-confirm">RELEASE CREATURE</button></div>`)
+}
+function releaseCreature() {
+  if (mode === 'arena') return toast('Return to the habitat before releasing a creature.')
+  if (game.creatures.length <= 1) { closeModal(); releaseTargetId = null; return toast('Your last creature must remain in the sanctuary.') }
+  const index = game.creatures.findIndex(c => c.id === releaseTargetId)
+  if (index < 0) { closeModal(); releaseTargetId = null; return }
+  const [creature] = game.creatures.splice(index, 1)
+  world.removeCreature(creature.id)
+  if (game.selected === creature.id) game.selected = game.creatures[index % game.creatures.length].id
+  releaseTargetId = null
+  world.setSelected(game.selected)
+  closeModal()
+  renderRoster()
+  renderProfile()
+  persist()
+  toast(`${creature.name} has been released from the sanctuary.`)
+}
 function arenaDialog() {
   if(game.creatures.length<2)return toast('Discover another creature before entering the arena.')
   const player=selected(), foes=game.creatures.filter(c=>c.id!==player.id)
@@ -378,6 +402,8 @@ function dispatch(action, id) {
   else if(action==='breed-confirm')breed()
   else if(action==='rename')renameDialog()
   else if(action==='rename-confirm')rename()
+  else if(action==='release')releaseDialog()
+  else if(action==='release-confirm')releaseCreature()
   else if(action==='arena')mode==='arena'?exitBattle():arenaDialog()
   else if(action==='battle-start')startBattle()
   else if(action==='battle-exit')exitBattle()

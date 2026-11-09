@@ -523,6 +523,7 @@ export class World {
   removeCreature(id) {
     const entry = this.creatures.get(id)
     if (!entry) return
+    entry.root.parent?.remove(entry.root)
     entry.root.userData.dispose?.()
     this.creatures.delete(id)
     if (this.selectedId === id) {
