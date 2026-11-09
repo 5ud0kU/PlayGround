@@ -15,6 +15,12 @@ export const GENES = [
   { key: 'tail',      label: 'Caudal Tail',    group: 'weapon', desc: 'Balance & sweep' },
   { key: 'armor',     label: 'Dermal Plates',  group: 'weapon', desc: 'Spine spikes & scutes' },
   { key: 'wings',     label: 'Wing Membrane',  group: 'weapon', desc: 'Glide & gust' },
+  { key: 'ears',      label: 'Pinnae',         group: 'adapt',  desc: 'Animal-inspired ears and sensory tufts' },
+  { key: 'fins',      label: 'Fin Webbing',    group: 'adapt',  desc: 'Fish-inspired dorsal, tail and pectoral fins' },
+  { key: 'gills',     label: 'Gill Slits',     group: 'adapt',  desc: 'Aquatic cheek and neck gill fans' },
+  { key: 'antennae',  label: 'Antennae',       group: 'adapt',  desc: 'Insect-inspired sensory feelers' },
+  { key: 'elytra',    label: 'Elytra',         group: 'adapt',  desc: 'Protective insect wing cases' },
+  { key: 'extraLegs', label: 'Lateral Limbs',  group: 'adapt',  desc: 'Additional insect-like walking legs' },
   { key: 'muscle',    label: 'Myofiber',       group: 'core',   desc: 'Raw contractile power' },
   { key: 'bone',      label: 'Bone Density',   group: 'core',   desc: 'Impact absorption' },
   { key: 'speed',     label: 'Fast Twitch',    group: 'core',   desc: 'Reaction & footspeed' },
@@ -31,8 +37,16 @@ export const GENES = [
 
 export const GENE_MAP = Object.fromEntries(GENES.map(g => [g.key, g]))
 
+const NEW_BODY_PARTS = new Set(['ears', 'fins', 'gills', 'antennae', 'elytra', 'extraLegs'])
+
 const clamp = (v, a = 0, b = 1) => Math.max(a, Math.min(b, v))
 export const clamp01 = v => clamp(v)
+export const allelesOf = (genome, key) => {
+  const fallback = NEW_BODY_PARTS.has(key) ? 0.04 : 0.5
+  const alleles = genome?.[key]
+  if (!Array.isArray(alleles)) return [fallback, fallback]
+  return [alleles[0] ?? fallback, alleles[1] ?? fallback]
+}
 export const lerp = (a, b, t) => a + (b - a) * t
 export const mix = (a, b, t) => Math.round(a + (b - a) * t)
 
@@ -77,8 +91,8 @@ export function randomGenome(seed, bias = {}) {
 export function phenotype(genome) {
   const p = {}
   for (const gene of GENES) {
-    // Older local saves predate newer appearance genes; keep them playable.
-    const [a = 0.5, b = 0.5] = genome[gene.key] || []
+    // Older local saves predate the adaptation loci; absent alleles stay recessive.
+    const [a, b] = allelesOf(genome, gene.key)
     p[gene.key] = (a + b) / 2
   }
   // Derived composite values used by the mesh builder.
@@ -119,7 +133,7 @@ export function averageNeeds(needs) {
 export function heterozygosity(genome) {
   let sum = 0
   for (const gene of GENES) {
-    const [a = 0.5, b = 0.5] = genome?.[gene.key] || []
+    const [a, b] = allelesOf(genome, gene.key)
     sum += Math.abs(a - b)
   }
   return sum / GENES.length
@@ -242,10 +256,10 @@ export function movesFor(creature) {
 export function geneticSimilarity(a, b) {
   let sum = 0
   for (const gene of GENES) {
-    const allelesA = a?.[gene.key] || [0.5, 0.5]
-    const allelesB = b?.[gene.key] || [0.5, 0.5]
-    const pa = ((allelesA[0] ?? 0.5) + (allelesA[1] ?? 0.5)) / 2
-    const pb = ((allelesB[0] ?? 0.5) + (allelesB[1] ?? 0.5)) / 2
+    const [a1, a2] = allelesOf(a, gene.key)
+    const [b1, b2] = allelesOf(b, gene.key)
+    const pa = (a1 + a2) / 2
+    const pb = (b1 + b2) / 2
     sum += Math.abs(pa - pb)
   }
   return clamp01(1 - sum / GENES.length)
