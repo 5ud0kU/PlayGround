@@ -429,7 +429,13 @@ function finishBattle(winner) {
   battle.finished=true; battle.winner=winner; battle.busy=false
   world.faint(winner==='player'?'foe':'player')
   battle.player.battles=(battle.player.battles||0)+1; battle.foe.battles=(battle.foe.battles||0)+1
-  if(winner==='player'){battle.player.wins=(battle.player.wins||0)+1;game.wins++;game.coins+=battle.challenge?35+Math.min(100,battle.challenge.level*2):25;awardXP(battle.challenge?45+Math.min(200,battle.challenge.level*5):35, 'arena victory');if(battle.challenge)game.roadLevel=battle.challenge.level+1;toast(battle.challenge?'Road victory! Rewards claimed.':'Victory! +25 shards and +35 XP.')}else toast(`${battle.foe.name} wins this round. Your creature will be ready for another bout.`)
+  if(winner==='player'){battle.player.wins=(battle.player.wins||0)+1;game.wins++;game.coins+=battle.challenge?35+Math.min(100,battle.challenge.level*2):25;awardXP(battle.challenge?45+Math.min(200,battle.challenge.level*5):35, 'arena victory');if(battle.challenge)game.roadLevel=battle.challenge.level+1
+    const foe=battle.foe
+    const entry={id:cryptoId(),name:`${foe.name} DNA`,sourceName:foe.name,sourceId:foe.id,source:'battle',generation:foe.generation||0,genome:copyGenome(foe.genome),savedAt:Date.now()}
+    game.archives.unshift(entry)
+    awardXP(15,'archive',`archive:${entry.id}`)
+    toast(battle.challenge?`Road victory! ${foe.name}'s DNA archived.`: `Victory! ${foe.name}'s DNA archived. +25 shards and +35 XP.`)
+  }else toast(`${battle.foe.name} wins this round. Your creature will be ready for another bout.`)
   persist(); renderBattle(); renderRoster()
 }
 function exitBattle() { if(battle?.busy&&!battle.finished)return toast('Wait for the current battle animation to finish.'); battle=null; world.exitArena(); mode='habitat'; updateModeUI(); populateWorld(); renderBattle(); renderProfile() }
