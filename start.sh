@@ -4,7 +4,7 @@ set -euo pipefail
 PROJECT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$PROJECT_DIR"
 PORT="${PORT:-3000}"
-DEPLOYMENT_DIR="/home/runner/work/_temp/omgithub-web"
+DEPLOYMENT_DIR="${OPENCODE_WEB_DIR:-/home/runner/work/_temp/omgithub-web}"
 
 run_timed() {
   printf '[timing]'
