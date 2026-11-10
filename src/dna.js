@@ -21,6 +21,8 @@ export const GENES = [
   { key: 'antennae',  label: 'Antennae',         group: 'adapt', desc: 'Sensitive insect feelers' },
   { key: 'carapace',  label: 'Carapace',         group: 'adapt', desc: 'Armored beetle shell' },
   { key: 'pincers',   label: 'Pincers',          group: 'adapt', desc: 'Paired grasping claws' },
+  { key: 'tusks',     label: 'Tusks',            group: 'weapon', desc: 'Protruding gore teeth' },
+  { key: 'mane',      label: 'Neck Mane',        group: 'adapt',  desc: 'Furred crest along the neck and back' },
   { key: 'muscle',    label: 'Myofiber',       group: 'core',   desc: 'Raw contractile power' },
   { key: 'bone',      label: 'Bone Density',   group: 'core',   desc: 'Impact absorption' },
   { key: 'speed',     label: 'Fast Twitch',    group: 'core',   desc: 'Reaction & footspeed' },
@@ -35,6 +37,7 @@ export const GENES = [
   { key: 'hueB',      label: 'Pigment B',      group: 'coat',   desc: 'Secondary chromatophore' },
   { key: 'pattern',   label: 'Dermal Pattern', group: 'coat',   desc: 'Spots, stripes, rosettes, mottling' },
   { key: 'hide',      label: 'Skin Type',      group: 'coat',   desc: 'Fur, scales, hide or crystalline sheen' },
+  { key: 'biolum',    label: 'Bioluminescence', group: 'coat',   desc: 'Glowing body markings' },
 ]
 
 export const GENE_MAP = Object.fromEntries(GENES.map(g => [g.key, g]))
@@ -137,6 +140,10 @@ export function phenotype(genome) {
   p.skinRoughness = 0.9 - p.hide * 0.62
   p.horniness = p.horns
   p.limbCount = { fish: 0, insect: 6, bird: 2, quadruped: 4, biped: 2 }[p.bodyPlanKey]
+  p.tuskSize = clamp(p.tusks)
+  p.maneSize = clamp(p.mane)
+  p.biolum = clamp(p.biolum)
+  p.glowColor = `hsl(${(p.hueAccent + 90) % 360} 90% ${50 + p.brain * 20}%)`
   return p
 }
 
@@ -179,7 +186,7 @@ export function statsOf(creature) {
   const cond = conditionOf(creature)
   const condMul = 0.72 + (cond / 100) * 0.28
   const raw = {
-    power: 12 + p.size * 18 + p.muscle * 30 + p.bone * 14 + p.horns * 12 + p.snout * 6 + p.armor * 7,
+    power: 12 + p.size * 18 + p.muscle * 30 + p.bone * 14 + p.horns * 12 + p.snout * 6 + p.armor * 7 + p.tusks * 10,
     bones: 8 + p.bone * 84 + p.armor * 8,
     mobility: 8 + p.legs * 25 + p.speed * 32 + (1 - p.stance) * 12 + p.wings * 14 - p.size * 7,
     muscle: 6 + p.muscle * 88 + p.stance * 6,
@@ -233,6 +240,13 @@ export function movesFor(creature) {
     acc: 0.88 + p.eyes * 0.08, tag: 'JAW',
     desc: 'A snapping bite. Reliable and cheap.',
     fx: 'bite',
+  })
+  if (p.tusks > 0.22) moves.push({
+    id: 'tusk', name: 'Tusk Jab', icon: '🦷', type: 'strike', cost: 13,
+    power: 0.88 + p.tusks * 0.44 + p.snout * 0.12,
+    acc: 0.9 + p.eyes * 0.06, tag: 'TUSK',
+    desc: 'Drive the tusks deep. Heavy piercing strike.',
+    fx: 'tusk', crit: 0.08 + p.tusks * 0.1,
   })
   if (p.horns > 0.18) moves.push({
     id: 'gore', name: 'Horn Rush', icon: '⛏', type: 'strike', cost: 18,

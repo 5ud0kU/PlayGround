@@ -301,6 +301,27 @@ export function buildCreature(genome, opts = {}) {
       horn.castShadow = true
     }
   }
+  // tusks protrude from the lower jaw when expressed
+  if (p.tusks > 0.22) {
+    const tuskLen = headScale * (0.42 + p.tusks * 0.9) * (0.9 + p.snout * 0.2)
+    for (const side of [-1, 1]) {
+      const tusk = addMesh(headGroup, new THREE.ConeGeometry(headScale * 0.09, tuskLen, 5), boneMat,
+        [side * headScale * 0.22, -headScale * 0.42, headScale * 0.78 + p.snout * 0.3],
+        [-0.5 + side * 0.1, 0, side * 0.15], [1, 1, 1])
+      tusk.castShadow = true
+    }
+  }
+  // neck & back mane follows the spine when expressed
+  if (p.mane > 0.25) {
+    const maneCount = 3 + Math.floor(p.mane * 4)
+    for (let i = 0; i < maneCount; i++) {
+      const t = i / (maneCount - 1 || 1)
+      const len = headScale * (0.28 + p.mane * 0.55) * (1 - t * 0.45)
+      addMesh(bodyGroup, new THREE.CapsuleGeometry(headScale * 0.075, len, 4, 6), mat(p.accentColor, { roughness: 0.6 }),
+        [0, torsoRY * 0.55 - t * torsoRY * 0.4, -torsoRZ * 0.15],
+        [-0.3 + t * 0.4, 0, 0], [1, 1, 1])
+    }
+  }
   // Animal adaptations are independent loci so inherited combinations reshape the silhouette.
   if (p.antlers > 0.24) {
     for (const side of [-1, 1]) {
@@ -428,6 +449,20 @@ export function buildCreature(genome, opts = {}) {
       addMesh(headGroup, new THREE.ConeGeometry(headScale * 0.12, headScale * (0.52 + i * 0.12), 5), wingMat,
         [(i - 1) * headScale * 0.2, headScale * 0.68, -headScale * (0.12 + i * 0.12)],
         [-0.5, 0, (i - 1) * 0.16])
+    }
+  }
+
+  // bioluminescent spots across the torso when expressed
+  if (p.biolum > 0.3) {
+    const spotCount = 6 + Math.round(p.biolum * 10)
+    const glowMat = mat(p.glowColor, { emissive: p.glowColor, emissiveIntensity: 1.6 + p.biolum, roughness: 0.1 })
+    for (let i = 0; i < spotCount; i++) {
+      const rx = (Math.random() - 0.5) * torsoRX * 0.9
+      const ry = (Math.random() - 0.5) * torsoRY * 0.9
+      const rz = (Math.random() - 0.5) * torsoRZ * 0.9
+      const rs = headScale * (0.05 + p.biolum * 0.12)
+      addMesh(bodyGroup, new THREE.SphereGeometry(rs, 7, 5), glowMat,
+        [rx, torsoRY * 0.3 + ry, -torsoRZ * 0.2 + rz])
     }
   }
 

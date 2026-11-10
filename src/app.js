@@ -18,6 +18,9 @@ const ADAPTATIONS = [
   { key: 'antennae', icon: '⌁', name: 'Antennae', source: 'Moth · beetle', note: 'Curious sensory feelers' },
   { key: 'carapace', icon: '⬡', name: 'Carapace', source: 'Beetle · crab', note: 'A glossy protective shell' },
   { key: 'pincers', icon: '⚯', name: 'Pincers', source: 'Crab · scorpion', note: 'Paired grasping claws' },
+{ key: 'tusks', icon: '🦷', name: 'Tusks', source: 'Boar · walrus', note: 'Protruding gore teeth' },
+{ key: 'mane', icon: '🌊', name: 'Neck Mane', source: 'Lion · horse', note: 'Furred neck crest' },
+{ key: 'biolum', icon: '✨', name: 'Bioluminescence', source: 'Jellyfish · firefly', note: 'Glowing body markings' },
 ]
 const DNA_CONTRACTS = [
   { id: 'bulwark', icon: '⬡', name: 'Living Bulwark', note: 'Armor ≥ 75% · Bone ≥ 65%', goals: [['armor', .75], ['bone', .65]] },
