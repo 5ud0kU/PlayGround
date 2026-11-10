@@ -1,5 +1,6 @@
 import './style.css'
 import { World } from './scene.js'
+import { portraitDataURL } from './creature.js'
 import {
   GENES, phenotype, statsOf, maxHpOf, maxStaminaOf, movesFor,
   freshNeeds, generateStarter, generateWild, makeName, sexOf, breedGenomes,
@@ -24,6 +25,17 @@ const DNA_CONTRACTS = [
   { id: 'colossus', icon: '⬤', name: 'Colossus', note: 'Stature ≥ 72% · Muscle ≥ 65%', goals: [['size', .72], ['muscle', .65]] },
   { id: 'mosaic', icon: '✦', name: 'Wild Mosaic', note: 'Pattern ≥ 70% · Skin ≥ 70%', goals: [['pattern', .70], ['hide', .70]] },
 ]
+
+const portraitCache = new Map()
+function creaturePortrait(c) {
+  let url = portraitCache.get(c.id)
+  if (!url) {
+    try { url = portraitDataURL(c.genome, 110) } catch (e) { console.warn('creature portrait failed', e) }
+    if (url) portraitCache.set(c.id, url)
+  }
+  return url
+}
+function dropPortrait(id) { portraitCache.delete(id) }
 
 function loadGame() {
   try {
@@ -92,7 +104,8 @@ function populateWorld() {
 function renderRoster() {
   $('#roster').innerHTML = game.creatures.map((c,i) => {
     const p = phenotype(c.genome), vitality = Object.values(c.needs).reduce((a,b) => a+b,0)/4
-    return `<button class="roster-card ${c.id === game.selected ? 'selected' : ''}" data-creature="${esc(c.id)}" ${mode === 'arena' ? 'disabled title="Return to the Hollow before changing your active creature."' : ''}><span class="roster-num">0${i+1}</span><span class="roster-avatar" style="--creature-color:${p.bodyColor};--creature-accent:${p.accentColor}"><i></i></span><span class="roster-info"><b>${esc(c.name)}</b><small>GEN ${c.generation || 0} <i>·</i> ${c.sex === 'F' ? '♀' : '♂'}</small><span class="roster-mini"><i style="width:${vitality}%"></i></span></span><span class="roster-rating">${statsOf(c).power}</span></button>`
+    const purl = creaturePortrait(c)
+    return `<button class="roster-card ${c.id === game.selected ? 'selected' : ''}" data-creature="${esc(c.id)}" ${mode === 'arena' ? 'disabled title="Return to the Hollow before changing your active creature."' : ''}><span class="roster-num">0${i+1}</span><span class="roster-avatar" style="--creature-color:${p.bodyColor};--creature-accent:${p.accentColor}">${purl?`<img src="${esc(purl)}" class="roster-portrait" alt="${esc(c.name)} portrait">`:''}<i></i></span><span class="roster-info"><b>${esc(c.name)}</b><small>GEN ${c.generation || 0} <i>·</i> ${c.sex === 'F' ? '♀' : '♂'}</small><span class="roster-mini"><i style="width:${vitality}%"></i></span></span><span class="roster-rating">${statsOf(c).power}</span></button>`
   }).join('')
   $('#roster-count').textContent = String(game.creatures.length).padStart(2,'0'); $('#stage-count').textContent = game.creatures.length
 }
@@ -100,11 +113,12 @@ function statBar(label, value, color) { return `<div class="stat-row"><span>${la
 function renderProfile() {
   const c = selected(); if (!c) return
   const p = phenotype(c.genome), stats = statsOf(c), genes = GENES
+  const purl = creaturePortrait(c)
   const body = tab === 'genome' ? renderGenome(c) : tab === 'abilities' ? renderAbilities(c) : renderOverview(c,p,stats)
   const combat = mode === 'arena' && battle && !battle.finished && c.id === battle.player.id ? `<section class="combat-actions"><div class="block-heading"><span>CHOOSE YOUR MOVE</span><small>${battle.busy?'TURN IN PROGRESS':'YOUR TURN'}</small></div><div class="combat-grid">${movesFor(c).map(m=>`<button data-move="${m.id}" ${battle.busy?'disabled':''}><b>${m.icon} ${esc(m.name)}</b><small>${m.type==='defend'?`+${Math.abs(m.cost)} STA`:`${Math.max(0,m.cost)} STA · ${Math.round((m.power||0)*20)} PWR`}</small></button>`).join('')}</div></section>` : ''
   const trait = p.horns > .62 ? 'HORNED' : p.wings > .62 ? 'WINGED' : p.armor > .62 ? 'ARMORED' : 'ADAPTIVE'
   $('#right-panel').innerHTML = `<div class="profile-heading"><div><div class="eyebrow">CREATURE DOSSIER</div><h2>FIELD NOTES</h2></div><button class="icon-btn" data-action="rename" title="Rename creature">···</button></div>
-  <div class="identity"><div class="identity-art" style="--creature-color:${p.bodyColor};--creature-accent:${p.accentColor}"><span class="art-creature"><i class="art-tail"></i><i class="art-horn"></i><i class="art-eye"></i></span><small>SPECIMEN 0${game.creatures.indexOf(c)+1}</small><b>${p.horns > .72 || p.wings > .75 ? '✦ RARE' : '◈ COMMON'}</b></div><div class="identity-copy"><div class="name-line"><h3>${esc(c.name)}</h3><span>${c.sex === 'F' ? '♀' : '♂'}</span></div><p>${c.generation ? `Generation ${c.generation} · offspring` : 'Foundling · Verdant Hollow'}</p><div class="trait-pills"><span>${esc(p.speciesType.toUpperCase())}</span><span>${p.postureName.toUpperCase()}</span><span>${trait}</span></div><small class="skin-note">${esc(p.skinType)}</small></div></div>
+  <div class="identity"><div class="identity-art" style="--creature-color:${p.bodyColor};--creature-accent:${p.accentColor}">${purl?`<img src="${esc(purl)}" class="identity-portrait" alt="${esc(c.name)} portrait">`:`<span class="art-creature"><i class="art-tail"></i><i class="art-horn"></i><i class="art-eye"></i></span>`}<small>SPECIMEN 0${game.creatures.indexOf(c)+1}</small><b>${p.horns > .72 || p.wings > .75 ? '✦ RARE' : '◈ COMMON'}</b></div><div class="identity-copy"><div class="name-line"><h3>${esc(c.name)}</h3><span>${c.sex === 'F' ? '♀' : '♂'}</span></div><p>${c.generation ? `Generation ${c.generation} · offspring` : 'Foundling · Verdant Hollow'}</p><div class="trait-pills"><span>${esc(p.speciesType.toUpperCase())}</span><span>${p.postureName.toUpperCase()}</span><span>${trait}</span></div><small class="skin-note">${esc(p.skinType)}</small></div></div>
   <div class="profile-tabs"><button data-tab="overview" class="${tab==='overview'?'active':''}">OVERVIEW</button><button data-tab="genome" class="${tab==='genome'?'active':''}">GENOME <i>${GENES.length}</i></button><button data-tab="abilities" class="${tab==='abilities'?'active':''}">ABILITIES</button></div><div class="profile-content">${body}</div>${combat}
   <div class="profile-footer"><button class="care-btn" data-care="feed"><span>◉</span><b>FEED</b><small>1 NECTAR</small></button><button class="care-btn" data-care="play"><span>♡</span><b>PLAY</b><small>+FUN</small></button><button class="care-btn" data-care="rest"><span>☾</span><b>REST</b><small>+ENERGY</small></button><button class="release-creature-btn" data-action="release" ${mode==='arena' || game.creatures.length <= 1 ? 'disabled' : ''} ${mode==='arena' ? 'title="Return to the habitat before releasing a creature."' : game.creatures.length <= 1 ? 'title="Your last creature must remain in the sanctuary."' : ''}>RELEASE CREATURE</button></div>`
 }
@@ -302,6 +316,7 @@ function releaseCreature() {
   const index = game.creatures.findIndex(c => c.id === releaseTargetId)
   if (index < 0) { closeModal(); releaseTargetId = null; return }
   const [creature] = game.creatures.splice(index, 1)
+  dropPortrait(creature.id)
   world.removeCreature(creature.id)
   if (game.selected === creature.id) game.selected = game.creatures[index % game.creatures.length].id
   releaseTargetId = null
