@@ -5,8 +5,6 @@ PROJECT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$PROJECT_DIR"
 : "${CAPTURE_URL:?Set CAPTURE_URL to the exact preview URL}"
 : "${CAPTURE_DIR:?Set CAPTURE_DIR for screenshot output}"
-mkdir -p "$CAPTURE_DIR"
-
 run_timed() {
   printf '[timing]'
   printf ' %q' "$@"
@@ -14,9 +12,10 @@ run_timed() {
   /usr/bin/time -p "$@"
 }
 
+run_timed mkdir -p "$CAPTURE_DIR"
 run_timed node --input-type=module <<'NODE'
 import { createRequire } from 'node:module'
-import { mkdirSync, readFileSync } from 'node:fs'
+import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 
 const runtime = join(process.env.HOME, '.local/share/omgithub-playwright')
