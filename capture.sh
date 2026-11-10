@@ -47,7 +47,7 @@ try {
   })
 
   for (const [name, width, height] of [
-    ['desktop', 1440, 900],
+    ['desktop', 1280, 900],
     ['mobile', 390, 844],
   ]) {
     const page = await browser.newPage({ viewport: { width, height } }).catch((error) => {
@@ -82,7 +82,7 @@ try {
       throw new Error(`Page rendering failed: ${errors.join('; ')}`)
     }
     await page
-      .screenshot({ path: join(output, `final-${name}.png`), fullPage: false, timeout: 30000 })
+      .screenshot({ path: join(output, `final-${name}.jpg`), type: 'jpeg', quality: 86, fullPage: false, timeout: 30000 })
       .catch((error) => {
         throw error
       })

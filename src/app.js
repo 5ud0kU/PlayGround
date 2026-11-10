@@ -25,6 +25,12 @@ const DNA_CONTRACTS = [
   { id: 'colossus', icon: '⬤', name: 'Colossus', note: 'Stature ≥ 72% · Muscle ≥ 65%', goals: [['size', .72], ['muscle', .65]] },
   { id: 'mosaic', icon: '✦', name: 'Wild Mosaic', note: 'Pattern ≥ 70% · Skin ≥ 70%', goals: [['pattern', .70], ['hide', .70]] },
 ]
+const ROAD_MILESTONE_STEP = 5
+function roadMilestone(level) {
+  const target = Math.ceil(level / ROAD_MILESTONE_STEP) * ROAD_MILESTONE_STEP
+  const boss = target % 10 === 0
+  return { target, cleared: level - 1 - Math.floor((level - 1) / ROAD_MILESTONE_STEP) * ROAD_MILESTONE_STEP, shards: boss ? 120 : 60, xp: boss ? 100 : 50, boss }
+}
 
 const portraitCache = new Map()
 function creaturePortrait(c) {
@@ -335,7 +341,9 @@ function releaseCreature() {
 function arenaDialog() {
   const player=selected(), foes=game.creatures.filter(c=>c.id!==player.id)
   const foe=[...foes].sort((a,b)=>Math.abs(statsOf(a).power-statsOf(player).power)-Math.abs(statsOf(b).power-statsOf(player).power))[0]
-  showModal(`<button class="modal-close" data-action="close" aria-label="Close">×</button><div class="eyebrow">THE CRUCIBLE · BATTLE GATE</div><h2>Choose your challenge</h2><p>Your selected creature enters turn-based combat. Abilities and stamina are shaped by its DNA.</p><section class="road-card"><div class="eyebrow">ENDLESS ROAD · LEVEL ${game.roadLevel}${game.roadLevel%10===0?' · BOSS':''}</div><b>One wild genome. Every level.</b><p>Face a totally random creature, with tougher opponents each level and an Apex boss every tenth level. Progress is saved.</p><button class="primary-btn" data-action="road-start">${game.roadLevel%10===0?'FACE THE BOSS':'START LEVEL '+game.roadLevel} ↗</button></section><div class="friendly-gate"><div class="eyebrow">FRIENDLY MATCH</div>${foe?`<div class="fight-preview"><div class="fight-side"><i style="--creature-color:${phenotype(player.genome).bodyColor}"></i><b>${esc(player.name)}</b><small>POWER ${statsOf(player).power}</small></div><span>VS</span><select id="foe-select">${foes.map(c=>`<option value="${esc(c.id)}" ${c.id===foe.id?'selected':''}>${esc(c.name)} · POW ${statsOf(c).power}</option>`).join('')}</select></div><button class="secondary-btn" data-action="battle-start">BEGIN FRIENDLY BOUT</button>`:`<p>Discover another creature to unlock friendly matches.</p>`}</div>`)
+  const milestone=roadMilestone(game.roadLevel)
+  const progress=Math.round(milestone.cleared/ROAD_MILESTONE_STEP*100)
+  showModal(`<button class="modal-close" data-action="close" aria-label="Close">×</button><div class="eyebrow">THE CRUCIBLE · BATTLE GATE</div><h2>Choose your challenge</h2><p>Your selected creature enters turn-based combat. Abilities and stamina are shaped by its DNA.</p><section class="road-card"><div class="eyebrow">ENDLESS ROAD · LEVEL ${game.roadLevel}${game.roadLevel%10===0?' · BOSS':''}</div><b>One wild genome. Every level.</b><p>Face a totally random creature, with tougher opponents each level and an Apex boss every tenth level. Progress is saved.</p><div class="road-milestone"><div><span>${milestone.boss?'APEX CACHE':'NEXT CACHE'}</span><b>LEVEL ${milestone.target} · +${milestone.shards} ✧ · +${milestone.xp} XP</b></div><small>${milestone.cleared} / ${ROAD_MILESTONE_STEP} levels cleared</small><i><em style="width:${progress}%"></em></i></div><button class="primary-btn" data-action="road-start">${game.roadLevel%10===0?'FACE THE BOSS':'START LEVEL '+game.roadLevel} ↗</button></section><div class="friendly-gate"><div class="eyebrow">FRIENDLY MATCH</div>${foe?`<div class="fight-preview"><div class="fight-side"><i style="--creature-color:${phenotype(player.genome).bodyColor}"></i><b>${esc(player.name)}</b><small>POWER ${statsOf(player).power}</small></div><span>VS</span><select id="foe-select">${foes.map(c=>`<option value="${esc(c.id)}" ${c.id===foe.id?'selected':''}>${esc(c.name)} · POW ${statsOf(c).power}</option>`).join('')}</select></div><button class="secondary-btn" data-action="battle-start">BEGIN FRIENDLY BOUT</button>`:`<p>Discover another creature to unlock friendly matches.</p>`}</div>`)
 }
 function startBattle(roadLevel=null, carry=null) {
   const player=selected()
@@ -434,12 +442,12 @@ function finishBattle(winner) {
   battle.finished=true; battle.winner=winner; battle.busy=false
   world.faint(winner==='player'?'foe':'player')
   battle.player.battles=(battle.player.battles||0)+1; battle.foe.battles=(battle.foe.battles||0)+1
-  if(winner==='player'){battle.player.wins=(battle.player.wins||0)+1;game.wins++;game.coins+=battle.challenge?35+Math.min(100,battle.challenge.level*2):25;awardXP(battle.challenge?45+Math.min(200,battle.challenge.level*5):35, 'arena victory');if(battle.challenge)game.roadLevel=battle.challenge.level+1
+  if(winner==='player'){battle.player.wins=(battle.player.wins||0)+1;game.wins++;game.coins+=battle.challenge?35+Math.min(100,battle.challenge.level*2):25;awardXP(battle.challenge?45+Math.min(200,battle.challenge.level*5):35, 'arena victory');let milestoneReward='';if(battle.challenge){game.roadLevel=battle.challenge.level+1;if(battle.challenge.level%ROAD_MILESTONE_STEP===0){const milestone=roadMilestone(battle.challenge.level);if(awardXP(milestone.xp,'road milestone',`road-milestone:${milestone.target}`)){game.coins+=milestone.shards;milestoneReward=` Milestone cache: +${milestone.shards} shards and +${milestone.xp} XP!`}}}
     const foe=battle.foe
     const entry={id:cryptoId(),name:`${foe.name} DNA`,sourceName:foe.name,sourceId:foe.id,source:'battle',generation:foe.generation||0,genome:copyGenome(foe.genome),savedAt:Date.now()}
     game.archives.unshift(entry)
     awardXP(15,'archive',`archive:${entry.id}`)
-    toast(battle.challenge?`Road victory! ${foe.name}'s DNA archived.`: `Victory! ${foe.name}'s DNA archived. +25 shards and +35 XP.`)
+    toast(battle.challenge?`Road victory! ${foe.name}'s DNA archived.${milestoneReward}`: `Victory! ${foe.name}'s DNA archived. +25 shards and +35 XP.`)
   }else toast(`${battle.foe.name} wins this round. Your creature will be ready for another bout.`)
   persist(); renderBattle(); renderRoster()
 }
