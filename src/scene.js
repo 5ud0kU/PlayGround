@@ -548,7 +548,15 @@ export class World {
     this.refreshSelectionRing()
   }
 
+  disposeFighters() {
+    if (!this.fighters) return
+    this.fighters.player.userData.dispose()
+    this.fighters.foe.userData.dispose()
+    this.fighters = null
+  }
+
   enterArena(player, foe) {
+    this.disposeFighters()
     this.setMode('arena')
     this.clearCreatures()
     const pA = buildCreature(player.genome)
@@ -568,11 +576,7 @@ export class World {
   }
 
   exitArena() {
-    if (this.fighters) {
-      this.fighters.player.userData.dispose()
-      this.fighters.foe.userData.dispose()
-      this.fighters = null
-    }
+    this.disposeFighters()
     this.clearCreatures()
     this.setMode('habitat')
     this.setWander()
