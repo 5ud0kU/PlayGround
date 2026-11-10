@@ -47,6 +47,14 @@ export const BODY_PLANS = [
   { key: 'biped', label: 'Biped', icon: '♙', source: 'Primate · drake', note: 'Upright stance with grasping forelimbs' },
 ]
 
+// Ten sculptural families, each with ten DNA-selected variants, provide a
+// stable catalog of 100 additional forms without adding artificial alleles.
+const MORPHOLOGY_FAMILIES = [
+  'Longstride', 'Bulwark', 'Spindle', 'Crownback', 'Sailcrest',
+  'Barrel', 'Thornhide', 'Highneck', 'Paddletail', 'Ridgeback',
+]
+const MORPHOLOGY_KEYS = ['size', 'length', 'girth', 'neck', 'head', 'snout', 'legs', 'stance', 'tail', 'armor', 'wings', 'posture', 'bodyPlan', 'archetype']
+
 const clamp = (v, a = 0, b = 1) => Math.max(a, Math.min(b, v))
 export const clamp01 = v => clamp(v)
 export const lerp = (a, b, t) => a + (b - a) * t
@@ -97,6 +105,14 @@ export function phenotype(genome) {
     const [a = 0.5, b = 0.5] = genome[gene.key] || []
     p[gene.key] = (a + b) / 2
   }
+  // Quantized expressed physical genes make morphology reproducible and
+  // heritable while allowing allele edits and breeding to reshuffle the form.
+  let morphologyHash = 2166136261
+  for (const key of MORPHOLOGY_KEYS) {
+    morphologyHash ^= Math.round(clamp(p[key]) * 255)
+    morphologyHash = Math.imul(morphologyHash, 16777619)
+  }
+  const morphologyIndex = (morphologyHash >>> 0) % 100
   // Derived composite values used by the mesh builder.
   const size = p.size
   p.height = 0.72 + size * 0.62 + p.legs * 0.18
@@ -114,6 +130,10 @@ export function phenotype(genome) {
   const bodyPlanIndex = Math.min(BODY_PLANS.length - 1, Math.floor(p.bodyPlan * BODY_PLANS.length))
   p.bodyPlanKey = BODY_PLANS[bodyPlanIndex].key
   p.bodyPlanName = BODY_PLANS[bodyPlanIndex].label
+  p.morphologyIndex = morphologyIndex
+  p.morphologyFamily = Math.floor(morphologyIndex / 10)
+  p.morphologyVariant = morphologyIndex % 10
+  p.morphologyName = `${MORPHOLOGY_FAMILIES[p.morphologyFamily]} ${String(p.morphologyVariant + 1).padStart(2, '0')}`
   p.skinRoughness = 0.9 - p.hide * 0.62
   p.horniness = p.horns
   p.limbCount = { fish: 0, insect: 6, bird: 2, quadruped: 4, biped: 2 }[p.bodyPlanKey]

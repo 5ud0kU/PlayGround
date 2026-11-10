@@ -1,6 +1,21 @@
 import * as THREE from 'three'
 import { phenotype } from './dna.js'
 
+// Proportional templates for ten sculptural families. Each has ten
+// DNA-derived variants with subtly different proportions (100 total forms).
+const MORPHOLOGY_SHAPES = [
+  { width: 0.94, height: 0.94, length: 1.16, head: 0.96, neck: 0.96, legs: 1.16, tail: 1.06 },
+  { width: 1.18, height: 1.16, length: 0.92, head: 1.08, neck: 0.84, legs: 0.9, tail: 0.84 },
+  { width: 0.8, height: 0.86, length: 1.12, head: 0.9, neck: 1.18, legs: 1.08, tail: 0.96 },
+  { width: 1.04, height: 1.04, length: 1.02, head: 1.06, neck: 1.08, legs: 0.96, tail: 1.04 },
+  { width: 0.96, height: 0.96, length: 1.04, head: 0.94, neck: 1.04, legs: 1.02, tail: 1.08 },
+  { width: 1.2, height: 1.1, length: 0.94, head: 0.94, neck: 0.88, legs: 0.84, tail: 0.86 },
+  { width: 1.02, height: 1.08, length: 1.04, head: 1.02, neck: 0.94, legs: 0.96, tail: 1.02 },
+  { width: 0.9, height: 0.96, length: 1.02, head: 0.96, neck: 1.32, legs: 1.02, tail: 0.94 },
+  { width: 0.94, height: 0.94, length: 1.08, head: 0.92, neck: 0.94, legs: 0.94, tail: 1.32 },
+  { width: 1.08, height: 1.1, length: 1.02, head: 1.04, neck: 1.0, legs: 0.94, tail: 1.12 },
+]
+
 // ─── materials & procedural coat texture ───────────────────────────────────
 const texCache = new Map()
 
@@ -178,6 +193,9 @@ export function buildCreature(genome, opts = {}) {
   const s = 0.78 + p.size * 0.52
   const species = Math.min(3, Math.floor(p.archetype * 4))
   const bodyPlan = p.bodyPlanKey
+  const morphology = MORPHOLOGY_SHAPES[p.morphologyFamily] || MORPHOLOGY_SHAPES[0]
+  const morphVariant = p.morphologyVariant - 4.5
+  const variantWave = Math.sin((p.morphologyVariant + 1) * Math.PI / 5)
   const fish = bodyPlan === 'fish'
   const insect = bodyPlan === 'insect'
   const bird = bodyPlan === 'bird'
@@ -188,13 +206,13 @@ export function buildCreature(genome, opts = {}) {
   const typeLength = [1, 1.12, 0.86, 1.08][species]
   const planWidth = fish ? 0.9 : insect ? 1.08 : bird ? 0.82 : 1
   const planLength = fish ? 1.32 : insect ? 0.92 : bird ? 0.9 : 1
-  const torsoRY = (0.5 + p.girth * 0.3) * s * [1, 0.98, 0.82, 1.2][species] * (fish ? 0.78 : 1)
-  const torsoRX = (0.52 + p.girth * 0.48) * s * typeWidth * planWidth
-  const torsoRZ = (0.62 + p.length * 0.55) * s * typeLength * planLength
-  const legLen = fish ? 0 : (0.34 + p.legs * 0.62) * s * [1, 0.9, 1.22, 0.82][species] * (biped ? 1.04 : bird ? 0.82 : insect ? 0.55 : 1)
+  const torsoRY = (0.5 + p.girth * 0.3) * s * [1, 0.98, 0.82, 1.2][species] * (fish ? 0.78 : 1) * morphology.height * (1 + variantWave * 0.07)
+  const torsoRX = (0.52 + p.girth * 0.48) * s * typeWidth * planWidth * morphology.width * (1 + morphVariant * 0.012)
+  const torsoRZ = (0.62 + p.length * 0.55) * s * typeLength * planLength * morphology.length * (1 - morphVariant * 0.01)
+  const legLen = fish ? 0 : (0.34 + p.legs * 0.62) * s * [1, 0.9, 1.22, 0.82][species] * (biped ? 1.04 : bird ? 0.82 : insect ? 0.55 : 1) * morphology.legs * (1 - morphVariant * 0.009)
   const legThick = (0.09 + p.stance * 0.12) * [1, 0.9, 0.78, 1.42][species] * (insect ? 0.55 : bird ? 0.82 : 1)
   const hipY = legLen + torsoRY * 0.42
-  const headScale = (0.34 + p.head * 0.36) * s * [1, 1.05, 0.88, 1.22][species] * (fish ? 0.9 : 1)
+  const headScale = (0.34 + p.head * 0.36) * s * [1, 1.05, 0.88, 1.22][species] * (fish ? 0.9 : 1) * morphology.head * (1 + morphVariant * 0.008 + variantWave * 0.025)
   const bodyY = fish ? torsoRY * 1.12 : legLen + torsoRY * (biped ? 0.62 : upright ? 0.58 : 0.52)
   const finLevel = fish ? Math.max(p.fins, 0.62) : p.fins
   const shellLevel = insect ? Math.max(p.carapace, 0.62) : p.carapace
@@ -230,7 +248,7 @@ export function buildCreature(genome, opts = {}) {
   const neckBase = new THREE.Group()
   neckBase.position.set(0, torsoRY * (biped ? 0.36 : 0.3), torsoRZ * 0.62)
   bodyGroup.add(neckBase)
-  const neckLen = (0.16 + p.neck * 0.62) * s * [1, 1.34, 1.08, 0.76][species]
+  const neckLen = (0.16 + p.neck * 0.62) * s * [1, 1.34, 1.08, 0.76][species] * morphology.neck * (1 - morphVariant * 0.006)
   const neckGeo = new THREE.CapsuleGeometry(0.17 * s, neckLen, 3, 8)
   addMesh(neckBase, neckGeo, bodyMat, [0, neckLen * 0.34, 0.06 * s], [-0.62 + p.neck * 0.2, 0, 0], [1, 1, 1.05 + p.neck * 0.3])
 
@@ -422,8 +440,8 @@ export function buildCreature(genome, opts = {}) {
     const segCount = 4
     for (let i = 0; i < segCount; i++) {
       const seg = new THREE.Group()
-      const r = (0.2 - i * 0.032) * s * (0.7 + p.tail * 0.7) * [1, 0.88, 0.78, 1.32][species]
-      const len = (0.32 + p.tail * 0.42) * s * [1, 1.22, 1.08, 0.82][species]
+      const r = (0.2 - i * 0.032) * s * (0.7 + p.tail * 0.7) * [1, 0.88, 0.78, 1.32][species] * (1 + variantWave * 0.06)
+      const len = (0.32 + p.tail * 0.42) * s * [1, 1.22, 1.08, 0.82][species] * morphology.tail * (1 + morphVariant * 0.006)
       seg.position.z = i === 0 ? 0 : -len * 0.92
       const g = new THREE.CapsuleGeometry(Math.max(0.045, r), len, 2, 7)
       addMesh(seg, g, i % 2 === 0 ? bodyMat : darkMat, [0, 0, -len * 0.46], [Math.PI / 2, 0, 0])
