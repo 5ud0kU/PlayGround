@@ -59,6 +59,11 @@
       <button id="btnAdd">+ Créatures</button>
       <button id="btnReset">Réinitialiser</button>
     </div>
+    <div class="btn-row">
+      <button id="btnZoomIn">Zoom +</button>
+      <button id="btnZoomOut">Zoom –</button>
+      <button id="btnCamReset">Reset vue</button>
+    </div>
     <div class="hint">Glisser pour déplacer la carte • Molette pour zoomer • Cliquer une créature pour l’inspecter • Espace : pause</div>
   </div>
   <div class="panel">
@@ -610,6 +615,27 @@ document.getElementById('btnAdd').addEventListener('click', () => {
   }
 });
 document.getElementById('btnReset').addEventListener('click', resetWorld);
+
+function setZoom(next) {
+  const prev = cam.zoom;
+  cam.zoom = clamp(next, [0.35, 3.5]);
+  // keep the center of the screen fixed on the same world point
+  const mx = width / 2, my = height / 2;
+  const wx = cam.x + mx / prev;
+  const wy = cam.y + my / prev;
+  cam.x = wx - mx / cam.zoom;
+  cam.y = wy - my / cam.zoom;
+  clampCam();
+}
+
+document.getElementById('btnZoomIn').addEventListener('click', () => setZoom(cam.zoom * 1.35));
+document.getElementById('btnZoomOut').addEventListener('click', () => setZoom(cam.zoom / 1.35));
+document.getElementById('btnCamReset').addEventListener('click', () => {
+  cam.x = WORLD_W / 2 - width / 2;
+  cam.y = WORLD_H / 2 - height / 2;
+  cam.zoom = 1;
+  clampCam();
+});
 
 resetWorld();
 requestAnimationFrame(loop);
