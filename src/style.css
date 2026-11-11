@@ -114,6 +114,28 @@ button:focus-visible,input:focus-visible,select:focus-visible{outline-color:#38d
 @media(max-width:420px){.genome-summary{grid-template-columns:34px minmax(0,1fr) auto;gap:5px;padding:6px}.chromosome-art{width:33px;height:31px}.genome-summary>span{font-size:6px;padding:3px}.gene-visual{grid-template-columns:17px minmax(0,1fr);gap:4px}.gene-glyph{width:16px;height:16px;font-size:9px}.ability-graphic-card{grid-template-columns:23px minmax(0,1fr);padding:5px}.ability-graphic-card .move-icon{width:22px;height:22px;font-size:12px}.move-title-line>span{font-size:5px;padding:2px 3px}}
 @media(prefers-reduced-motion:reduce){.chromosome-locus,.ability-graphic-card{transition:none!important}}
 
+/* First-person crosshair */
+.crosshair {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 20px;
+  height: 20px;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+  z-index: 4;
+  opacity: 0.75;
+}
+.crosshair::before, .crosshair::after {
+  content: '';
+  position: absolute;
+  background: #d8ff5f;
+  box-shadow: 0 0 10px #d8ff5f;
+  border-radius: 1px;
+}
+.crosshair::before { left: 9px; top: 0; width: 2px; height: 10px; }
+.crosshair::after { top: 9px; left: 0; width: 10px; height: 2px; }
+
 /* 3D creature portraits rendered from each genome, shown in the roster and dossier. */
 .roster-portrait{width:100%;height:100%;object-fit:cover;border-radius:inherit;display:block;position:relative;z-index:2}
 .identity-portrait{width:100%;height:100%;object-fit:cover;border-radius:inherit;display:block;position:relative;z-index:2}

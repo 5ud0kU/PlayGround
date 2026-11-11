@@ -227,9 +227,20 @@ export class World {
     this.time = 0
     this.shakeAmt = 0
     this.pointer = { down: false, x: 0, y: 0, moved: 0 }
-    // Drag-to-pan camera state.
+    // First-person player state (habitat mode).
+    this.player = {
+      x: 0, y: 1.6, z: 3.5,
+      yaw: 0, pitch: -0.25,
+      locked: false,
+      speed: 5.5,
+      bob: 0,
+      keys: { w: false, s: false, a: false, d: false },
+    }
+    this.fov = 45
+    this.crosshair = null
+    this.hintEl = null
+    // Drag-to-pan camera state (retained for reference).
     this.pan = { x: 0, z: 0, targetX: 0, targetZ: 0 }
-    this.zoom = 11
     this.targetY = 1.35
     this.autoRotate = false
     this.raycaster = new THREE.Raycaster()
@@ -251,10 +262,23 @@ export class World {
     this.renderer.domElement.style.touchAction = 'none'
     container.appendChild(this.renderer.domElement)
 
+    const wrap = container.parentElement
+    if (wrap) {
+      this.crosshair = document.createElement('div')
+      this.crosshair.className = 'crosshair'
+      wrap.appendChild(this.crosshair)
+      this.hintEl = wrap.querySelector('.camera-hint')
+      this.updateHint()
+    }
+
     this.scene = new THREE.Scene()
     this.scene.fog = new THREE.FogExp2(0x0b1a1d, 0.028)
-    this.camera = new THREE.PerspectiveCamera(42, 1, 0.1, 200)
-    this.camera.position.set(6, 4, 8)
+    this.camera = new THREE.PerspectiveCamera(45, 1, 0.1, 200)
+    this.camera.fov = this.fov
+    this.camera.position.set(0, 1.6, 3.5)
+    this.camera.rotation.order = 'YXZ'
+    this.camera.rotation.set(0.25, 0, 0)
+    this.camera.updateProjectionMatrix()
 
     this.hemi = new THREE.HemisphereLight(0x9ffff0, 0x14201f, 1.25)
     this.scene.add(this.hemi)
@@ -281,6 +305,11 @@ export class World {
     this.buildArena()
     this.setMode('habitat', true)
     this.bindPointer()
+    this.bindKeys()
+    document.addEventListener('pointerlockchange', () => {
+      this.player.locked = document.pointerLockElement === this.renderer.domElement
+      this.updateHint()
+    })
     this.resize()
     this.resizeObserver = new ResizeObserver(() => this.resize())
     this.resizeObserver.observe(this.container)
@@ -761,6 +790,7 @@ export class World {
 
   bindPointer() {
     const el = this.renderer.domElement
+    const sens = 0.002
     const down = e => {
       this.pointer.down = true
       this.pointer.moved = 0
@@ -778,15 +808,22 @@ export class World {
       this.pointer.moved += Math.abs(dx) + Math.abs(dy)
       this.pointer.lx = e.clientX
       this.pointer.ly = e.clientY
-      // Drag pans the camera target across the habitat map.
-      const scale = this.zoom * 0.002
-      this.pan.targetX -= dx * scale
-      this.pan.targetZ += dy * scale
+      if (this.player.locked) {
+        this.player.yaw += e.movementX * sens
+        this.player.pitch -= e.movementY * sens
+      } else {
+        this.player.yaw += dx * sens
+        this.player.pitch -= dy * sens
+      }
+      this.player.pitch = Math.max(-1.4, Math.min(1.4, this.player.pitch))
     }
     const up = e => {
       if (!this.pointer.down) return
       this.pointer.down = false
-      if (this.pointer.moved < 8) this.pickAt(e.clientX, e.clientY)
+      if (this.pointer.moved < 8) {
+        if (this.player.locked) this.pickCenter()
+        else el.requestPointerLock()
+      }
     }
     el.addEventListener('pointerdown', down)
     el.addEventListener('pointermove', move)
@@ -794,8 +831,75 @@ export class World {
     el.addEventListener('pointercancel', () => { this.pointer.down = false })
     el.addEventListener('wheel', e => {
       e.preventDefault()
-      this.zoom = Math.max(5, Math.min(25, this.zoom + e.deltaY * 0.005))
+      this.camera.fov = Math.max(30, Math.min(90, this.camera.fov - e.deltaY * 0.05))
+      this.camera.updateProjectionMatrix()
     }, { passive: false })
+  }
+
+  bindKeys() {
+    const down = e => {
+      const k = e.code
+      if (k === 'KeyW') this.player.keys.w = true
+      else if (k === 'KeyS') this.player.keys.s = true
+      else if (k === 'KeyA') this.player.keys.a = true
+      else if (k === 'KeyD') this.player.keys.d = true
+    }
+    const up = e => {
+      const k = e.code
+      if (k === 'KeyW') this.player.keys.w = false
+      else if (k === 'KeyS') this.player.keys.s = false
+      else if (k === 'KeyA') this.player.keys.a = false
+      else if (k === 'KeyD') this.player.keys.d = false
+    }
+    window.addEventListener('keydown', down)
+    window.addEventListener('keyup', up)
+  }
+
+  updatePlayer(dt) {
+    const p = this.player
+    const spd = p.speed * dt
+    const yaw = p.yaw
+    const fx = Math.sin(yaw), fz = -Math.cos(yaw)
+    const rx = Math.cos(yaw), rz = Math.sin(yaw)
+    let mx = 0, mz = 0
+    if (p.keys.w) { mx += fx; mz += fz }
+    if (p.keys.s) { mx -= fx; mz -= fz }
+    if (p.keys.d) { mx += rx; mz += rz }
+    if (p.keys.a) { mx -= rx; mz -= rz }
+    if (mx || mz) {
+      const len = Math.hypot(mx, mz)
+      mx = (mx / len) * spd
+      mz = (mz / len) * spd
+      const nx = p.x + mx, nz = p.z + mz
+      if (Math.hypot(nx, nz) < 55) { p.x = nx; p.z = nz }
+      p.bob = Math.min(1, p.bob + dt * 4)
+    } else {
+      p.bob = Math.max(0, p.bob - dt * 2)
+    }
+    p.y = 1.6 + Math.sin(this.time * 12) * p.bob * 0.04
+  }
+
+  updateHint() {
+    if (!this.hintEl) return
+    this.hintEl.innerHTML = this.player.locked
+      ? 'LOOK <b>·</b> WASD WALK <b>·</b> CLICK CREATURE TO INSPECT <b>·</b> ESC RELEASE'
+      : 'CLICK TO LOOK AROUND <b>·</b> WASD TO WALK'
+  }
+
+  pickCenter() {
+    if (this.mode !== 'habitat') return
+    this.ndc.set(0, 0)
+    this.raycaster.setFromCamera(this.ndc, this.camera)
+    const hits = this.raycaster.intersectObjects(this.habitat.children, true)
+    for (const hit of hits) {
+      let o = hit.object
+      while (o && !o.userData.creatureId) o = o.parent
+      if (o?.userData.creatureId) {
+        this.hooks.onSelect?.(o.userData.creatureId)
+        return
+      }
+    }
+    this.hooks.onBackground?.()
   }
 
   pickAt(clientX, clientY) {
@@ -838,12 +942,11 @@ export class World {
     this.updateParticles(dt)
 
     if (this.mode === 'habitat') {
-      const pan = this.pan
-      pan.x += (pan.targetX - pan.x) * 0.1
-      pan.z += (pan.targetZ - pan.z) * 0.1
-      const camY = this.targetY + this.zoom * 0.55
-      this.camera.position.lerp(new THREE.Vector3(pan.x, camY, pan.z), 0.1)
-      this.camera.lookAt(pan.x, this.targetY, pan.z)
+      this.updatePlayer(dt)
+      const p = this.player
+      this.camera.position.set(p.x, p.y, p.z)
+      this.camera.rotation.order = 'YXZ'
+      this.camera.rotation.set(-p.pitch, p.yaw, 0)
     } else {
       const orbit = this.orbit
       if (this.autoRotate && this.mode === 'habitat') {
@@ -964,6 +1067,15 @@ export class World {
         }
       }
 
+      // Gentle avoidance of the player.
+      const pdx = pos.x - this.player.x, pdz = pos.z - this.player.z
+      const pd = Math.hypot(pdx, pdz)
+      if (pd > 0 && pd < 4) {
+        const repel = ((4 - pd) / 4) * entry.speed * dt * 1.5
+        pos.x += (pdx / pd) * repel
+        pos.z += (pdz / pd) * repel
+      }
+
       entry.moving += (moving - entry.moving) * Math.min(1, dt * 5)
       entry.root.userData.update?.(dt, entry.moving)
 
@@ -971,11 +1083,12 @@ export class World {
         this.selectionRing.position.x = pos.x
         this.selectionRing.position.z = pos.z
         this.selectionRing.scale.setScalar(1 + Math.sin(this.time * 3) * 0.06)
-        // Highlight current biome.
-        const b = this.getBiomeAt(pos.x, pos.z)
-        if (this.hooks.onBiome) this.hooks.onBiome(b)
       }
     }
+    // Biome tag under the player's feet.
+    const pb = this.getBiomeAt(this.player.x, this.player.z)
+    if (this.hooks.onBiome) this.hooks.onBiome(pb)
+
     // spore drift
     this.driftField(this.spores, dt, 0.25)
     this.driftField(this.fireflies, dt, 0.6)
