@@ -2,8 +2,11 @@ import * as THREE from 'three';
 import './style.css';
 
 const scene = new THREE.Scene();
-scene.background = new THREE.Color(0x07141b);
-scene.fog = new THREE.Fog(0x07141b, 26, 135);
+scene.background = new THREE.Color(0x9aaca9);
+scene.fog = new THREE.Fog(0x9aaca9, 48, 165);
+const daylightSky = new THREE.Color(0x9aaca9);
+const eveningSky = new THREE.Color(0x374345);
+const skyColor = new THREE.Color();
 
 const camera = new THREE.PerspectiveCamera(72, innerWidth / innerHeight, 0.1, 220);
 camera.position.set(0, 1.7, 8);
@@ -18,8 +21,9 @@ renderer.toneMapping = THREE.ACESFilmicToneMapping;
 renderer.toneMappingExposure = 1.18;
 document.body.appendChild(renderer.domElement);
 
-scene.add(new THREE.HemisphereLight(0xdaf6ff, 0x1b2c34, 2.3));
-const sun = new THREE.DirectionalLight(0xfff0d1, 2.8);
+const hemisphere = new THREE.HemisphereLight(0xe4eeea, 0x63716e, 2.5);
+scene.add(hemisphere);
+const sun = new THREE.DirectionalLight(0xfff3d9, 3.2);
 sun.position.set(-22, 42, 28);
 sun.castShadow = true;
 sun.shadow.mapSize.set(2048, 2048);
@@ -28,13 +32,13 @@ sun.shadow.camera.top = 65; sun.shadow.camera.bottom = -65;
 scene.add(sun);
 
 const mat = (color, roughness = 0.86, metalness = 0.03) => new THREE.MeshStandardMaterial({ color, roughness, metalness });
-const ground = new THREE.Mesh(new THREE.PlaneGeometry(240, 240), mat(0x3d4546));
+const ground = new THREE.Mesh(new THREE.PlaneGeometry(240, 240), mat(0x93968a));
 ground.rotation.x = -Math.PI / 2;
 ground.position.y = -0.05;
 ground.receiveShadow = true;
 scene.add(ground);
 
-const road = new THREE.Mesh(new THREE.PlaneGeometry(16, 220), mat(0x27363d));
+const road = new THREE.Mesh(new THREE.PlaneGeometry(16, 220), mat(0x626b6c));
 road.rotation.x = -Math.PI / 2;
 road.position.y = 0.01;
 road.receiveShadow = true;
@@ -47,7 +51,7 @@ for (const x of [-10.5, 10.5]) {
   scene.add(sidewalk);
 }
 
-const lineMat = new THREE.MeshBasicMaterial({ color: 0xe8d785 });
+const lineMat = new THREE.MeshBasicMaterial({ color: 0xe8d6a0 });
 for (let z = -100; z <= 100; z += 12) {
   const stripe = new THREE.Mesh(new THREE.PlaneGeometry(0.18, 5), lineMat);
   stripe.rotation.x = -Math.PI / 2;
@@ -55,9 +59,9 @@ for (let z = -100; z <= 100; z += 12) {
   scene.add(stripe);
 }
 
-const buildingMats = [0x53626b, 0x7f746c, 0x667d7a, 0x646e7a, 0x8f7f68, 0x6b7d86].map((c) => mat(c));
-const windowMats = [0x1d3945, 0x2a454b, 0x314b5a].map((c) => new THREE.MeshStandardMaterial({ color: c, roughness: 0.47, metalness: 0.12 }));
-const signMats = [0xe97d61, 0xe2be67, 0x57c7bd, 0x8a9de0].map((c) => new THREE.MeshStandardMaterial({ color: c, emissive: c, emissiveIntensity: 0.25 }));
+const buildingMats = [0xc1b9a7, 0xb5aa98, 0xa9b8b0, 0xb0b4b1, 0xc3b59b, 0x9eadae].map((c) => mat(c, 0.94));
+const windowMats = [0x566d70, 0x687a79, 0x71817e].map((c) => new THREE.MeshStandardMaterial({ color: c, roughness: 0.47, metalness: 0.08 }));
+const signMats = [0xb9684c, 0xc49b50, 0x5c9287, 0x727da2].map((c) => new THREE.MeshStandardMaterial({ color: c, emissive: c, emissiveIntensity: 0.12 }));
 
 function box(w, h, d, material, x, y, z, cast = true) {
   const mesh = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), material);
@@ -78,7 +82,7 @@ for (const side of [-1, 1]) {
     const z = -82 + row * 10 + Math.random() * 2;
     const w = 8 + Math.random() * 7;
     const d = 8 + Math.random() * 5;
-    const floors = Math.max(2, Math.floor((10 + Math.random() * 24) / 3.1));
+    const floors = Math.max(2, Math.floor((8 + Math.random() * 13) / 3.1));
     const floorHeight = 3.05;
     const h = floors * floorHeight;
     const x = side * (14 + w / 2 + Math.random() * 3.5);
@@ -149,10 +153,10 @@ for (const side of [-1, 1]) {
 }
 
 const lampMat = new THREE.MeshStandardMaterial({ color: 0x2e3940, metalness: 0.72, roughness: 0.3 });
-const lampGlow = new THREE.MeshStandardMaterial({ color: 0xffdea2, emissive: 0xffc77c, emissiveIntensity: 1.2 });
-const trunkMat = mat(0x5d4738);
-const leafMats = [mat(0x617b69), mat(0x788a6d), mat(0x58706a)];
-const carMats = [0x58707d, 0x9d6247, 0x77817a, 0x2f4653, 0xc4b08d].map((c) => new THREE.MeshStandardMaterial({ color: c, metalness: 0.3, roughness: 0.42 }));
+const lampGlow = new THREE.MeshStandardMaterial({ color: 0xffe6b4, emissive: 0xf2c577, emissiveIntensity: 0.62 });
+const trunkMat = mat(0x79624c);
+const leafMats = [mat(0x81947a), mat(0xa0a17b), mat(0x708c82)];
+const carMats = [0x687a7b, 0x9d7059, 0x818982, 0x53676a, 0xb9a987].map((c) => new THREE.MeshStandardMaterial({ color: c, metalness: 0.16, roughness: 0.58 }));
 
 for (let i = 0; i < 12; i++) {
   const z = -84 + i * 12;
@@ -224,6 +228,8 @@ const state = {
   pitch: 0,
   interactCooldown: 0,
   mapOpen: false,
+  workedToday: false,
+  completed: false,
 };
 
 const cityMap = document.querySelector('#cityMap');
@@ -305,11 +311,11 @@ document.addEventListener('keydown', (event) => {
 });
 
 const lifeNodes = [
-  { key: 'home', name: 'Home', color: 0x70f0d7, position: new THREE.Vector3(-12, 1.8, -24), radius: 3.2 },
-  { key: 'work', name: 'Office', color: 0x8abaf5, position: new THREE.Vector3(-2.5, 1.8, 26), radius: 3.4 },
-  { key: 'cafe', name: 'Cafe', color: 0xffb46a, position: new THREE.Vector3(11.5, 1.8, 20), radius: 3 },
-  { key: 'park', name: 'Park', color: 0x72d77c, position: new THREE.Vector3(14.5, 1.5, -11), radius: 3.5 },
-  { key: 'club', name: 'Night Club', color: 0xf87eb0, position: new THREE.Vector3(-15, 1.8, 8), radius: 3.5 },
+  { key: 'home', name: 'Home', color: 0x83a998, position: new THREE.Vector3(-12, 1.8, -24), radius: 3.2 },
+  { key: 'work', name: 'Office', color: 0x8497a4, position: new THREE.Vector3(-2.5, 1.8, 26), radius: 3.4 },
+  { key: 'cafe', name: 'Cafe', color: 0xc28b5e, position: new THREE.Vector3(11.5, 1.8, 20), radius: 3 },
+  { key: 'park', name: 'Park', color: 0x87986e, position: new THREE.Vector3(14.5, 1.5, -11), radius: 3.5 },
+  { key: 'club', name: 'Night Club', color: 0xa57b84, position: new THREE.Vector3(-15, 1.8, 8), radius: 3.5 },
 ];
 
 const roomZones = [
@@ -399,9 +405,7 @@ function setOverlay(title, text, buttonText) {
 
 function resetForNewDay() {
   state.time = 7;
-  state.energy = 100;
-  state.hunger = 100;
-  state.joy = 100;
+  state.workedToday = false;
   camera.position.set(0, 1.7, 8);
   state.yaw = 0;
   state.pitch = 0;
@@ -410,29 +414,35 @@ function resetForNewDay() {
 }
 
 function endDay() {
+  if (!state.started) return;
   state.started = false;
   document.exitPointerLock?.();
 
   if (state.day >= state.maxDays) {
-    const resultText = `You survived ${state.maxDays} days in Neon City with $${state.money}.`;
-    setOverlay('Neighborhood legend', resultText, 'Restart life');
-    state.day = 1;
-    state.money = 42;
-    resetForNewDay();
+    state.completed = true;
+    const resultText = `You made it through the week with $${state.money}. Your final needs: ${Math.round(state.energy)} energy, ${Math.round(state.hunger)} hunger, and ${Math.round(state.joy)} mood.`;
+    setOverlay('Week complete', resultText, 'Restart life');
     return;
   }
 
-  const summary = `Day ${state.day} complete. You closed with $${state.money}.`;
-  setOverlay('Day complete', summary, 'Start next day');
+  const previousDay = state.day;
   state.day += 1;
-  state.money = Math.max(42, state.money);
+  state.energy = clamp(state.energy + 58, 35, 100);
+  state.hunger = clamp(state.hunger - 18, 12, 100);
+  state.joy = clamp(state.joy - 8, 12, 100);
+  state.money -= 12;
   resetForNewDay();
+  setOverlay('Day complete', `Day ${previousDay} is done. Overnight rent and utilities cost $12. You have $${state.money} for the days ahead.`, 'Start next day');
 }
 
 function startGame() {
-  if (state.day > state.maxDays) {
+  if (state.completed) {
     state.day = 1;
     state.money = 42;
+    state.energy = 100;
+    state.hunger = 100;
+    state.joy = 100;
+    state.completed = false;
   }
 
   state.started = true;
@@ -486,62 +496,68 @@ function interact() {
   }
 
   state.interactCooldown = 0.45;
+  let hoursSpent = 0.35;
 
   switch (targetNode.key) {
     case 'home':
-      if (state.time < 21 && state.time > 6) {
-        state.energy = clamp(state.energy + 36, 0, 100);
-        state.hunger = clamp(state.hunger - 10, 0, 100);
-        state.joy = clamp(state.joy + 12, 0, 100);
-        setStatus('You rest at home and recover your energy.');
+      if (state.time >= 20 || state.time < 7 || state.energy <= 20) {
+        setStatus('You call it a night. Rest up and the next day begins.');
+        endDay();
       } else {
-        setStatus('Home is cozy, but the city is still active.');
+        state.energy = clamp(state.energy + 32, 0, 100);
+        state.hunger = clamp(state.hunger - 8, 0, 100);
+        setStatus('A short rest at home helps you recover.');
       }
       break;
     case 'work':
-      if (state.time >= 9 && state.time <= 18) {
-        state.money += 30;
-        state.energy = clamp(state.energy - 18, 0, 100);
-        state.hunger = clamp(state.hunger - 12, 0, 100);
-        state.joy = clamp(state.joy - 8, 0, 100);
-        setStatus('A productive shift. The bank account is healthier.');
+      if (state.workedToday) {
+        setStatus('You already worked a shift today. Come back tomorrow.');
+      } else if (state.time >= 9 && state.time <= 12) {
+        state.money += 45;
+        state.workedToday = true;
+        state.energy = clamp(state.energy - 20, 0, 100);
+        state.hunger = clamp(state.hunger - 18, 0, 100);
+        state.joy = clamp(state.joy - 10, 0, 100);
+        hoursSpent = 6;
+        setStatus('Shift complete: +$45. You worked six hours; take care of yourself.');
       } else {
-        setStatus('The office is off-hours right now.');
+        setStatus('The shift starts between 09:00 and 12:00. One shift is available each day.');
       }
       break;
     case 'cafe':
-      if (state.money >= 10) {
-        state.hunger = clamp(state.hunger + 28, 0, 100);
-        state.energy = clamp(state.energy + 8, 0, 100);
-        state.joy = clamp(state.joy + 8, 0, 100);
-        state.money -= 10;
-        setStatus('Fresh food and coffee keep you going.');
+      if (state.money >= 8) {
+        state.hunger = clamp(state.hunger + 34, 0, 100);
+        state.energy = clamp(state.energy + 6, 0, 100);
+        state.joy = clamp(state.joy + 5, 0, 100);
+        state.money -= 8;
+        setStatus('Meal bought for $8. You feel ready to keep moving.');
       } else {
-        setStatus('You need $10 for a meal at the cafe.');
+        setStatus('You need $8 for a meal. Try to get a work shift first.');
       }
       break;
     case 'park':
-      state.joy = clamp(state.joy + 26, 0, 100);
-      state.energy = clamp(state.energy + 8, 0, 100);
-      state.hunger = clamp(state.hunger - 8, 0, 100);
-      setStatus('A walk in the park lifts your mood.');
+      state.joy = clamp(state.joy + 22, 0, 100);
+      state.energy = clamp(state.energy + 5, 0, 100);
+      state.hunger = clamp(state.hunger - 6, 0, 100);
+      setStatus('A little time outside lifts your mood.');
       break;
     case 'club':
       if (state.money >= 12) {
         state.money -= 12;
-        state.joy = clamp(state.joy + 30, 0, 100);
-        state.energy = clamp(state.energy - 12, 0, 100);
-        setStatus('Late-night music and conversation energize you.');
+        state.joy = clamp(state.joy + 25, 0, 100);
+        state.energy = clamp(state.energy - 14, 0, 100);
+        setStatus('A night out costs $12, but the music lifts your mood.');
       } else {
-        setStatus('You need a little cash before hitting the club.');
+        setStatus('You need $12 for a night out.');
       }
       break;
     default:
       break;
   }
 
+  if (state.started) state.time += hoursSpent;
   updateHud();
-  if (state.energy <= 0 || state.hunger <= 0 || state.joy <= 0) {
+  if (state.started && (state.time >= 23.8 || state.energy <= 0 || state.hunger <= 0 || state.joy <= 0)) {
     endDay();
   }
 }
@@ -622,6 +638,16 @@ document.querySelector('#touchFire').addEventListener('pointerdown', (event) => 
 
 function update(dt) {
   state.interactCooldown = Math.max(0, state.interactCooldown - dt);
+
+  const morning = clamp((state.time - 5) / 2, 0, 1);
+  const evening = 1 - clamp((state.time - 18) / 3, 0, 1);
+  const daylight = morning * evening;
+  skyColor.copy(eveningSky).lerp(daylightSky, daylight);
+  scene.background.copy(skyColor);
+  scene.fog.color.copy(skyColor);
+  sun.intensity = 0.55 + daylight * 2.65;
+  hemisphere.intensity = 0.8 + daylight * 1.7;
+  sun.color.setRGB(1, 0.88 + daylight * 0.07, 0.68 + daylight * 0.22);
 
   if (state.started && !state.mapOpen) {
     const move = new THREE.Vector3();
