@@ -4,23 +4,49 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%23091b23'/%3E%3Cpath d='M32 8 52 46H12z' fill='none' stroke='%2371eddf' stroke-width='5'/%3E%3Ccircle cx='32' cy='37' r='5' fill='%23ffcb7c'/%3E%3C/svg%3E" />
-    <title>Neon City Siege</title>
+    <title>Neon City Life</title>
     <meta
       name="description"
-      content="A compact 3D city FPS survival game built with Three.js."
+      content="Explore a lively 3D city, balance your needs, and make the most of each day."
     />
   </head>
   <body>
     <div id="hud">
-      <div id="brand">NEXUS SQUAD</div>
-      <div id="stats">
-        <span id="waveLabel">Wave 1</span>
-        <span id="scoreLabel">Score 0</span>
-      </div>
-      <div id="healthWrap">
-        <div id="healthFill"></div>
-      </div>
-      <div id="crosshair" aria-hidden="true"></div>
+      <header class="topbar">
+        <div class="brand-mark" aria-hidden="true">N</div>
+        <div class="brand-copy">
+          <div id="brand">NEON CITY</div>
+          <div class="eyebrow">A LITTLE LIFE, YOUR WAY</div>
+        </div>
+        <div class="day-card">
+          <span class="eyebrow">YOUR WEEK</span>
+          <strong id="dayLabel">Day 1</strong>
+        </div>
+        <div class="clock-card">
+          <span class="eyebrow">LOCAL TIME</span>
+          <strong id="clockLabel">07:00</strong>
+        </div>
+        <div class="money-card"><span aria-hidden="true">✦</span><strong id="moneyLabel">$42</strong></div>
+      </header>
+
+      <section id="needsPanel" aria-label="Your needs">
+        <div class="panel-heading"><span>HOW YOU'RE FEELING</span><span class="live-dot"></span></div>
+        <div class="need-row">
+          <div class="need-icon energy-icon" aria-hidden="true">☼</div>
+          <div class="need-info"><div class="need-label"><span>Energy</span><span class="need-hint">REST AT HOME</span></div><div class="bar-track"><div id="energyBar" class="need-fill energy-fill"></div></div></div>
+        </div>
+        <div class="need-row">
+          <div class="need-icon hunger-icon" aria-hidden="true">♡</div>
+          <div class="need-info"><div class="need-label"><span>Hunger</span><span class="need-hint">GRAB A BITE</span></div><div class="bar-track"><div id="hungerBar" class="need-fill hunger-fill"></div></div></div>
+        </div>
+        <div class="need-row">
+          <div class="need-icon joy-icon" aria-hidden="true">✳</div>
+          <div class="need-info"><div class="need-label"><span>Mood</span><span class="need-hint">FIND YOUR JOY</span></div><div class="bar-track"><div id="joyBar" class="need-fill joy-fill"></div></div></div>
+        </div>
+      </section>
+
+      <div id="status" role="status" aria-live="polite">Take a look around.</div>
+      <div class="look-hint" aria-hidden="true"><span class="look-dot"></span> LOOK AROUND</div>
     </div>
 
     <div id="touchControls" aria-label="Touch controls">
@@ -32,14 +58,18 @@
           <button type="button" data-key="KeyD" aria-label="Move right">▶</button>
         </div>
       </div>
-      <button id="touchFire" type="button" aria-label="Fire weapon">FIRE</button>
+      <button id="touchFire" type="button" aria-label="Interact with nearby activity">E</button>
+      <div class="touch-hint">DRAG TO LOOK</div>
     </div>
 
     <div id="overlay" class="visible">
       <div class="panel">
-        <h1>Neon City Siege</h1>
-        <p>WASD to move, Shift to sprint, click to fire, survive the drone waves.</p>
-        <button id="startBtn" type="button">Deploy</button>
+        <div class="panel-kicker"><span></span> YOUR CITY IS WAITING</div>
+        <h1>Make a life<br />in <em>Neon City.</em></h1>
+        <p>Work a shift, grab something good, meet the neighbors, or just wander. Balance your energy, hunger, mood, and money through a full week.</p>
+        <div class="panel-controls"><span><b>W A S D</b> MOVE</span><span><b>SHIFT</b> SPRINT</span><span><b>E</b> INTERACT</span></div>
+        <button id="startBtn" type="button">Start your day <span aria-hidden="true">→</span></button>
+        <div class="panel-footnote">A SMALL, OPEN-ENDED CITY SIMULATION</div>
       </div>
     </div>
 
