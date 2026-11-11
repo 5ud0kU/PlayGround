@@ -665,7 +665,7 @@ export function portraitDataURL(genome, size = 220) {
   const creature = buildCreature(genome)
   // face three-quarter
   creature.rotation.y = -0.5
-  creature.update(0.2, 0)
+  creature.userData.update(0.2, 0)
   scene.add(creature)
   const box = new THREE.Box3().setFromObject(creature)
   const sphere = box.getBoundingSphere(new THREE.Sphere())
