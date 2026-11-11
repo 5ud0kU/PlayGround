@@ -19,6 +19,11 @@
   .kbd { display: inline-block; padding: 1px 9px; border: 1px solid #526c7e; border-radius: 4px; color: #bfe0ef; font-size: 12px; font-weight: 700; margin: 0 4px; }
   .hintline { margin: 6px 0; color: #8fb0c4; font-size: 13px; }
   #startBtn { margin-top: 10px; padding: 15px 40px; font-size: 17px; font-weight: 800; letter-spacing: 3px; text-transform: uppercase; background: #2fb396; border: none; color: #fff; border-radius: 6px; cursor: pointer; box-shadow: 0 7px 0 #1d7a64; }
+  #loader { position: absolute; inset: 0; background: #071018; display: none; flex-direction: column; align-items: center; justify-content: center; z-index: 40; }
+  #loader h2 { margin: 0 0 24px; font-size: 32px; letter-spacing: 8px; color: #fff; text-transform: uppercase; text-shadow: 0 2px 20px rgba(0,0,0,0.6); }
+  .track { width: 340px; height: 10px; background: #162a37; border-radius: 6px; overflow: hidden; border: 1px solid #345467; }
+  .bar { height: 100%; width: 0%; background: linear-gradient(90deg, #2fb396, #7ee8c7); border-radius: 6px; transition: width 0.15s ease; }
+  #loader p { margin-top: 18px; color: #8fb0c4; font-size: 13px; }
   #startBtn:hover { background: #4fc9aa; }
   #startBtn:active { transform: translateY(4px); box-shadow: 0 3px 0 #1d7a64; }
   #fps { position: absolute; bottom: 12px; left: 12px; font-size: 12px; color: #8fb0c4; pointer-events: none; }
@@ -37,6 +42,11 @@
   <p>A detailed first-person town in a single scene.<br>Every building is accessible: enter through the front door, walk from room to room, and climb the stairs between floors.</p>
   <div class="hintline"><span class="kbd">WASD</span> move &nbsp;<span class="kbd">Mouse</span> look &nbsp;<span class="kbd">E</span> doors &nbsp;<span class="kbd">Space</span> jump &nbsp;<span class="kbd">Esc</span> release mouse</div>
   <button id="startBtn">Enter town</button>
+</div>
+<div id="loader">
+  <h2>Entering Town</h2>
+  <div class="track"><div class="bar" id="bar"></div></div>
+  <p id="loadText">Generating blocks…</p>
 </div>
 <script type="importmap">
 {
@@ -174,13 +184,36 @@ scene.add(new THREE.AmbientLight(0xffffff, 0.4));
 const controls = new PointerLockControls(camera, document.getElementById('canvas'));
 const startScreen = document.getElementById('start');
 const startBtn = document.getElementById('startBtn');
-startBtn.addEventListener('click', () => controls.lock());
+const loader = document.getElementById('loader');
+const bar = document.getElementById('bar');
+const loadText = document.getElementById('loadText');
+startBtn.addEventListener('click', () => beginLoading());
 document.getElementById('canvas').addEventListener('mousedown', () => { if (!controls.isLocked) controls.lock(); });
 controls.addEventListener('lock', () => {
   startScreen.style.display = 'none';
+  loader.style.display = 'none';
   console.log('locked, scene children:', scene.children.length, 'colliders:', colliders.length, 'doors:', doors.length);
 });
-controls.addEventListener('unlock', () => { startScreen.style.display = 'flex'; });
+controls.addEventListener('unlock', () => { startScreen.style.display = 'flex'; loader.style.display = 'none'; });
+
+function beginLoading() {
+  startScreen.style.display = 'none';
+  loader.style.display = 'flex';
+  const steps = ['Generating blocks…', 'Paving streets…', 'Placing buildings…', 'Lighting interiors…', 'Ready.'];
+  let i = 0;
+  const tick = () => {
+    const p = Math.min(i / (steps.length - 1), 1);
+    bar.style.width = (p * 100) + '%';
+    loadText.textContent = steps[Math.min(i, steps.length - 1)];
+    i++;
+    if (i <= steps.length - 1) {
+      setTimeout(tick, 220);
+    } else {
+      setTimeout(() => { loader.style.display = 'none'; controls.lock(); }, 300);
+    }
+  };
+  tick();
+}
 
 const keys = {};
 window.addEventListener('keydown', (e) => { if (e.code === 'Escape') controls.unlock(); keys[e.code] = true; });
@@ -207,7 +240,7 @@ function addGroundZone(x0, z0, x1, z1, height) {
 function groundHeightAt(x, z) {
   let best = null;
   for (const g of groundZones) {
-    if (x >= g.min.x && x <= g.max2.x && z >= g.min.y && z <= g.max2.y) {
+    if (x >= g.min.x && x <= g.max.x && z >= g.min.y && z <= g.max.y) {
       const h = typeof g.height === 'function' ? g.height(x, z) : g.height;
       if (best === null || h > best) best = h;
     }
@@ -638,7 +671,7 @@ function update(dt) {
   const cx = camera.position.x, cy = camera.position.y, cz = camera.position.z;
   let curLabel = null;
   for (const g of groundZones) {
-    if (g.label && cx >= g.min.x && cx <= g.max2.x && cz >= g.min.y && cz <= g.max2.y && cy >= g.height && cy < g.height + 2.6) { curLabel = g.label; break; }
+    if (g.label && cx >= g.min.x && cx <= g.max.x && cz >= g.min.y && cz <= g.max.y && cy >= g.height && cy < g.height + 2.6) { curLabel = g.label; break; }
   }
   if (!curLabel) {
     for (const b of buildings) {
@@ -659,16 +692,12 @@ function update(dt) {
 /* ---------------- render loop ---------------- */
 const fpsEl = document.getElementById('fps');
 let frames = 0, fpsTime = performance.now();
-let loggedUpdErr = false, loggedCtrlErr = false, loggedRenderErr = false;
-let animateCount = 0;
 function animate() {
-
   requestAnimationFrame(animate);
-  animateCount++;
   const dt = Math.min(clock.getDelta(), 0.05);
-  try { update(dt); } catch (e) { if (!loggedUpdErr) { loggedUpdErr = true; console.log('UPDATE ERR', e.stack); } }
-  try { controls.update && controls.update(dt); } catch (e) { if (!loggedCtrlErr) { loggedCtrlErr = true; console.log('CONTROLS ERR', e.stack); } }
-  try { renderer.render(scene, camera); } catch (e) { if (!loggedRenderErr) { loggedRenderErr = true; console.log('RENDER ERR', e.stack); } }
+  update(dt);
+  controls.update && controls.update(dt);
+  renderer.render(scene, camera);
   frames++;
   const now = performance.now();
   if (now - fpsTime >= 1000) {
