@@ -1,5 +1,6 @@
 import * as THREE from 'three'
 import { buildCreature } from './creature.js'
+import { phenotype } from './dna.js'
 
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v))
 
