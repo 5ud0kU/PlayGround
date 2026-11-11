@@ -1,0 +1,682 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Town — First Person</title>
+<style>
+  html, body { margin: 0; height: 100%; overflow: hidden; background: #091520; font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif; }
+  #canvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; display: block; cursor: crosshair; }
+  #hud { position: absolute; inset: 0; pointer-events: none; display: flex; flex-direction: column; justify-content: space-between; padding: 22px; color: #fff; }
+  .crosshair { position: absolute; top: 50%; left: 50%; width: 12px; height: 12px; border: 2px solid rgba(255,255,255,0.55); border-radius: 50%; transform: translate(-50%,-50%); pointer-events: none; }
+  .crosshair::after { content: ''; position: absolute; top: 50%; left: 50%; width: 3px; height: 3px; background: #fff; transform: translate(-50%,-50%); border-radius: 50%; }
+  #prompt { position: absolute; top: 56%; left: 50%; transform: translate(-50%,-50%); pointer-events: none; padding: 8px 16px; border-radius: 8px; font-size: 13px; font-weight: 700; letter-spacing: 1.4px; text-transform: uppercase; color: #d8f5e3; background: rgba(16, 70, 50, 0.7); border: 1px solid rgba(47,179,150,0.5); display: none; white-space: nowrap; }
+  #label { position: absolute; bottom: 30%; left: 50%; transform: translateX(-50%); pointer-events: none; font-size: 15px; font-weight: 800; letter-spacing: 1px; color: #fff; text-shadow: 0 1px 6px rgba(0,0,0,0.8); opacity: 0; transition: opacity 0.25s; white-space: nowrap; }
+  #label.show { opacity: 1; }
+  #start { position: absolute; inset: 0; background: linear-gradient(180deg, #071018 0%, #05121c 100%); display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 30; }
+  #start h1 { margin: 0 0 10px; font-size: 52px; letter-spacing: 14px; color: #fff; text-transform: uppercase; text-shadow: 0 2px 24px rgba(0,0,0,0.6); }
+  #start p { color: #aec8d8; font-size: 15px; line-height: 1.75; margin: 0 0 20px; max-width: 520px; text-align: center; }
+  .kbd { display: inline-block; padding: 1px 9px; border: 1px solid #526c7e; border-radius: 4px; color: #bfe0ef; font-size: 12px; font-weight: 700; margin: 0 4px; }
+  .hintline { margin: 6px 0; color: #8fb0c4; font-size: 13px; }
+  #startBtn { margin-top: 10px; padding: 15px 40px; font-size: 17px; font-weight: 800; letter-spacing: 3px; text-transform: uppercase; background: #2fb396; border: none; color: #fff; border-radius: 6px; cursor: pointer; box-shadow: 0 7px 0 #1d7a64; }
+  #startBtn:hover { background: #4fc9aa; }
+  #startBtn:active { transform: translateY(4px); box-shadow: 0 3px 0 #1d7a64; }
+  #fps { position: absolute; bottom: 12px; left: 12px; font-size: 12px; color: #8fb0c4; pointer-events: none; }
+</style>
+</head>
+<body>
+<canvas id="canvas"></canvas>
+<div id="hud">
+  <div class="crosshair"></div>
+  <div id="prompt">E — Ouvrir / Interagir</div>
+  <div id="label"></div>
+</div>
+<div id="fps">—</div>
+<div id="start">
+  <h1>Town</h1>
+  <p>A detailed first-person town in a single scene.<br>Every building is accessible: enter through the front door, walk from room to room, and climb the stairs between floors.</p>
+  <div class="hintline"><span class="kbd">WASD</span> move &nbsp;<span class="kbd">Mouse</span> look &nbsp;<span class="kbd">E</span> doors &nbsp;<span class="kbd">Space</span> jump &nbsp;<span class="kbd">Esc</span> release mouse</div>
+  <button id="startBtn">Enter town</button>
+</div>
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://unpkg.com/three@0.170.0/build/three.module.js",
+    "three/addons/": "https://unpkg.com/three@0.170.0/examples/jsm/"
+  }
+}
+</script>
+<script type="module">
+import * as THREE from 'three';
+import { PointerLockControls } from 'three/addons/controls/PointerLockControls.js';
+
+/* ---------------- configuration ---------------- */
+const TOWN_BLOCKS = 6;
+const BLOCK = 100;
+const ROAD = 16;
+const TOWN = TOWN_BLOCKS * (BLOCK + ROAD);
+const HALF = TOWN / 2;
+const STORY = 3.3;
+const PLAYER_HEIGHT = 1.7;
+const PLAYER_RADIUS = 0.32;
+const MOVE_SPEED = 5.4;
+const JUMP = 9.6;
+const GRAVITY = 32.0;
+const DOOR_REACH = 5.2;
+
+/* ---------------- utilities ---------------- */
+let seed = 0x12345678;
+const rng = () => { seed = (seed * 1664525 + 1013904223) >>> 0; return (seed >>> 8) / 0xffffff; };
+const rand = (a, b = null) => b === null ? rng() * a : a + rng() * (b - a);
+const randInt = (a, b) => Math.floor(rand(a, b));
+const pick = arr => arr[randInt(0, arr.length)];
+const tmp = new THREE.Vector3();
+function canvasTexture(w, h, draw, repeat = false) {
+  const c = document.createElement('canvas');
+  c.width = w; c.height = h;
+  draw(c.getContext('2d'), w, h);
+  const t = new THREE.CanvasTexture(c);
+  t.colorSpace = THREE.SRGBColorSpace;
+  if (repeat) { t.wrapS = THREE.RepeatWrapping; t.wrapT = THREE.RepeatWrapping; }
+  return t;
+}
+function rgbaJitter(hex) {
+  const v = Math.round(rand(0, 40));
+  return `rgba(${parseInt(hex.slice(1,3),16)+v},${parseInt(hex.slice(3,5),16)+v},${parseInt(hex.slice(5,7),16)+v},0.9)`;
+}
+
+const tex = {
+  grass: canvasTexture(256, 256, (ctx) => {
+    ctx.fillStyle = '#6b9358'; ctx.fillRect(0, 0, 256, 256);
+    for (let i = 0; i < 900; i++) {
+      ctx.fillStyle = rng() > 0.5 ? '#5e824c' : '#7da164';
+      ctx.fillRect(rand(256), rand(256), rand(2, 5), rand(2, 5));
+    }
+  }, true),
+  asphalt: canvasTexture(256, 256, (ctx) => {
+    ctx.fillStyle = '#2a2a2a'; ctx.fillRect(0, 0, 256, 256);
+    for (let i = 0; i < 700; i++) { ctx.fillStyle = rgbaJitter('#3a3a3a'); ctx.fillRect(rand(256), rand(256), 1.5, 1.5); }
+    ctx.strokeStyle = 'rgba(150,150,150,0.35)'; ctx.lineWidth = 3;
+    ctx.setLineDash([22, 18]); ctx.lineCap = 'round';
+    ctx.beginPath(); ctx.moveTo(0, 128); ctx.lineTo(256, 128); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(128, 0); ctx.lineTo(128, 256); ctx.stroke();
+  }, true),
+  sidewalk: canvasTexture(256, 256, (ctx) => {
+    ctx.fillStyle = '#cfcfcf'; ctx.fillRect(0, 0, 256, 256);
+    for (let i = 0; i < 400; i++) { ctx.fillStyle = '#c2c2c2'; ctx.fillRect(rand(256), rand(256), 1.5, 1.5); }
+    ctx.strokeStyle = 'rgba(120,120,120,0.25)'; ctx.lineWidth = 2; ctx.strokeRect(1, 1, 254, 254);
+  }, true),
+  brick: canvasTexture(256, 256, (ctx) => {
+    ctx.fillStyle = '#8c4528'; ctx.fillRect(0, 0, 256, 256);
+    ctx.strokeStyle = '#bdae95'; ctx.lineWidth = 4;
+    for (let r = 0; r < 8; r++) {
+      const y = r * 32; const off = (r % 2) * 16;
+      ctx.beginPath(); ctx.moveTo(-16 + off, y); ctx.lineTo(256 + 16 + off, y); ctx.stroke();
+      ctx.strokeStyle = '#8c4528'; ctx.lineWidth = 2;
+      for (let x = off; x < 256; x += 64) { ctx.strokeRect(x, y, 60, 26); }
+      ctx.strokeStyle = '#bdae95'; ctx.lineWidth = 4;
+    }
+  }, true),
+  wall: canvasTexture(256, 256, (ctx) => {
+    ctx.fillStyle = '#e6e6e6'; ctx.fillRect(0, 0, 256, 256);
+    ctx.strokeStyle = '#d3d3d3'; ctx.lineWidth = 2;
+    for (let y = 0; y < 256; y += 60) { ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(256, y); ctx.stroke(); }
+    for (let i = 0; i < 120; i++) { ctx.fillStyle = '#d9d9d9'; ctx.fillRect(rand(256), rand(256), 2, 2); }
+  }, true),
+  wall2: canvasTexture(256, 256, (ctx) => {
+    ctx.fillStyle = '#e8dcc8'; ctx.fillRect(0, 0, 256, 256);
+    ctx.strokeStyle = '#d8c8b0'; ctx.lineWidth = 2;
+    for (let y = 0; y < 256; y += 60) { ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(256, y); ctx.stroke(); }
+  }, true),
+  roof: canvasTexture(256, 256, (ctx) => {
+    ctx.fillStyle = '#44474a'; ctx.fillRect(0, 0, 256, 256);
+    for (let i = 0; i < 500; i++) { ctx.fillStyle = '#3c3e40'; ctx.fillRect(rand(256), rand(256), 1.5, 1.5); }
+  }, true),
+  wood: canvasTexture(256, 256, (ctx) => {
+    ctx.fillStyle = '#8c6f54'; ctx.fillRect(0, 0, 256, 256);
+    ctx.strokeStyle = '#7b6048'; ctx.lineWidth = 5;
+    for (let y = 0; y < 256; y += 44) { ctx.beginPath(); ctx.moveTo(0, y + 2); ctx.lineTo(256, y + 2); ctx.stroke(); }
+    for (let i = 0; i < 300; i++) { ctx.fillStyle = '#7f644c'; ctx.fillRect(rand(256), rand(256), 1.5, 1.5); }
+  }, true),
+  door: canvasTexture(256, 256, (ctx) => {
+    ctx.fillStyle = '#6e4c36'; ctx.fillRect(0, 0, 256, 256);
+    ctx.strokeStyle = '#5c3d2a'; ctx.lineWidth = 4;
+    ctx.strokeRect(30, 30, 196, 196); ctx.strokeRect(110, 30, 36, 196);
+    ctx.fillStyle = '#5b3d29'; ctx.fillRect(184, 116, 12, 14);
+  }, true),
+  glass: canvasTexture(64, 64, (ctx) => { ctx.fillStyle = 'rgba(150, 190, 225, 0.42)'; ctx.fillRect(0, 0, 64, 64); }),
+  carpetBase: (hue) => canvasTexture(256, 256, (ctx) => {
+    const c = `hsl(${hue}, 55%, 42%)`; ctx.fillStyle = c; ctx.fillRect(0, 0, 256, 256);
+    for (let i = 0; i < 700; i++) { ctx.fillStyle = `hsla(${hue}, 50%, 34%, 0.8)`; ctx.fillRect(rand(256), rand(256), 1.5, 1.5); }
+  }, true),
+};
+
+/* ---------------- scene ---------------- */
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x8ccbe4);
+scene.fog = new THREE.FogExp2(0x8ccbe4, 0.0013);
+
+const camera = new THREE.PerspectiveCamera(60, innerWidth / innerHeight, 0.1, 1400);
+camera.position.set(0, 1.7, 6);
+
+const renderer = new THREE.WebGLRenderer({ canvas: document.getElementById('canvas'), antialias: true, powerPreference: 'high-performance' });
+renderer.setSize(innerWidth, innerHeight);
+renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+renderer.outputColorSpace = THREE.SRGBColorSpace;
+renderer.shadowMap.enabled = false;
+
+const sun = new THREE.DirectionalLight(0xffffff, 1.15);
+sun.position.set(120, 120, 60);
+scene.add(sun);
+scene.add(new THREE.AmbientLight(0xffffff, 0.4));
+
+/* ---------------- controls ---------------- */
+const controls = new PointerLockControls(camera, document.getElementById('canvas'));
+const startScreen = document.getElementById('start');
+const startBtn = document.getElementById('startBtn');
+startBtn.addEventListener('click', () => controls.lock());
+document.getElementById('canvas').addEventListener('mousedown', () => { if (!controls.isLocked) controls.lock(); });
+controls.addEventListener('lock', () => {
+  startScreen.style.display = 'none';
+  console.log('locked, scene children:', scene.children.length, 'colliders:', colliders.length, 'doors:', doors.length);
+});
+controls.addEventListener('unlock', () => { startScreen.style.display = 'flex'; });
+
+const keys = {};
+window.addEventListener('keydown', (e) => { if (e.code === 'Escape') controls.unlock(); keys[e.code] = true; });
+window.addEventListener('keyup', (e) => { keys[e.code] = false; });
+window.addEventListener('resize', () => {
+  camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix();
+  renderer.setSize(innerWidth, innerHeight);
+});
+window.addEventListener('contextmenu', e => e.preventDefault());
+
+/* ---------------- collision world ---------------- */
+const colliders = []; // { box, active }
+const groundZones = []; // { min, max, height: number | (x,z)=>y, label? }
+function addBoxCollider(x0, y0, z0, x1, y1, z1) {
+  const c = { box: new THREE.Box3(new THREE.Vector3(x0, y0, z0), new THREE.Vector3(x1, y1, z1)), active: true };
+  colliders.push(c);
+  return c;
+}
+function addGroundZone(x0, z0, x1, z1, height) {
+  const g = { min: new THREE.Vector2(x0, z0), max: new THREE.Vector2(x1, z1), height };
+  groundZones.push(g);
+  return g;
+}
+function groundHeightAt(x, z) {
+  let best = null;
+  for (const g of groundZones) {
+    if (x >= g.min.x && x <= g.max2.x && z >= g.min.y && z <= g.max2.y) {
+      const h = typeof g.height === 'function' ? g.height(x, z) : g.height;
+      if (best === null || h > best) best = h;
+    }
+  }
+  return best === null ? 0 : best;
+}
+function collidesSphere(px, py, pz) {
+  const r = PLAYER_RADIUS;
+  const y0 = py - 0.04, y1 = py + PLAYER_HEIGHT + 0.04;
+  for (const c of colliders) {
+    if (c.active === false) continue;
+    const b = c.box;
+    if (b.max.y < y0 || b.min.y > y1) continue;
+    const cx = Math.max(b.min.x, Math.min(px, b.max.x));
+    const cz = Math.max(b.min.z, Math.min(pz, b.max.z));
+    const dx = px - cx, dz = pz - cz;
+    if (dx * dx + dz * dz < r * r) return true;
+  }
+  return false;
+}
+
+const doors = [];
+function addDoor(mesh, collider, closedRot, swing) {
+  doors.push({ mesh, collider, closedRot, swing, open: false, cur: closedRot });
+}
+
+/* ---------------- geometry helpers ---------------- */
+const wallMat = new THREE.MeshStandardMaterial({ map: tex.wall, roughness: 0.9 });
+const wallMat2 = new THREE.MeshStandardMaterial({ map: tex.wall2, roughness: 0.9 });
+const roofMat = new THREE.MeshStandardMaterial({ map: tex.roof, roughness: 0.95 });
+const glassMat = new THREE.MeshStandardMaterial({ map: tex.glass, transparent: true, roughness: 0.1, metalness: 0.6 });
+const doorMat = new THREE.MeshStandardMaterial({ map: tex.door, roughness: 0.7 });
+const carpetMats = [0, 40, 180, 260, 300, 340].map(h => new THREE.MeshStandardMaterial({ map: tex.carpetBase(h), roughness: 1 }));
+const woodMat = new THREE.MeshStandardMaterial({ map: tex.wood, roughness: 0.85 });
+
+function matColor(hex, rough = 0.9) { return new THREE.MeshStandardMaterial({ color: hex, roughness: rough }); }
+const matRoofC = matColor(0x4a4e52);
+const matRoofC2 = matColor(0x3e4246);
+
+function box(w, h, d, mat) {
+  const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat);
+  return m;
+}
+
+/* ---------------- town: ground & roads ---------------- */
+const ground = box(TOWN + 200, 0.4, TOWN + 200, new THREE.MeshStandardMaterial({ map: tex.grass }), false, true);
+ground.position.y = -0.2;
+ground.receiveShadow = true;
+scene.add(ground);
+
+for (let i = 0; i <= TOWN_BLOCKS; i++) {
+  const line = -HALF + i * (BLOCK + ROAD);
+  const vr = box(ROAD, 0.12, TOWN, new THREE.MeshStandardMaterial({ map: tex.asphalt }), false, true);
+  vr.position.set(line + ROAD / 2, 0.06, 0); scene.add(vr);
+  const hr = box(TOWN, 0.12, ROAD, new THREE.MeshStandardMaterial({ map: tex.asphalt }), false, true);
+  hr.position.set(0, 0.06, line + ROAD / 2); scene.add(hr);
+}
+for (let i = 0; i <= TOWN_BLOCKS; i++) {
+  const line = -HALF + i * (BLOCK + ROAD);
+  const sw = 3;
+  const v1 = box(sw, 0.12, TOWN, new THREE.MeshStandardMaterial({ map: tex.sidewalk }), false, true);
+  v1.position.set(line + ROAD / 2 - sw / 2, 0.07, 0); scene.add(v1);
+  const v2 = box(sw, 0.12, TOWN, new THREE.MeshStandardMaterial({ map: tex.sidewalk }), false, true);
+  v2.position.set(line + ROAD / 2 + sw / 2, 0.07, 0); scene.add(v2);
+  const h1 = box(TOWN, 0.12, sw, new THREE.MeshStandardMaterial({ map: tex.sidewalk }), false, true);
+  h1.position.set(0, 0.07, line + ROAD / 2 - sw / 2); scene.add(h1);
+  const h2 = box(TOWN, 0.12, sw, new THREE.MeshStandardMaterial({ map: tex.sidewalk }), false, true);
+  h2.position.set(0, 0.07, line + ROAD / 2 + sw / 2); scene.add(h2);
+}
+for (let i = 0; i <= TOWN_BLOCKS; i++) {
+  const line = -HALF + i * (BLOCK + ROAD);
+  for (let z = -HALF + 10; z < HALF; z += 22) {
+    const d = box(2.2, 0.13, 20, matColor(0x888), false, false);
+    d.position.set(line + ROAD / 2, 0.085, z + 10); scene.add(d);
+  }
+  for (let x = -HALF + 10; x < HALF; x += 22) {
+    const d = box(20, 0.13, 2.2, matColor(0x888), false, false);
+    d.position.set(x + 10, 0.085, line + ROAD / 2); scene.add(d);
+  }
+}
+
+/* ---------------- street furniture ---------------- */
+function streetLight(x, z) {
+  const g = new THREE.Group();
+  const post = box(0.5, 6, 0.5, matColor(0x444444)); post.position.y = 3; g.add(post);
+  const arm = box(0.14, 0.14, 2.6, matColor(0x444444)); arm.position.set(0, 6, -1.35); g.add(arm);
+  const globe = box(0.75, 0.75, 0.75, new THREE.MeshStandardMaterial({ color: 0xfff3d6, emissive: 0xfff0c8, emissiveIntensity: 0.6 }));
+  globe.position.set(0, 6.45, -2.7); g.add(globe);
+  g.position.set(x, 0, z);
+  const pl = new THREE.PointLight(0xfff6e0, 1.6, 26); pl.position.set(0, 6.45, -2.7); g.add(pl);
+  scene.add(g);
+}
+function tree(x, z) {
+  const g = new THREE.Group();
+  const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.28, 0.36, 2.6, 8), matColor(0x5d4a3a)); trunk.position.y = 1.3; g.add(trunk);
+  const top = new THREE.Mesh(new THREE.ConeGeometry(1.4, 4, 8), matColor(0x4a7c3a)); top.position.y = 3.6; g.add(top);
+  g.position.set(x, 0, z); scene.add(g);
+  addBoxCollider(x - 0.5, 0, z - 0.5, x + 0.5, 4.6, z + 0.5);
+}
+function bench(x, z, rot) {
+  const g = new THREE.Group();
+  const seat = box(1.4, 0.14, 0.5, matColor(0x6b5b4b)); seat.position.y = 0.45; g.add(seat);
+  const leg = box(0.14, 0.32, 0.14, matColor(0x554a40)); leg.position.set(-0.55, 0.29, 0); g.add(leg);
+  const leg2 = leg.clone(); leg2.position.set(0.55, 0.29, 0); g.add(leg2);
+  const back = box(1.4, 0.4, 0.14, matColor(0x6b5b4b)); back.position.set(0, 0.79, -0.32); g.add(back);
+  g.position.set(x, 0, z); g.rotation.y = rot; scene.add(g);
+}
+
+let lampX = -HALF + ROAD / 2 + 20;
+while (lampX < HALF - 20) { streetLight(lampX, -HALF + 30); streetLight(lampX, HALF - 30); lampX += 42; }
+let lampZ = -HALF + ROAD / 2 + 20;
+while (lampZ < HALF - 20) { streetLight(-HALF + 30, lampZ); streetLight(HALF - 30, lampZ); lampZ += 42; }
+tree(-HALF + 45, -HALF + 45); tree(HALF - 45, -HALF + 45); tree(-HALF + 45, HALF - 45); tree(HALF - 45, HALF - 45);
+tree(-HALF + 70, -HALF + 120); tree(HALF - 70, HALF - 120);
+bench(-HALF + 40, -HALF + 55, 0); bench(HALF - 40, HALF - 55, Math.PI);
+
+/* ---------------- buildings ---------------- */
+const ROOM_LABELS = ['Living room', 'Kitchen', 'Bedroom', 'Office', 'Dining room', 'Lounge', 'Library', 'Storage', 'Bathroom'];
+const buildings = [];
+
+function blockBounds(i, j) {
+  const x0 = -HALF + i * (BLOCK + ROAD) + ROAD;
+  const z0 = -HALF + j * (BLOCK + ROAD) + ROAD;
+  return { x0, z0, x1: x0 + BLOCK, z1: z0 + BLOCK };
+}
+function nearestRoadDist(x, z) {
+  let d = 1e9;
+  for (let i = 0; i <= TOWN_BLOCKS; i++) {
+    const l = -HALF + i * (BLOCK + ROAD);
+    d = Math.min(d, Math.abs(x - (l + ROAD / 2)));
+    d = Math.min(d, Math.abs(z - (l + ROAD / 2)));
+  }
+  return d;
+}
+
+function createBuilding(bx, bz) {
+  const b = blockBounds(bx, bz);
+  const inset = 11;
+  const lotW = b.x1 - b.x0 - 2 * inset;
+  const lotD = b.z1 - b.z0 - 2 * inset;
+  if (rng() > 0.9) return null;
+  const w = rand(14, 26);
+  const d = rand(14, 26);
+  const x = b.x0 + inset + rand(0, lotW - w);
+  const z = b.z0 + inset + rand(0, lotD - d);
+  const floors = randInt(2, 3);
+  const height = floors * STORY;
+  const wallPick = rng() < 0.45 ? wallMat : (rng() < 0.5 ? wallMat2 : new THREE.MeshStandardMaterial({ color: 0xdcdcdc, roughness: 0.9 }));
+  const roofPick = rng() < 0.5 ? matRoofC : matRoofC2;
+
+  const group = new THREE.Group();
+  const cx = x + w / 2;
+  const cz = z + d / 2;
+
+  const edges = [
+    { name: 'W', x0: x, z0: z, x1: x + 0.7, z1: z + d, nx: 0, nz: -1 },
+    { name: 'E', x0: x + w - 0.7, z0: z, x1: x + w, z1: z + d, nx: 0, nz: 1 },
+    { name: 'S', x0: x, z0: z, x1: x + w, z1: z + 0.7, nx: -1, nz: 0 },
+    { name: 'N', x0: x, z0: z + d - 0.7, x1: x + w, z1: z + d, nx: 1, nz: 0 },
+  ];
+  for (const e of edges) {
+    const wall = box(e.x1 - e.x0, height, e.z1 - e.z0, wallPick);
+    wall.position.set((e.x0 + e.x1) / 2, height / 2, (e.z0 + e.z1) / 2);
+    wall.castShadow = true; wall.receiveShadow = true;
+    group.add(wall);
+    const countX = Math.max(1, Math.floor((e.x1 - e.x0) / 9));
+    const countZ = Math.max(1, Math.floor(height / 4));
+    for (let iz = 0; iz < countZ; iz++) {
+      const yy = 1.0 + iz * 2.9;
+      for (let ix = 0; ix < countX; ix++) {
+        const xx = e.x0 + (ix + 0.5) * ((e.x1 - e.x0) / countX);
+        const g = box(1.7, 1.25, 0.16, glassMat, false, false);
+        g.position.set(xx, yy, e.name === 'W' ? z - 0.17 : e.name === 'E' ? z + d + 0.17 : e.name === 'S' ? z - 0.17 : z + d + 0.17);
+        if (e.name === 'W' || e.name === 'E') g.rotation.y = Math.PI / 2;
+        group.add(g);
+      }
+    }
+  }
+
+  // door edge = side closest to a road
+  const doorDist = { W: nearestRoadDist(x, cz), E: nearestRoadDist(x + w, cz), S: nearestRoadDist(cx, z), N: nearestRoadDist(cx, z + d) };
+  let doorEdge = 'S'; let best = 1e9;
+  for (const k of Object.keys(doorDist)) { if (doorDist[k] < best) { best = doorDist[k]; doorEdge = k; } }
+  const doorW = 1.15, doorH = 2.15;
+  let dx = cx, dz = cz, drot = 0, swing = -1;
+  switch (doorEdge) {
+    case 'W': dx = x - 0.62; dz = cz; drot = -Math.PI / 2; swing = -1; break;
+    case 'E': dx = x + w + 0.62; dz = cz; drot = Math.PI / 2; swing = 1; break;
+    case 'S': dx = cx; dz = z - 0.62; drot = 0; swing = -1; break;
+    case 'N': dx = cx; dz = z + d + 0.62; drot = Math.PI; swing = 1; break;
+  }
+  const door = box(doorW, doorH, 0.14, doorMat, true, false);
+  door.position.set(dx, doorH / 2, dz);
+  door.rotation.y = drot;
+  door.castShadow = true; door.receiveShadow = true;
+  group.add(door);
+
+  let dcx = cx, dcz = cz;
+  if (doorEdge === 'W') { dcx = x; dcz = cz; }
+  if (doorEdge === 'E') { dcx = x + w; dcz = cz; }
+  if (doorEdge === 'S') { dcx = cx; dcz = z; }
+  if (doorEdge === 'N') { dcx = cx; dcz = z + d; }
+  const dCol = addBoxCollider(dcx - doorW / 2 - 0.03, 0.05, dcz - 0.14, dcx + doorW / 2 + 0.03, doorH, dcz + 0.14);
+
+  if (doorEdge === 'W' || doorEdge === 'E') {
+    addBoxCollider(x, 0, z, x + 0.7, height, dz - doorW / 2 - 0.05);
+    addBoxCollider(x, 0, dz + doorW / 2 + 0.05, x + 0.7, height, z + d);
+  } else {
+    addBoxCollider(x, 0, z, dx - doorW / 2 - 0.05, height, z + 0.7);
+    addBoxCollider(dx + doorW / 2 + 0.05, 0, z, x + w, height, z + 0.7);
+  }
+
+  const roof = box(w + 1.6, 1.4, d + 1.6, roofPick, true, false);
+  roof.position.set(cx, height + 0.7, cz); group.add(roof);
+  const parapet = box(w + 0.4, 0.5, d + 0.4, matColor(0x33363a), true, false);
+  parapet.position.set(cx, height + 1.65, cz); group.add(parapet);
+
+  const innerW = w - 1.6, innerD = d - 1.6;
+  const corridorDepth = 6.2;
+
+  for (let f = 0; f < floors; f++) {
+    const fy = f * STORY;
+    const igroup = new THREE.Group();
+    igroup.position.set(0, fy, 0);
+    group.add(igroup);
+
+    const floor = box(innerW, 0.22, innerD, pick(carpetMats), false, true);
+    floor.position.set(cx, fy + 0.11, cz); igroup.add(floor);
+    addGroundZone(x + 0.9, z + 0.9, x + w - 0.9, z + d - 0.9, fy);
+
+    const ceil = box(innerW, 0.18, innerD, new THREE.MeshStandardMaterial({ color: 0xf2efe7 }), false, true);
+    ceil.position.set(cx, fy + STORY - 0.09, cz); igroup.add(ceil);
+
+    const innerX0 = x + 0.8, innerX1 = x + w - 0.8;
+    const innerZ0 = z + 0.8, innerZ1 = z + d - 0.8;
+    const doorSide = doorEdge;
+    let colX0, colZ0, colX1, colZ1, roomX0, roomZ0, roomX1, roomZ1;
+    if (doorSide === 'S') { colZ0 = innerZ0; colZ1 = innerZ0 + corridorDepth; roomZ0 = colZ1; roomZ1 = innerZ1; roomX0 = innerX0; roomX1 = innerX1; }
+    else if (doorSide === 'N') { colZ1 = innerZ1; colZ0 = innerZ1 - corridorDepth; roomZ1 = colZ0; roomZ0 = innerZ0; roomX0 = innerX0; roomX1 = innerX1; }
+    else if (doorSide === 'W') { colX0 = innerX0; colX1 = innerX0 + corridorDepth; roomX0 = colX1; roomX1 = innerX1; roomZ0 = innerZ0; roomZ1 = innerZ1; }
+    else if (doorSide === 'E') { colX1 = innerX1; colX0 = innerX1 - corridorDepth; roomX1 = colX0; roomX0 = innerX0; roomZ0 = innerZ0; roomZ1 = innerZ1; }
+    if (!colX0) { colX0 = innerX0; colX1 = innerX1; colZ0 = innerZ0; colZ1 = innerZ1; roomX0 = innerX0; roomX1 = innerX1; roomZ0 = innerZ0; roomZ1 = innerZ1; }
+
+    const wallTh = 0.14;
+    const wallH = STORY - 0.55;
+    if (doorSide === 'S' || doorSide === 'N') {
+      const boundary = (doorSide === 'S') ? colZ1 : colZ0;
+      const nRooms = randInt(1, 3);
+      const roomW = (roomX1 - roomX0) / nRooms;
+      for (let k = 0; k < nRooms; k++) {
+        const rX0 = roomX0 + k * roomW;
+        const rX1 = rX0 + roomW;
+        if (rX0 > roomX0) addBoxCollider(rX0, fy, boundary - wallTh, rX0 + wallTh, fy + wallH, boundary + wallTh);
+        if (rX1 < roomX1) addBoxCollider(rX1 - wallTh, fy, boundary - wallTh, rX1, fy + wallH, boundary + wallTh);
+      }
+    }
+    if (doorSide === 'W' || doorSide === 'E') {
+      const boundary = (doorSide === 'W') ? colX1 : colX0;
+      const nRooms = randInt(1, 3);
+      const roomD = (roomZ1 - roomZ0) / nRooms;
+      for (let k = 0; k < nRooms; k++) {
+        const rZ0 = roomZ0 + k * roomD;
+        const rZ1 = rZ0 + roomD;
+        if (rZ0 > roomZ0) addBoxCollider(boundary - wallTh, fy, rZ0, boundary + wallTh, fy + wallH, rZ0 + wallTh);
+        if (rZ1 < roomZ1) addBoxCollider(boundary - wallTh, fy, rZ1 - wallTh, boundary + wallTh, fy + wallH, rZ1);
+      }
+    }
+
+    // partitions between rooms (with door gaps)
+    if (doorSide === 'S' || doorSide === 'N') {
+      const nRooms = randInt(1, 3);
+      const roomW = (roomX1 - roomX0) / nRooms;
+      for (let k = 1; k < nRooms; k++) {
+        const xp = roomX0 + k * roomW;
+        const gap = rand(0.9, roomW - 1.1);
+        addBoxCollider(xp - wallTh, fy, roomZ0, xp - wallTh + gap, fy + wallH, roomZ1);
+        addBoxCollider(xp + gap, fy, roomZ0, xp + wallTh, fy + wallH, roomZ1);
+      }
+    }
+    if (doorSide === 'W' || doorSide === 'E') {
+      const nRooms = randInt(1, 3);
+      const roomD = (roomZ1 - roomZ0) / nRooms;
+      for (let k = 1; k < nRooms; k++) {
+        const zp = roomZ0 + k * roomD;
+        const gap = rand(0.9, roomD - 1.1);
+        addBoxCollider(colX0 - wallTh, fy, zp - wallTh, colX1 + wallTh, fy + wallH, zp - wallTh + gap);
+        addBoxCollider(colX0 - wallTh, fy, zp - wallTh + gap, colX1 + wallTh, fy + wallH, zp + wallTh);
+      }
+    }
+
+    // rooms: labels + furniture
+    const nRoomsFinal = randInt(1, 3);
+    for (let k = 0; k < nRoomsFinal; k++) {
+      let rX0r, rZ0r, rX1r, rZ1r;
+      if (doorSide === 'S' || doorSide === 'N') {
+        const roomW = (roomX1 - roomX0) / nRoomsFinal;
+        rX0r = roomX0 + k * roomW; rX1r = rX0r + roomW; rZ0r = roomZ0; rZ1r = roomZ1;
+      } else {
+        const roomD = (roomZ1 - roomZ0) / nRoomsFinal;
+        rZ0r = roomZ0 + k * roomD; rZ1r = rZ0r + roomD; rX0r = roomX0; rX1r = roomX1;
+      }
+      const m = 0.9;
+      const labelZone = addGroundZone(rX0r + m, rZ0r + m, rX1r - m, rZ1r - m, fy);
+      labelZone.label = pick(ROOM_LABELS);
+      const nFurn = randInt(1, 3);
+      for (let t = 0; t < nFurn; t++) {
+        const fx = rand(rX0r + 1.4, rX1r - 1.4);
+        const fz = rand(rZ0r + 1.4, rZ1r - 1.4);
+        const f = box(1, 0.9, 1.2, matColor(0x6b564a), true, false);
+        f.position.set(fx, fy + 0.45, fz); igroup.add(f);
+        addBoxCollider(fx - 0.5, fy, fz - 0.6, fx + 0.5, fy + 0.95, fz + 0.6);
+        const chair = box(0.5, 0.85, 0.5, matColor(0x4a3c35), true, false);
+        chair.position.set(fx + 1.1, fy + 0.425, fz); igroup.add(chair);
+        addBoxCollider(fx + 0.82, fy, fz - 0.28, fx + 1.38, fy + 0.9, fz + 0.28);
+      }
+    }
+
+    // stairs between f and f+1 (ramp collider + step mesh)
+    if (f < floors - 1) {
+      const sx = 2.6, sz = 5.6;
+      let sxP = cx, szP = cz;
+      if (doorSide === 'S') szP = colZ1 - sz / 2 - 1;
+      else if (doorSide === 'N') szP = colZ0 + sz / 2 + 1;
+      else if (doorSide === 'W') sxP = colX0 + sx / 2 + 1;
+      else sxP = colX1 - sx / 2 - 1;
+      sxP = Math.max(Math.min(sxP, colX1 - sx / 2 - 0.6), colX0 + sx / 2 + 0.6);
+      szP = Math.max(Math.min(szP, colZ1 - sz / 2 - 0.6), colZ0 + sz / 2 + 0.6);
+      const dirX = (doorSide === 'W') ? 1 : (doorSide === 'E') ? -1 : 0;
+      const dirZ = (doorSide === 'S') ? 1 : (doorSide === 'N') ? -1 : 0;
+      addGroundZone(sxP - sx / 2, szP - sz / 2, sxP + sx / 2, szP + sz / 2, (wx, wz) => {
+        const t = ((wx - sxP) * dirX + (wz - szP) * dirZ) / sz;
+        const tt = Math.max(0, Math.min(1, t));
+        return fy + STORY * tt;
+      });
+      const nSteps = 10;
+      for (let s = 0; s < nSteps; s++) {
+        const hh = STORY * (s / nSteps);
+        const step = box(sx, 0.28, sz / nSteps, woodMat, false, true);
+        const px = dirX !== 0 ? sxP - sx / 2 + (s + 0.5) * (sx / nSteps) : sxP;
+        const pz = dirZ !== 0 ? szP - sz / 2 + (s + 0.5) * (sz / nSteps) : szP;
+        step.position.set(px, fy + hh + 0.14, pz); igroup.add(step);
+      }
+      addBoxCollider(sxP - sx / 2 - 0.08, fy, szP - sz / 2 - 0.08, sxP + sx / 2 + 0.08, fy + STORY, szP - sz / 2 - 0.08);
+      addBoxCollider(sxP - sx / 2 - 0.08, fy, szP - sz / 2 - 0.08, sxP + sx / 2 + 0.08, fy + STORY, szP + sz / 2 + 0.08);
+    }
+  }
+
+  buildings.push({ group, x, z, w, d, height, doorEdge, doorMesh: door, doorCol: dCol, cx, cz });
+  addDoor(door, dCol, drot, swing);
+  scene.add(group);
+  return buildings[buildings.length - 1];
+}
+
+for (let i = 0; i < TOWN_BLOCKS; i++)
+  for (let j = 0; j < TOWN_BLOCKS; j++)
+    createBuilding(i, j);
+
+/* ---------------- interaction ---------------- */
+const raycaster = new THREE.Raycaster();
+const center = new THREE.Vector2(0, 0);
+function interact() {
+  raycaster.setFromCamera(center, camera);
+  let hit = null, hitDist = DOOR_REACH;
+  for (const door of doors) {
+    const intersects = raycaster.intersectObject(door.mesh);
+    if (intersects.length > 0 && intersects[0].distance < hitDist) { hit = door; hitDist = intersects[0].distance; }
+  }
+  if (!hit) return;
+  hit.open = !hit.open;
+  const prompt = document.getElementById('prompt');
+  prompt.textContent = hit.open ? 'Door opened' : 'Door closed';
+  prompt.style.display = 'block';
+  setTimeout(() => { prompt.style.display = 'none'; }, 1400);
+}
+
+/* ---------------- movement ---------------- */
+let vx = 0, vz = 0, vy = 0;
+let onGround = false;
+let lastInteract = 0;
+let prevLabel = null;
+const clock = new THREE.Clock();
+
+function update(dt) {
+  const time = performance.now();
+  const wishX = (keys['KeyD'] ? 1 : 0) - (keys['KeyA'] ? 1 : 0);
+  const wishZ = (keys['KeyS'] ? 1 : 0) - (keys['KeyW'] ? 1 : 0);
+  let len = Math.sqrt(wishX * wishX + wishZ * wishZ);
+  if (len > 0) { wishX /= len; wishZ /= len; }
+
+  if (controls.isLocked) {
+    const dir = new THREE.Vector3(); controls.getDirection(dir); dir.y = 0; dir.normalize();
+    const right = new THREE.Vector3(0, 1, 0).cross(dir).normalize();
+    const wx = dir.x * (-wishZ) + right.x * wishX;
+    const wz = dir.z * (-wishZ) + right.z * wishZ;
+    const acc = 14;
+    vx += (wx * MOVE_SPEED - vx) * acc * dt;
+    vz += (wz * MOVE_SPEED - vz) * acc * dt;
+  } else {
+    vx *= Math.pow(0.4, dt); vz *= Math.pow(0.4, dt);
+  }
+
+  const py = camera.position.y;
+  const nx = camera.position.x + vx * dt;
+  const nz = camera.position.z + vz * dt;
+  if (!collidesSphere(nx, py, camera.position.z)) camera.position.x = nx;
+  else if (!collidesSphere(camera.position.x, py, nz)) camera.position.z = nz;
+
+  const gh = groundHeightAt(camera.position.x, camera.position.z);
+  if (Math.abs(camera.position.y - gh) < 0.3) {
+    camera.position.y = gh; vy = 0; onGround = true;
+  } else {
+    vy -= GRAVITY * dt;
+    camera.position.y += vy * dt;
+    const gh2 = groundHeightAt(camera.position.x, camera.position.z);
+    if (camera.position.y < gh2) { camera.position.y = gh2; vy = 0; onGround = true; }
+  }
+  if (keys['Space'] && onGround) { vy = JUMP; onGround = false; camera.position.y += 0.1; }
+
+  if (keys['KeyE'] && time - lastInteract > 350) { lastInteract = time; interact(); }
+
+  for (const door of doors) {
+    const tgt = door.open ? door.closedRot + door.swing * Math.PI / 2 : door.closedRot;
+    door.cur += (tgt - door.mesh.rotation.y) * Math.min(dt * 9, 1);
+    door.mesh.rotation.y = door.cur;
+    door.collider.active = !door.open;
+  }
+
+  const cx = camera.position.x, cy = camera.position.y, cz = camera.position.z;
+  let curLabel = null;
+  for (const g of groundZones) {
+    if (g.label && cx >= g.min.x && cx <= g.max2.x && cz >= g.min.y && cz <= g.max2.y && cy >= g.height && cy < g.height + 2.6) { curLabel = g.label; break; }
+  }
+  if (!curLabel) {
+    for (const b of buildings) {
+      if (cy >= 0 && cy < b.height + 0.6 && cx >= b.x - 0.5 && cx <= b.x + b.w + 0.5 && cz >= b.z - 0.5 && cz <= b.z + b.d + 0.5) {
+        curLabel = `Building — ${b.doorEdge === 'S' ? 'south' : b.doorEdge === 'N' ? 'north' : b.doorEdge === 'W' ? 'west' : 'east'} entrance`;
+        break;
+      }
+    }
+  }
+  const el = document.getElementById('label');
+  if (curLabel !== prevLabel) {
+    prevLabel = curLabel;
+    el.textContent = curLabel || '';
+    el.classList.toggle('show', !!curLabel);
+  }
+}
+
+/* ---------------- render loop ---------------- */
+const fpsEl = document.getElementById('fps');
+let frames = 0, fpsTime = performance.now();
+let loggedUpdErr = false, loggedCtrlErr = false, loggedRenderErr = false;
+let animateCount = 0;
+function animate() {
+
+  requestAnimationFrame(animate);
+  animateCount++;
+  const dt = Math.min(clock.getDelta(), 0.05);
+  try { update(dt); } catch (e) { if (!loggedUpdErr) { loggedUpdErr = true; console.log('UPDATE ERR', e.stack); } }
+  try { controls.update && controls.update(dt); } catch (e) { if (!loggedCtrlErr) { loggedCtrlErr = true; console.log('CONTROLS ERR', e.stack); } }
+  try { renderer.render(scene, camera); } catch (e) { if (!loggedRenderErr) { loggedRenderErr = true; console.log('RENDER ERR', e.stack); } }
+  frames++;
+  const now = performance.now();
+  if (now - fpsTime >= 1000) {
+    fpsEl.textContent = `${frames} FPS`;
+    frames = 0; fpsTime = now;
+  }
+}
+animate();
+</script>
+</body>
+</html>
