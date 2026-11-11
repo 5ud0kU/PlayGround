@@ -192,6 +192,30 @@ function tree(x, z, scale, palette) {
   return g
 }
 
+// ─── Biomes ───────────────────────────────────────────────────────────────────
+// Each biome tints the ground, places themed flora and offers distinct
+// nutrients. Creatures sense nearby biomes and roam to satisfy their needs.
+export const BIOMES = [
+  { key: 'forest', label: 'Forest', icon: '🌲', ground: '#2d6a4f', edge: '#1b4332', sky: '#0b1426', resources: ['fruit', 'nectar'], food: 'fruit', water: 'stream', color: '#4ade80' },
+  { key: 'jungle', label: 'Jungle', icon: '🌴', ground: '#1b4332', edge: '#0d4f1b', sky: '#0a1a12', resources: ['fruit', 'insect'], food: 'fruit', water: 'pond', color: '#22c55e' },
+  { key: 'desert', label: 'Desert', icon: '🏜️', ground: '#a67c52', edge: '#8b6914', sky: '#2a1b0e', resources: ['cactus', 'water'], food: 'cactus', water: 'oasis', color: '#f59e0b' },
+  { key: 'seacoast', label: 'Seacoast', icon: '🏖️', ground: '#3d8da1', edge: '#2a6f97', sky: '#14263a', resources: ['fish', 'kelp'], food: 'fish', water: 'sea', color: '#0ea5e9' },
+  { key: 'sea', label: 'Sea', icon: '🌊', ground: '#028090', edge: '#05668d', sky: '#12262e', resources: ['fish', 'kelp'], food: 'fish', water: 'sea', color: '#0891b2' },
+  { key: 'plain', label: 'Plain', icon: '🌾', ground: '#8fbc8f', edge: '#6b8e23', sky: '#16261e', resources: ['grass', 'seed'], food: 'grass', water: 'dew', color: '#84cc16' },
+]
+const BIOME_COLORS = Object.fromEntries(BIOMES.map(b => [b.key, b.ground]))
+
+function biomeAt(x, z) {
+  // Pseudo-random stable biome field based on world position.
+  const nx = Math.floor(x / 22)
+  const nz = Math.floor(z / 22)
+  let h = 2166136261
+  h ^= nx; h = Math.imul(h, 16777619)
+  h ^= nz; h = Math.imul(h, 16777619)
+  const pick = (h >>> 0) % BIOMES.length
+  return BIOMES[pick]
+}
+
 export class World {
   constructor(container, hooks = {}) {
     this.container = container
@@ -202,11 +226,18 @@ export class World {
     this.time = 0
     this.shakeAmt = 0
     this.pointer = { down: false, x: 0, y: 0, moved: 0 }
-    this.orbit = { yaw: 0.55, pitch: 0.34, radius: 10.5, targetY: 1.35 }
-    this.autoRotate = true
-    this.bindCamera = { yaw: 0, pitch: 0, radius: 11 }
+    // Drag-to-pan camera state.
+    this.pan = { x: 0, z: 0, targetX: 0, targetZ: 0 }
+    this.zoom = 11
+    this.targetY = 1.35
+    this.autoRotate = false
     this.raycaster = new THREE.Raycaster()
     this.ndc = new THREE.Vector2()
+
+    this.biomes = []
+    this.resources = []
+    this.resourceNodes = []
+    this.resourceSpawnTimer = 0
 
     this.renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' })
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2))
@@ -265,31 +296,71 @@ export class World {
 
     g.add(skyMesh('#071426', '#1c4d4b', '#081416'))
 
-    const groundTex = groundTexture('habitat')
+    // Large navigable ground plane.
     const ground = new THREE.Mesh(
-      new THREE.CircleGeometry(15, 72),
-      new THREE.MeshStandardMaterial({ map: groundTex, color: 0xffffff, roughness: 0.95, metalness: 0 })
+      new THREE.CircleGeometry(60, 120),
+      new THREE.MeshStandardMaterial({ color: 0x2d6a4f, roughness: 0.95, metalness: 0 })
     )
     ground.rotation.x = -Math.PI / 2
     ground.receiveShadow = true
     g.add(ground)
 
     const under = new THREE.Mesh(
-      new THREE.CylinderGeometry(15.2, 15.8, 1.4, 72),
+      new THREE.CylinderGeometry(60.2, 60.8, 1.4, 120),
       new THREE.MeshStandardMaterial({ color: '#0d2124', roughness: 0.9, flatShading: true })
     )
     under.position.y = -0.71
     under.receiveShadow = true
     g.add(under)
 
-    // luminous rim
-    const rim = new THREE.Mesh(
-      new THREE.TorusGeometry(14.6, 0.035, 6, 120),
-      new THREE.MeshBasicMaterial({ color: '#67ffc8' })
-    )
-    rim.rotation.x = -Math.PI / 2
-    rim.position.y = 0.02
-    g.add(rim)
+    // Biome patches: circular regions with distinct ground color, flora & resources.
+    const patchCount = 24
+    for (let i = 0; i < patchCount; i++) {
+      const a = Math.random() * Math.PI * 2
+      const r = 8 + Math.random() * 40
+      const x = Math.cos(a) * r
+      const z = Math.sin(a) * r
+      const biome = biomeAt(x, z)
+      this.biomes.push({ x, z, biome, radius: 6 + Math.random() * 8 })
+
+      // Biome ground disc.
+      const disc = new THREE.Mesh(
+        new THREE.CircleGeometry(this.biomes[i].radius, 24),
+        new THREE.MeshStandardMaterial({ color: biome.ground, roughness: 0.9, metalness: 0 })
+      )
+      disc.rotation.x = -Math.PI / 2
+      disc.position.set(x, 0.02, z)
+      g.add(disc)
+
+      // Biome-appropriate flora.
+      const floraCount = 3 + Math.floor(Math.random() * 4)
+      for (let j = 0; j < floraCount; j++) {
+        const fa = Math.random() * Math.PI * 2
+        const fr = Math.random() * (this.biomes[i].radius * 0.8)
+        const fx = x + Math.cos(fa) * fr
+        const fz = z + Math.sin(fa) * fr
+        if (biome.key === 'forest' || biome.key === 'jungle') {
+          g.add(tree(fx, fz, 0.8 + Math.random() * 1.1, [biome.edge, biome.ground, '#123e40'][j % 3]))
+        } else if (biome.key === 'desert') {
+          g.add(crystal(fx, fz, 0.6 + Math.random() * 1, biome.color))
+        } else if (biome.key === 'seacoast' || biome.key === 'sea') {
+          g.add(mushroom(fx, fz, 0.5 + Math.random() * 0.8, biome.color))
+        } else {
+          g.add(tree(fx, fz, 0.6 + Math.random() * 0.8, [biome.edge, biome.ground, '#6b8e23'][j % 3]))
+        }
+      }
+
+      // Resource nodes: creatures seek these to satisfy their needs.
+      const resCount = 2 + Math.floor(Math.random() * 3)
+      for (let j = 0; j < resCount; j++) {
+        const ra = Math.random() * Math.PI * 2
+        const rr = Math.random() * (this.biomes[i].radius * 0.7)
+        const rx = x + Math.cos(ra) * rr
+        const rz = z + Math.sin(ra) * rr
+        const type = biome.resources[Math.floor(Math.random() * biome.resources.length)]
+        this.addResourceNode(rx, rz, type, biome)
+      }
+    }
 
     // distant moon
     const moon = new THREE.Mesh(new THREE.SphereGeometry(3.2, 24, 16), new THREE.MeshBasicMaterial({ color: '#cfe9d3' }))
@@ -298,50 +369,6 @@ export class World {
     const moonGlow = new THREE.Mesh(new THREE.SphereGeometry(4.4, 20, 14), new THREE.MeshBasicMaterial({ color: '#6dffc9', transparent: true, opacity: 0.12, blending: THREE.AdditiveBlending, depthWrite: false }))
     moonGlow.position.copy(moon.position)
     g.add(moonGlow)
-
-    for (let i = 0; i < 26; i++) {
-      const a = -0.2 + Math.random() * Math.PI * 1.4
-      const r = 11 + Math.random() * 9
-      const x = Math.cos(a) * r
-      const z = Math.sin(a) * r
-      if (Math.abs(x) < 11 && z > -14) {
-        if (Math.random() < 0.55) g.add(tree(x, z, 0.8 + Math.random() * 1.1, ['#174a44', '#1c5b4e', '#123e40'][i % 3]))
-        else g.add(crystal(x, z, 0.8 + Math.random() * 1.4, ['#7dffd0', '#9a8cff', '#ffd27a'][i % 3]))
-      }
-    }
-    for (let i = 0; i < 18; i++) {
-      const a = Math.random() * Math.PI * 2
-      const r = 3.6 + Math.random() * 9.4
-      g.add(mushroom(Math.cos(a) * r, Math.sin(a) * r, 0.6 + Math.random() * 1.2, ['#8dffbe', '#ffb3d9', '#9ad7ff', '#ffe28a'][i % 4]))
-    }
-    for (let i = 0; i < 14; i++) {
-      const a = Math.random() * Math.PI * 2
-      const r = 3.2 + Math.random() * 10
-      const rock = new THREE.Mesh(
-        new THREE.DodecahedronGeometry(0.18 + Math.random() * 0.5, 0),
-        new THREE.MeshStandardMaterial({ color: '#24413e', roughness: 0.95, flatShading: true })
-      )
-      rock.position.set(Math.cos(a) * r, 0.14, Math.sin(a) * r)
-      rock.rotation.set(Math.random(), Math.random(), Math.random())
-      rock.castShadow = true
-      g.add(rock)
-    }
-
-    // central ceremonial rings
-    for (const [r, op] of [[3.1, 0.3], [5.4, 0.16], [8.1, 0.1]]) {
-      const ring = new THREE.Mesh(
-        new THREE.RingGeometry(r - 0.025, r + 0.025, 96),
-        new THREE.MeshBasicMaterial({ color: '#64ffc4', transparent: true, opacity: op, side: THREE.DoubleSide })
-      )
-      ring.rotation.x = -Math.PI / 2
-      ring.position.y = 0.025
-      g.add(ring)
-    }
-
-    this.spores = sporeField(180, '#9dffd7', 15, 5.5, 0.075)
-    g.add(this.spores)
-    this.fireflies = sporeField(60, '#ffd27a', 11, 3.2, 0.12)
-    g.add(this.fireflies)
 
     // floating islets
     for (let i = 0; i < 5; i++) {
@@ -364,6 +391,11 @@ export class World {
       this.isles.push(isle)
     }
 
+    this.spores = sporeField(180, '#9dffd7', 55, 5.5, 0.075)
+    g.add(this.spores)
+    this.fireflies = sporeField(60, '#ffd27a', 45, 3.2, 0.12)
+    g.add(this.fireflies)
+
     this.selectionRing = new THREE.Mesh(
       new THREE.TorusGeometry(0.72, 0.028, 6, 64),
       new THREE.MeshBasicMaterial({ color: '#d8ff5f' })
@@ -372,6 +404,56 @@ export class World {
     this.selectionRing.position.y = 0.03
     this.selectionRing.visible = false
     g.add(this.selectionRing)
+  }
+
+  addResourceNode(x, z, type, biome) {
+    const g = new THREE.Group()
+    g.position.set(x, 0.05, z)
+    let mesh, color
+    switch (type) {
+      case 'fruit': color = 0xff6b6b; mesh = new THREE.Mesh(new THREE.SphereGeometry(0.14, 10, 8), new THREE.MeshBasicMaterial({ color })); break
+      case 'nectar': color = 0x4ade80; mesh = new THREE.Mesh(new THREE.IcosahedronGeometry(0.12, 1), new THREE.MeshBasicMaterial({ color })); break
+      case 'insect': color = 0xf59e0b; mesh = new THREE.Mesh(new THREE.SphereGeometry(0.1, 8, 6), new THREE.MeshBasicMaterial({ color })); break
+      case 'cactus': color = 0x22c55e; mesh = new THREE.Mesh(new THREE.ConeGeometry(0.12, 0.3, 6), new THREE.MeshBasicMaterial({ color })); break
+      case 'water': color = 0x0ea5e9; mesh = new THREE.Mesh(new THREE.SphereGeometry(0.16, 12, 10), new THREE.MeshBasicMaterial({ color })); break
+      case 'fish': color = 0x0891b2; mesh = new THREE.Mesh(new THREE.SphereGeometry(0.11, 8, 6), new THREE.MeshBasicMaterial({ color })); break
+      case 'kelp': color = 0x10b981; mesh = new THREE.Mesh(new THREE.ConeGeometry(0.08, 0.25, 6), new THREE.MeshBasicMaterial({ color })); break
+      case 'grass': color = 0x84cc16; mesh = new THREE.Mesh(new THREE.SphereGeometry(0.1, 8, 6), new THREE.MeshBasicMaterial({ color })); break
+      case 'seed': color = 0xd97706; mesh = new THREE.Mesh(new THREE.IcosahedronGeometry(0.08, 1), new THREE.MeshBasicMaterial({ color })); break
+      default: color = 0xffffff; mesh = new THREE.Mesh(new THREE.SphereGeometry(0.1, 8, 6), new THREE.MeshBasicMaterial({ color }))
+    }
+    mesh.castShadow = false
+    g.add(mesh)
+    const node = { x, z, type, amount: 1, mesh: g, biome, t: 0 }
+    this.resourceNodes.push(node)
+    this.habitat.add(g)
+    return node
+  }
+
+  getBiomeAt(x, z) {
+    return biomeAt(x, z)
+  }
+
+  findNearestResource(x, z, type) {
+    let best = null, bestDist = 1e9
+    for (const node of this.resourceNodes) {
+      if (node.type !== type || node.amount <= 0) continue
+      const d = Math.hypot(node.x - x, node.z - z)
+      if (d < bestDist) { bestDist = d; best = node }
+    }
+    return best
+  }
+
+  consumeResource(node) {
+    if (node.amount <= 0) return
+    node.amount -= 1
+    if (node.amount <= 0) {
+      node.mesh.visible = false
+      // Respawn after a delay in the same biome.
+      setTimeout(() => {
+        if (node.amount <= 0) { node.amount = 1; node.mesh.visible = true }
+      }, 12000 + Math.random() * 8000)
+    }
   }
 
   buildArena() {
@@ -458,9 +540,8 @@ export class World {
       this.hemi.color.set(0x9ffff0)
       this.hemi.intensity = 1.25
       this.arenaGlow.intensity = 0
-      this.orbit = { yaw: 0.55, pitch: 0.34, radius: 10.5, targetY: 1.35 }
-      if (!instant) this.orbit.yaw = this.orbitYaw ?? 0.55
-      this.bindCamera = { yaw: this.orbit.yaw, pitch: this.orbit.pitch, radius: this.orbit.radius }
+      this.pan.targetX = 0
+      this.pan.targetZ = 0
     } else {
       this.habitat.visible = false
       this.arena.visible = true
@@ -696,14 +777,15 @@ export class World {
       this.pointer.moved += Math.abs(dx) + Math.abs(dy)
       this.pointer.lx = e.clientX
       this.pointer.ly = e.clientY
-      this.orbit.yaw -= dx * 0.006
-      this.orbit.pitch = clamp(this.orbit.pitch + dy * 0.004, 0.02, 0.95)
+      // Drag pans the camera target across the habitat map.
+      const scale = this.zoom * 0.002
+      this.pan.targetX -= dx * scale
+      this.pan.targetZ += dy * scale
     }
     const up = e => {
       if (!this.pointer.down) return
       this.pointer.down = false
       if (this.pointer.moved < 8) this.pickAt(e.clientX, e.clientY)
-      if (this.mode === 'habitat') this.autoRotate = true
     }
     el.addEventListener('pointerdown', down)
     el.addEventListener('pointermove', move)
@@ -711,7 +793,7 @@ export class World {
     el.addEventListener('pointercancel', () => { this.pointer.down = false })
     el.addEventListener('wheel', e => {
       e.preventDefault()
-      this.orbit.radius = clamp(this.orbit.radius + e.deltaY * 0.006, 6.5, 15)
+      this.zoom = Math.max(5, Math.min(25, this.zoom + e.deltaY * 0.005))
     }, { passive: false })
   }
 
@@ -754,23 +836,32 @@ export class World {
 
     this.updateParticles(dt)
 
-    const orbit = this.orbit
-    if (this.autoRotate && this.mode === 'habitat') {
-      this.orbitYaw = (this.orbitYaw ?? orbit.yaw) + dt * 0.028
-      orbit.yaw = this.orbitYaw
+    if (this.mode === 'habitat') {
+      const pan = this.pan
+      pan.x += (pan.targetX - pan.x) * 0.1
+      pan.z += (pan.targetZ - pan.z) * 0.1
+      const camY = this.targetY + this.zoom * 0.55
+      this.camera.position.lerp(new THREE.Vector3(pan.x, camY, pan.z), 0.1)
+      this.camera.lookAt(pan.x, this.targetY, pan.z)
+    } else {
+      const orbit = this.orbit
+      if (this.autoRotate && this.mode === 'habitat') {
+        this.orbitYaw = (this.orbitYaw ?? orbit.yaw) + dt * 0.028
+        orbit.yaw = this.orbitYaw
+      }
+      const target = new THREE.Vector3(0, orbit.targetY, 0)
+      const dist = orbit.radius
+      const camX = Math.sin(orbit.yaw) * Math.cos(orbit.pitch) * dist
+      const camZ = Math.cos(orbit.yaw) * Math.cos(orbit.pitch) * dist
+      const camY = orbit.targetY + Math.sin(orbit.pitch) * dist + 0.4
+      this.camera.position.lerp(new THREE.Vector3(camX, camY, camZ), 0.08)
+      this.camera.lookAt(target)
     }
-    const target = new THREE.Vector3(0, orbit.targetY, 0)
-    const dist = orbit.radius
-    const camX = Math.sin(orbit.yaw) * Math.cos(orbit.pitch) * dist
-    const camZ = Math.cos(orbit.yaw) * Math.cos(orbit.pitch) * dist
-    const camY = orbit.targetY + Math.sin(orbit.pitch) * dist + 0.4
-    this.camera.position.lerp(new THREE.Vector3(camX, camY, camZ), 0.08)
     if (this.shakeAmt > 0.001) {
       this.camera.position.x += (Math.random() - 0.5) * this.shakeAmt
       this.camera.position.y += (Math.random() - 0.5) * this.shakeAmt
       this.shakeAmt *= 0.9
     }
-    this.camera.lookAt(target)
 
     // slow toggling details
     if (this.isles) for (const isle of this.isles) {
@@ -791,35 +882,97 @@ export class World {
     const list = [...this.creatures.values()]
     for (const entry of list) {
       if (!this.habitat.children.includes(entry.root)) continue
-      entry.pause -= dt
-      const dx = entry.target.x - entry.root.position.x
-      const dz = entry.target.z - entry.root.position.z
-      const dist = Math.hypot(dx, dz)
+      const c = entry.data
+      const needs = c.needs
+      const p = phenotype(c.genome)
+      const pos = entry.root.position
+
+      // Automatic survival AI: creatures roam to satisfy their needs.
+      // Needs decay is handled in app.js gameLoop; here creatures act on them.
+      const hungry = needs.hunger < 45
+      const tired = needs.energy < 35
+      const needFun = needs.fun < 35
       let moving = 0
-      if (entry.pause <= 0) {
-        if (dist < 0.25) {
-          entry.pause = 2 + Math.random() * 5
-          const a = Math.random() * Math.PI * 2
-          const r = 1.5 + Math.random() * 4.8
-          entry.target.set(Math.cos(a) * r, 0, Math.sin(a) * r)
+      let goalReached = false
+
+      // Decide current goal based on the most pressing need.
+      let goal = null
+      if (hungry) {
+        const foodType = p.mammifere > 0.5 ? 'fruit' : p.reptile > 0.5 ? 'insect' : 'fruit'
+        goal = this.findNearestResource(pos.x, pos.z, foodType) || this.findNearestResource(pos.x, pos.z, 'nectar')
+      } else if (tired) {
+        // Rest where you are: recover energy, pause movement.
+        entry.pause = Math.max(entry.pause, dt)
+        needs.energy = Math.min(100, needs.energy + 12 * dt)
+        needs.hunger = Math.max(0, needs.hunger - 6 * dt)
+      } else if (needFun) {
+        // Roam toward any resource for enrichment.
+        goal = this.findNearestResource(pos.x, pos.z, null)
+      }
+
+      if (goal) {
+        const dx = goal.x - pos.x
+        const dz = goal.z - pos.z
+        const dist = Math.hypot(dx, dz)
+        if (dist < 0.9) {
+          // Consume the resource.
+          goalReached = true
+          if (goal.type === 'fruit' || goal.type === 'insect' || goal.type === 'cactus' || goal.type === 'fish' || goal.type === 'grass') {
+            needs.hunger = Math.min(100, needs.hunger + 28)
+            needs.fun = Math.min(100, needs.fun + 12)
+          } else if (goal.type === 'nectar' || goal.type === 'water' || goal.type === 'kelp' || goal.type === 'seed') {
+            needs.fun = Math.min(100, needs.fun + 18)
+            needs.hunger = Math.min(100, needs.hunger + 10)
+          }
+          this.consumeResource(goal)
+          entry.pause = 2
         } else {
           moving = 1
-          const step = Math.min(dist, entry.speed * dt)
-          entry.root.position.x += (dx / dist) * step
-          entry.root.position.z += (dz / dist) * step
+          const step = Math.min(dist, (entry.speed + p.speed * 0.5) * dt)
+          pos.x += (dx / dist) * step
+          pos.z += (dz / dist) * step
           const want = Math.atan2(dx, dz)
           let diff = want - entry.root.rotation.y
           while (diff > Math.PI) diff -= Math.PI * 2
           while (diff < -Math.PI) diff += Math.PI * 2
           entry.root.rotation.y += diff * Math.min(1, dt * 4)
         }
+      } else if (!tired) {
+        // Free-roam wander when no pressing need.
+        entry.pause -= dt
+        if (entry.pause <= 0) {
+          entry.pause = 2 + Math.random() * 5
+          const a = Math.random() * Math.PI * 2
+          const r = 1.5 + Math.random() * 4.8
+          entry.target.set(Math.cos(a) * r, 0, Math.sin(a) * r)
+        } else {
+          const dx = entry.target.x - pos.x
+          const dz = entry.target.z - pos.z
+          const dist = Math.hypot(dx, dz)
+          if (dist > 0.25) {
+            moving = 1
+            const step = Math.min(dist, entry.speed * dt)
+            pos.x += (dx / dist) * step
+            pos.z += (dz / dist) * step
+            const want = Math.atan2(dx, dz)
+            let diff = want - entry.root.rotation.y
+            while (diff > Math.PI) diff -= Math.PI * 2
+            while (diff < -Math.PI) diff += Math.PI * 2
+            entry.root.rotation.y += diff * Math.min(1, dt * 4)
+          }
+        }
       }
+
       entry.moving += (moving - entry.moving) * Math.min(1, dt * 5)
       entry.root.userData.update?.(dt, entry.moving)
+
       if (this.selectedId === entry.id) {
-        this.selectionRing.position.x = entry.root.position.x
-        this.selectionRing.position.z = entry.root.position.z
+        this.selectionRing.position.x = pos.x
+        this.selectionRing.position.z = pos.z
         this.selectionRing.scale.setScalar(1 + Math.sin(this.time * 3) * 0.06)
+        // Highlight current biome.
+        const b = this.getBiomeAt(pos.x, pos.z)
+        if (this.hooks.onBiome) this.hooks.onBiome(b)
       }
     }
     // spore drift

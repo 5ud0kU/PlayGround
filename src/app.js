@@ -59,7 +59,7 @@ function loadGame() {
   return { creatures, selected: creatures[0].id, coins: 120, food: 8, wins: 0, archives: [], xp: 0, xpClaims: [], roadLevel: 1 }
 }
 const game = loadGame()
-let mode = 'habitat', tab = 'overview', world, battle = null, toastTimer, releaseTargetId = null
+let mode = 'habitat', tab = 'overview', world, battle = null, toastTimer, releaseTargetId = null, currentBiome = null
 const app = $('#app')
 app.innerHTML = `
 <div class="shell">
@@ -73,7 +73,11 @@ app.innerHTML = `
 </main><nav class="mobile-nav"><button data-action="sanctuary">◈<span>Sanctuary</span></button><button data-action="habitat">◉<span>Habitat</span></button><button data-action="profile">◎<span>Profile</span></button></nav><div class="toast" id="toast" role="status"></div><div class="modal-layer hidden" id="modal-layer"><div class="modal" id="modal"></div></div></div>`
 
 const viewport = $('#viewport')
-world = new World(viewport, { onSelect: selectCreature, onBackground: () => mode === 'habitat' && toast('Select a creature to inspect its genome.') })
+world = new World(viewport, {
+  onSelect: selectCreature,
+  onBackground: () => mode === 'habitat' && toast('Select a creature to inspect its genome.'),
+  onBiome: (b) => { currentBiome = b; renderStageTag() },
+})
 
 function xpForNextLevel(level) { return 100 + (level - 1) * 25 }
 function levelInfo(total = game.xp) {
@@ -370,11 +374,18 @@ function startBattle(roadLevel=null, carry=null) {
   if(carry){battle.hp.player=Math.min(maxHp.player,carry.hp+Math.round(maxHp.player*0.28));battle.sta.player=Math.min(maxSta.player,carry.sta+Math.round(maxSta.player*0.45))}
   world.enterArena(player,foe); updateModeUI(); renderProfile(); renderBattle()
 }
+function renderStageTag() {
+  if (mode !== 'habitat') return
+  const el = $('#scene-tag-text')
+  if (!currentBiome) { el.textContent = 'ECOSYSTEM ACTIVE'; return }
+  el.textContent = `${currentBiome.icon} ${currentBiome.label.toUpperCase()} · ${currentBiome.resources.join(' · ')}`
+}
+
 function updateModeUI() {
   document.querySelectorAll('[data-mode]').forEach(b=>b.classList.toggle('active',b.dataset.mode===mode))
   $('#stage-title').textContent=mode==='arena'?(battle?.challenge?`Endless Road · Level ${battle.challenge.level}`:'The Crucible'):'The Verdant Hollow'
   $('#stage-kicker').textContent=mode==='arena'?(battle?.challenge?(battle.challenge.boss?'☠ APEX BOSS':'⚔ ENDLESS CHALLENGE'):'⚔ COMBAT ARENA'):'◌ OPEN HABITAT'
-  $('#scene-tag-text').textContent=mode==='arena'?(battle?.challenge?(battle.challenge.boss?'BOSS ENCOUNTER':'ROAD CHALLENGE'):'BATTLE IN PROGRESS'):'ECOSYSTEM ACTIVE'
+  $('#scene-tag-text').textContent=mode==='arena'?(battle?.challenge?(battle.challenge.boss?'BOSS ENCOUNTER':'ROAD CHALLENGE'):'BATTLE IN PROGRESS'):(currentBiome?`${currentBiome.icon} ${currentBiome.label.toUpperCase()} · ${currentBiome.resources.join(' · ')}`:'ECOSYSTEM ACTIVE')
   $('.creature-count').style.display=mode==='arena'?'none':''
   $('[data-action="arena"]').innerHTML=mode==='arena'?'↩ RETURN TO HOLLOW <b>↗</b>':'⚔ ENTER ARENA <b>↗</b>'
   $('[data-action="breed"]').disabled=mode==='arena'
