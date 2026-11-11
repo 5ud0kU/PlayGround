@@ -709,6 +709,16 @@ for (let i = 0; i < TOWN_BLOCKS; i++)
   for (let j = 0; j < TOWN_BLOCKS; j++)
     createBuilding(i, j);
 
+/* ---------------- spawn over the map floor ---------------- */
+// Pick a safe outdoor spawn on a road/sidewalk intersection, then place the
+// player's eye height above the ground so they spawn standing on the floor.
+const SPAWN_X = 24;
+const SPAWN_Z = 24;
+const spawnY = groundHeightAt(SPAWN_X, SPAWN_Z) + PLAYER_HEIGHT + 0.05;
+camera.position.set(SPAWN_X, spawnY, SPAWN_Z);
+yaw = 0;
+pitch = 0;
+
 /* ---------------- interaction ---------------- */
 const raycaster = new THREE.Raycaster();
 const center = new THREE.Vector2(0, 0);
@@ -729,7 +739,7 @@ function interact() {
 
 /* ---------------- movement ---------------- */
 let vx = 0, vz = 0, vy = 0;
-let onGround = false;
+let onGround = true;
 let lastInteract = 0;
 let prevLabel = null;
 const clock = new THREE.Clock();
