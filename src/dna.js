@@ -50,6 +50,13 @@ export const BODY_PLANS = [
   { key: 'biped', label: 'Biped', icon: '♙', source: 'Primate · drake', note: 'Upright stance with grasping forelimbs' },
 ]
 
+// Four legacy species plus ten new DNA-expressed species. Archetype is a
+// continuous locus; equal intervals keep every species selectable by breeding.
+export const SPECIES_TYPES = [
+  'Drake', 'Mireling', 'Skykin', 'Goliath', 'Tidecaller', 'Crawler', 'Thornback',
+  'Longtail', 'Prism', 'Dunerunner', 'Frostfang', 'Bloomkin', 'Voltling', 'Stonejaw',
+]
+
 // Ten sculptural families, each with ten DNA-selected variants, provide a
 // stable catalog of 100 additional forms without adding artificial alleles.
 const MORPHOLOGY_FAMILIES = [
