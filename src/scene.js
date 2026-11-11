@@ -230,6 +230,9 @@ export class World {
     // Drag-to-pan camera state.
     this.pan = { x: 0, z: 0, targetX: 0, targetZ: 0 }
     this.zoom = 11
+    // How far the camera target may drift from the habitat center before
+    // it clamps, keeping the view over the navigable ground.
+    this.panLimit = 50
     this.targetY = 1.35
     this.autoRotate = false
     this.raycaster = new THREE.Raycaster()
@@ -759,6 +762,27 @@ export class World {
     this.shakeAmt = Math.min(0.5, this.shakeAmt + amount)
   }
 
+  // Programmatic camera navigation used by the on-screen habitat controls
+  // (and reusable by any input). Moves the camera target across the map.
+  panBy(dx = 0, dz = 0) {
+    if (this.mode !== 'habitat') return
+    this.autoRotate = false
+    const step = 2
+    this.pan.targetX = clamp(this.pan.targetX + dx * step, -this.panLimit, this.panLimit)
+    this.pan.targetZ = clamp(this.pan.targetZ + dz * step, -this.panLimit, this.panLimit)
+  }
+
+  zoomBy(amount) {
+    this.zoom = clamp(this.zoom + amount, 5, 25)
+  }
+
+  resetView() {
+    this.pan.targetX = 0
+    this.pan.targetZ = 0
+    this.zoom = 11
+    this.autoRotate = this.mode === 'habitat'
+  }
+
   bindPointer() {
     const el = this.renderer.domElement
     const down = e => {
@@ -839,6 +863,8 @@ export class World {
 
     if (this.mode === 'habitat') {
       const pan = this.pan
+      pan.targetX = clamp(pan.targetX, -this.panLimit, this.panLimit)
+      pan.targetZ = clamp(pan.targetZ, -this.panLimit, this.panLimit)
       pan.x += (pan.targetX - pan.x) * 0.1
       pan.z += (pan.targetZ - pan.z) * 0.1
       const camY = this.targetY + this.zoom * 0.55

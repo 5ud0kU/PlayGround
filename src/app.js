@@ -67,10 +67,21 @@ app.innerHTML = `
 <main class="workspace">
 <aside class="left-rail"><div class="section-label">YOUR SANCTUARY <span id="roster-count">03</span></div><div class="roster" id="roster"></div><button class="discover" data-action="discover">＋ DISCOVER CREATURE <small>60 ✧</small></button><div class="rail-spacer"></div><div class="sanctuary-card"><div class="sanctuary-orb">✳</div><div><b>THE HOLLOW</b><span>Habitat level 01</span></div><i class="live-tag">LIVE</i><p>Creatures wander, rest and recover here.</p><div class="harmony"><i></i></div><small>SANCTUARY HARMONY <b>78%</b></small></div><div class="rail-footer">BUILD 1.0 · AUTOSAVED</div></aside>
 <section class="stage-column"><div class="stage-head"><div><div class="eyebrow" id="stage-kicker">◌ OPEN HABITAT</div><h1 id="stage-title">The Verdant Hollow</h1></div><div class="stage-controls"><span class="creature-count"><i></i><b id="stage-count">3</b> CREATURES</span><button class="view-btn active" data-mode="habitat">◉ HABITAT</button><button class="view-btn" data-mode="arena">⚔ ARENA</button></div></div>
-<div class="viewport-wrap"><div class="viewport" id="viewport"></div><div class="viewport-vignette"></div><div class="scene-tag"><i class="live-dot"></i><span id="scene-tag-text">ECOSYSTEM ACTIVE</span></div><div class="camera-hint">DRAG TO ORBIT <b>·</b> SCROLL TO ZOOM</div><div id="battle-hud" class="battle-hud hidden"></div><div id="battle-result" class="battle-result hidden"></div></div>
+<div class="viewport-wrap"><div class="viewport" id="viewport"></div><div class="viewport-vignette"></div><div class="scene-tag"><i class="live-dot"></i><span id="scene-tag-text">ECOSYSTEM ACTIVE</span></div><div class="camera-hint">DRAG TO PAN THE MAP <b>·</b> SCROLL TO ZOOM</div>
+<div id="battle-hud" class="battle-hud hidden"></div><div id="battle-result" class="battle-result hidden"></div></div>
 <div class="stage-bottom"><div class="world-note"><span>✦</span><div><b id="world-note-title">THE HOLLOW IS ALIVE</b><small id="world-note-copy">Traits and temperament are written in every creature's DNA.</small></div></div><div class="stage-actions"><button class="secondary-btn" data-action="archives">▤ DNA ARCHIVE</button><button class="secondary-btn" data-action="breed">♧ BREED</button><button class="primary-btn" data-action="arena">⚔ ENTER ARENA <b>↗</b></button></div></div></section>
 <aside class="right-panel" id="right-panel"></aside>
-</main><nav class="mobile-nav"><button data-action="sanctuary">◈<span>Sanctuary</span></button><button data-action="habitat">◉<span>Habitat</span></button><button data-action="profile">◎<span>Profile</span></button></nav><div class="toast" id="toast" role="status"></div><div class="modal-layer hidden" id="modal-layer"><div class="modal" id="modal"></div></div></div>`
+</main>
+<div class="habitat-nav" aria-label="Habitat navigation">
+  <button data-nav="up" aria-label="Pan up">▲</button>
+  <button data-nav="down" aria-label="Pan down">▼</button>
+  <button data-nav="left" aria-label="Pan left">◀</button>
+  <button data-nav="right" aria-label="Pan right">▶</button>
+  <button data-zoom="in" aria-label="Zoom in">⊕</button>
+  <button data-zoom="out" aria-label="Zoom out">⊖</button>
+  <button data-nav="reset" aria-label="Center view">⌂</button>
+</div>
+<nav class="mobile-nav"><button data-action="sanctuary">◈<span>Sanctuary</span></button><button data-action="habitat">◉<span>Habitat</span></button><button data-action="profile">◎<span>Profile</span></button></nav><div class="toast" id="toast" role="status"></div><div class="modal-layer hidden" id="modal-layer"><div class="modal" id="modal"></div></div></div>`
 
 const viewport = $('#viewport')
 world = new World(viewport, {
@@ -531,6 +542,20 @@ document.addEventListener('change',e=>{
   if(confirm)confirm.disabled=n===0
 })
 document.addEventListener('click',e=>{
+  const nav = e.target.closest('[data-nav],[data-zoom]')
+  if (nav) {
+    const zoom = nav.dataset.zoom
+    if (zoom) world.zoomBy(zoom === 'in' ? 1.5 : -1.5)
+    else {
+      const move = nav.dataset.nav
+      if (move === 'reset') world.resetView()
+      else {
+        const v = { up: [0, 1], down: [0, -1], left: [-1, 0], right: [1, 0] }[move] || [0, 0]
+        world.panBy(v[0], v[1])
+      }
+    }
+    return
+  }
   const actionTarget=e.target.closest('[data-action]')
   const action=actionTarget?.dataset.action
   if(action){dispatch(action,actionTarget.dataset.archiveId);return}
