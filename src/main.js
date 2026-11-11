@@ -68,36 +68,83 @@ function box(w, h, d, material, x, y, z, cast = true) {
   return mesh;
 }
 
+const buildingAccess = [];
+const buildingNames = ['Juniper Flats', 'Lantern House', 'Market Lofts', 'Bluebird Studio', 'Cedar Court', 'Sunroom Apartments', 'Old Town Office', 'Canal House', 'Maple Works', 'Cornerstone Inn', 'Orchard Residences', 'Foundry Lofts', 'Mosaic House', 'Garden Apartments', 'Northstar Offices'];
+const trimMat = mat(0xc8b78f, 0.58, 0.12);
+const sillMat = mat(0x36464a, 0.7, 0.1);
+
 for (const side of [-1, 1]) {
   for (let row = 0; row < 15; row++) {
     const z = -82 + row * 10 + Math.random() * 2;
     const w = 8 + Math.random() * 7;
     const d = 8 + Math.random() * 5;
-    const h = 10 + Math.random() * 24;
+    const floors = Math.max(2, Math.floor((10 + Math.random() * 24) / 3.1));
+    const floorHeight = 3.05;
+    const h = floors * floorHeight;
     const x = side * (14 + w / 2 + Math.random() * 3.5);
-    const building = box(w, h, d, buildingMats[Math.floor(Math.random() * buildingMats.length)], x, h / 2, z);
-    building.userData.lifeColor = signMats[row % signMats.length].color;
-    const facing = x - side * w / 2;
-    const cols = Math.max(2, Math.floor(w / 2.5));
-    const floors = Math.floor(h / 3.1);
-    for (let fy = 0; fy < floors; fy++) {
-      for (let cx = 0; cx < cols; cx++) {
-        const wx = facing - side * 0.025;
-        const wz = z - w * 0.32 + cx * (w * 0.64 / Math.max(1, cols - 1));
-        const wy = 2.1 + fy * 3.05;
-        if (wy < h - 1) {
-          box(0.9, 1.5, 0.08, windowMats[(row + fy + cx) % windowMats.length], wx, wy, wz, false);
-        }
+    const front = x - side * w / 2;
+    const wall = buildingMats[Math.floor(Math.random() * buildingMats.length)];
+    const name = buildingNames[(row + (side > 0 ? 4 : 0)) % buildingNames.length];
+
+    // These are open-front shells, not solid props: each level has a walkable
+    // floor, and the facade is framed around real door and window openings.
+    box(0.22, h, d, wall, x + side * (w / 2 - 0.11), h / 2, z);
+    box(0.22, h, d, wall, x - side * (w / 2 - 0.11), h / 2, z);
+    box(w, h, 0.22, wall, x, h / 2, z - d / 2 + 0.11);
+    box(w, 0.28, d, wall, x, h + 0.14, z);
+
+    for (let floor = 0; floor < floors; floor++) {
+      const levelY = floor * floorHeight;
+      box(w - 0.35, 0.2, d - 0.35, mat(floor % 2 ? 0x726f61 : 0x8b806d), x, levelY, z, false);
+    }
+
+    const windowCount = Math.max(2, Math.floor(d / 2.35));
+    const windowCenters = Array.from({ length: windowCount }, (_, index) => z - d * 0.31 + index * (d * 0.62 / Math.max(1, windowCount - 1)));
+    const windowAccess = [];
+    for (let floor = 0; floor < floors; floor++) {
+      for (let index = 0; index < windowCenters.length; index++) {
+        const windowZ = windowCenters[index];
+        const windowY = floor * floorHeight + 1.85;
+        if (floor === 0 && Math.abs(windowZ - z) < 1.1) continue; // keep the front door clear
+        const frameX = front - side * 0.12;
+        const width = 1.42;
+        const frame = trimMat;
+        box(0.16, 1.35, 0.12, frame, frameX, windowY, windowZ - width / 2, false);
+        box(0.16, 1.35, 0.12, frame, frameX, windowY, windowZ + width / 2, false);
+        box(0.16, 0.12, width + 0.12, frame, frameX, windowY + 0.68, windowZ, false);
+        box(0.16, 0.12, width + 0.12, frame, frameX, windowY - 0.68, windowZ, false);
+        box(0.18, 0.12, width, sillMat, frameX, windowY - 0.72, windowZ, false);
+        windowAccess.push({ floor, index: index + 1, position: new THREE.Vector3(front + side * 1.5, floor * floorHeight + 1.7, windowZ) });
       }
     }
+
+    // Front supports leave open bays; the central ground-level bay is a door.
+    const doorWidth = 1.55;
+    const doorFrameX = front - side * 0.12;
+    box(0.18, 2.55, 0.14, trimMat, doorFrameX, 1.275, z - doorWidth / 2, false);
+    box(0.18, 2.55, 0.14, trimMat, doorFrameX, 1.275, z + doorWidth / 2, false);
+    box(0.18, 0.16, doorWidth + 0.14, signMats[row % signMats.length], doorFrameX, 2.55, z, false);
+
+    // Visible vertical piers and roofline identify every floor and aperture.
+    for (const edgeZ of [z - d / 2, z + d / 2]) {
+      box(0.24, h, 0.24, wall, front, h / 2, edgeZ, false);
+    }
+    for (let floor = 1; floor < floors; floor++) {
+      box(0.22, 0.16, d, trimMat, front, floor * floorHeight, z, false);
+    }
     if (row % 3 === 0) {
-      box(2.2, 1.8, 2.2, mat(0x464e55), x + side * (Math.random() * 2), h + 0.9, z, true);
-      box(2.8, 0.25, 2.8, mat(0x9d8c76), x, h + 1.85, z, true);
+      box(2.2, 1.8, 2.2, mat(0x464e55), x + side * 1.5, h + 1, z, true);
+      box(2.8, 0.25, 2.8, mat(0x9d8c76), x, h + 1.95, z, true);
     }
-    if (h > 13) {
-      box(w * 0.86, 0.65, 0.35, signMats[row % signMats.length], facing, 3.2, z, false);
-      box(w * 0.9, 0.18, 1.1, mat(0x343d40), facing, 2.65, z, false);
-    }
+    box(w * 0.68, 0.62, 0.16, signMats[row % signMats.length], doorFrameX, 3.35, z, false);
+
+    buildingAccess.push({
+      id: `${side < 0 ? 'west' : 'east'}-${row + 1}`,
+      name: `${name} ${String(row + 1).padStart(2, '0')}`,
+      side, x, z, front, floors, floorHeight, doorZ: z,
+      door: new THREE.Vector3(front - side * 1.65, 1.7, z),
+      windows: windowAccess,
+    });
   }
 }
 
@@ -176,7 +223,86 @@ const state = {
   yaw: 0,
   pitch: 0,
   interactCooldown: 0,
+  mapOpen: false,
 };
+
+const cityMap = document.querySelector('#cityMap');
+const buildingList = document.querySelector('#buildingList');
+const mapToggle = document.querySelector('#mapToggle');
+
+function travelTo(position, side, label) {
+  camera.position.copy(position);
+  state.yaw = side > 0 ? -Math.PI / 2 : Math.PI / 2;
+  state.pitch = 0;
+  camera.rotation.set(0, state.yaw, 0, 'YXZ');
+  setStatus(`Arrived at ${label}. Explore this floor and its open windows.`);
+  closeCityMap();
+}
+
+function addMapButton(parent, text, className, position, side, label) {
+  const button = document.createElement('button');
+  button.type = 'button';
+  button.className = className;
+  button.textContent = text;
+  button.addEventListener('click', () => travelTo(position, side, label));
+  parent.append(button);
+}
+
+for (const building of buildingAccess) {
+  const card = document.createElement('article');
+  card.className = 'building-card';
+  const heading = document.createElement('div');
+  heading.className = 'building-card-heading';
+  const title = document.createElement('h3');
+  title.textContent = building.name;
+  heading.append(title);
+  addMapButton(heading, 'Door', 'door-action', new THREE.Vector3(building.front + building.side * 1.5, 1.7, building.doorZ), building.side, `${building.name} entrance`);
+  card.append(heading);
+
+  const details = document.createElement('details');
+  const summary = document.createElement('summary');
+  summary.textContent = `${building.floors} floors · ${building.windows.length} accessible windows`;
+  details.append(summary);
+  for (let floor = 0; floor < building.floors; floor++) {
+    const floorRow = document.createElement('div');
+    floorRow.className = 'floor-access';
+    const floorName = `Floor ${floor + 1}`;
+    const floorPosition = new THREE.Vector3(building.front + building.side * 1.5, floor * building.floorHeight + 1.7, building.z);
+    addMapButton(floorRow, floorName, 'floor-action', floorPosition, building.side, `${building.name}, ${floorName}`);
+    const windows = building.windows.filter((window) => window.floor === floor);
+    for (const window of windows) {
+      const label = `${floorName}, window ${window.index}`;
+      addMapButton(floorRow, `Window ${window.index}`, 'window-action', window.position, building.side, `${building.name}, ${label}`);
+    }
+    details.append(floorRow);
+  }
+  card.append(details);
+  buildingList.append(card);
+}
+
+function openCityMap() {
+  state.mapOpen = true;
+  document.exitPointerLock?.();
+  cityMap.classList.add('open');
+  cityMap.setAttribute('aria-hidden', 'false');
+  mapToggle.setAttribute('aria-expanded', 'true');
+}
+
+function closeCityMap() {
+  state.mapOpen = false;
+  cityMap.classList.remove('open');
+  cityMap.setAttribute('aria-hidden', 'true');
+  mapToggle.setAttribute('aria-expanded', 'false');
+}
+
+mapToggle.addEventListener('click', () => state.mapOpen ? closeCityMap() : openCityMap());
+document.querySelector('#mapClose').addEventListener('click', closeCityMap);
+cityMap.addEventListener('click', (event) => {
+  if (event.target === cityMap) closeCityMap();
+});
+document.addEventListener('keydown', (event) => {
+  if (event.code === 'Escape' && state.mapOpen) closeCityMap();
+});
 
 const lifeNodes = [
   { key: 'home', name: 'Home', color: 0x70f0d7, position: new THREE.Vector3(-12, 1.8, -24), radius: 3.2 },
@@ -346,7 +472,7 @@ function currentRoom() {
 }
 
 function interact() {
-  if (!state.started || state.interactCooldown > 0) {
+  if (!state.started || state.mapOpen || state.interactCooldown > 0) {
     return;
   }
 
@@ -439,6 +565,9 @@ document.addEventListener('keydown', (event) => {
   if (event.code === 'KeyE') {
     interact();
   }
+  if (event.code === 'KeyM') {
+    state.mapOpen ? closeCityMap() : openCityMap();
+  }
   if (event.code === 'Escape' && state.started) {
     document.exitPointerLock?.();
   }
@@ -494,7 +623,7 @@ document.querySelector('#touchFire').addEventListener('pointerdown', (event) => 
 function update(dt) {
   state.interactCooldown = Math.max(0, state.interactCooldown - dt);
 
-  if (state.started) {
+  if (state.started && !state.mapOpen) {
     const move = new THREE.Vector3();
     if (keys.has('KeyW') || keys.has('ArrowUp')) move.z -= 1;
     if (keys.has('KeyS') || keys.has('ArrowDown')) move.z += 1;
@@ -508,8 +637,8 @@ function update(dt) {
 
     camera.position.addScaledVector(forward, -move.z * speed * dt);
     camera.position.addScaledVector(right, move.x * speed * dt);
-    camera.position.x = clamp(camera.position.x, -30, 30);
-    camera.position.z = clamp(camera.position.z, -96, 38);
+    camera.position.x = clamp(camera.position.x, -40, 40);
+    camera.position.z = clamp(camera.position.z, -96, 74);
 
     state.energy = clamp(state.energy - dt * 1.8, 0, 100);
     state.hunger = clamp(state.hunger - dt * 2.2, 0, 100);
