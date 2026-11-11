@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#101813"><title>Living World — A world that remembers</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=DM+Sans:wght@400;500;600;700&family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="app-shell">
+  <header class="topbar">
+    <a class="brand" href="#" aria-label="Living World home"><span class="brand-mark">◉</span><span>LIVING<span class="brand-light">WORLD</span></span></a>
+    <div class="world-title"><span class="eyebrow">A WORLD THAT REMEMBERS</span><strong id="worldName">The Vale of Aster</strong></div>
+    <div class="top-actions"><span class="save-state"><i></i><span id="saveStatus">WORLD SAVED</span></span><button class="icon-btn" id="soundBtn" title="Sound off" aria-label="Toggle sound">♫</button><button class="icon-btn" id="resetBtn" title="Start a new world" aria-label="Start a new world">↻</button><button class="avatar" id="playerBtn" title="Choose your perspective">A</button></div>
+  </header>
+  <main class="workspace">
+    <aside class="rail"><div class="rail-group"><span class="rail-label">WORLD</span><button class="rail-btn active" data-view="world" title="World"><span>⌂</span><small>World</small></button><button class="rail-btn" data-view="people" title="People"><span>♙</span><small>People</small></button><button class="rail-btn" data-view="society" title="Society"><span>◇</span><small>Society</small></button><button class="rail-btn" data-view="economy" title="Economy"><span>⌁</span><small>Economy</small></button><button class="rail-btn" data-view="history" title="Chronicle"><span>◷</span><small>Chronicle</small></button></div><div class="rail-bottom"><span class="season-dot"></span><small>SIM<br>ONLINE</small></div></aside>
+    <section class="main-column">
+      <div class="datebar"><div><span class="eyebrow">LOCAL CALENDAR</span><strong id="dateLabel">Day 01 · Spring, Year 1</strong></div><div class="date-controls"><button id="stepBack" class="step-btn" title="Advance one day">−</button><button id="playBtn" class="play-btn"><span id="playIcon">Ⅱ</span><span id="playText">PAUSE</span></button><button id="stepForward" class="step-btn" title="Advance one day">+</button><span class="control-divider"></span><button class="speed-btn" data-speed="1">1×</button><button class="speed-btn" data-speed="3">3×</button><button class="speed-btn" data-speed="8">8×</button></div></div>
+      <div class="content-view" id="contentView"></div>
+    </section>
+    <aside class="inspector" id="inspector"></aside>
+  </main>
+  <footer class="statusbar"><span><i class="live-dot"></i> <b>SIMULATION RUNNING</b></span><span id="footerPopulation">—</span><span class="footer-center" id="footerNotice">Every life leaves a trace.</span><button id="helpBtn">HOW THIS WORLD WORKS <span>↗</span></button></footer>
+</div>
+<div class="toast" id="toast"></div>
+<div class="modal-backdrop hidden" id="modal"><div class="modal-card" id="modalContent"></div></div>
+<script src="game.js"></script>
+</body></html>
