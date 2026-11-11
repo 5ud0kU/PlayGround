@@ -227,11 +227,18 @@ export class World {
     this.time = 0
     this.shakeAmt = 0
     this.pointer = { down: false, x: 0, y: 0, moved: 0 }
-    // Drag-to-pan camera state.
+    // First-person floating camera state.
+    this.heading = 0        // yaw around Y (0 = looking toward +Z)
+    this.pitch = -0.22      // slight downward look
+    this.eyeHeight = 1.7    // floating camera height above ground
     this.pan = { x: 0, z: 0, targetX: 0, targetZ: 0 }
     this.zoom = 11
     this.targetY = 1.35
     this.autoRotate = false
+    this.touchPoints = new Map()   // pointerId -> {lx, ly, sx, sy, moved}
+    this.touchGesture = null       // 'look' | 'pinch'
+    this.pinchDist0 = 0
+    this.pinchHeight0 = 0
     this.raycaster = new THREE.Raycaster()
     this.ndc = new THREE.Vector2()
 
@@ -543,6 +550,10 @@ export class World {
       this.arenaGlow.intensity = 0
       this.pan.targetX = 0
       this.pan.targetZ = 0
+      this.pan.x = 0
+      this.pan.z = 0
+      this.heading = 0
+      this.eyeHeight = 1.7
     } else {
       this.habitat.visible = false
       this.arena.visible = true
@@ -761,6 +772,19 @@ export class World {
 
   bindPointer() {
     const el = this.renderer.domElement
+    const syncTouchGesture = () => {
+      const n = this.touchPoints.size
+      this.touchGesture = null
+      if (n === 1) { this.touchGesture = 'look' }
+      else if (n >= 2) {
+        this.touchGesture = 'pinch'
+        const ids = [...this.touchPoints.keys()]
+        const a = this.touchPoints.get(ids[0])
+        const b = this.touchPoints.get(ids[1])
+        this.pinchDist0 = Math.hypot(b.lx - a.lx, b.ly - a.ly)
+        this.pinchHeight0 = this.eyeHeight
+      }
+    }
     const down = e => {
       this.pointer.down = true
       this.pointer.moved = 0
@@ -769,6 +793,8 @@ export class World {
       this.pointer.lx = e.clientX
       this.pointer.ly = e.clientY
       this.autoRotate = false
+      this.touchPoints.set(e.pointerId, { lx: e.clientX, ly: e.clientY, sx: e.clientX, sy: e.clientY, moved: 0 })
+      syncTouchGesture()
       el.setPointerCapture?.(e.pointerId)
     }
     const move = e => {
@@ -778,23 +804,65 @@ export class World {
       this.pointer.moved += Math.abs(dx) + Math.abs(dy)
       this.pointer.lx = e.clientX
       this.pointer.ly = e.clientY
-      // Drag pans the camera target across the habitat map.
-      const scale = this.zoom * 0.002
-      this.pan.targetX -= dx * scale
-      this.pan.targetZ += dy * scale
+      const tp = this.touchPoints.get(e.pointerId)
+      let pdx = 0, pdy = 0
+      if (tp) {
+        pdx = e.clientX - tp.lx
+        pdy = e.clientY - tp.ly
+        tp.lx = e.clientX
+        tp.ly = e.clientY
+        tp.moved += Math.abs(pdx) + Math.abs(pdy)
+      }
+      syncTouchGesture()
+      if (e.pointerType !== 'touch') {
+        // Mouse: pan the floating camera target across the map (desktop).
+        const scale = this.zoom * 0.002
+        this.pan.targetX -= dx * scale
+        this.pan.targetZ += dy * scale
+      } else if (this.touchGesture === 'look' && this.touchPoints.size === 1) {
+        // One finger: rotate heading horizontally, move forward/back along heading.
+        this.heading += pdx * 0.002
+        const moveDist = -pdy * 0.0025
+        const hx = Math.sin(this.heading)
+        const hz = Math.cos(this.heading)
+        this.pan.x += hx * moveDist
+        this.pan.z += hz * moveDist
+        this.pan.targetX = this.pan.x
+        this.pan.targetZ = this.pan.z
+        const limit = 52
+        this.pan.x = clamp(this.pan.x, -limit, limit)
+        this.pan.z = clamp(this.pan.z, -limit, limit)
+      } else if (this.touchGesture === 'pinch' && this.touchPoints.size >= 2) {
+        // Two fingers: float the camera up / down.
+        const ids = [...this.touchPoints.keys()]
+        const a = this.touchPoints.get(ids[0])
+        const b = this.touchPoints.get(ids[1])
+        const d = Math.hypot(b.lx - a.lx, b.ly - a.ly)
+        if (d > 0 && this.pinchDist0 > 0) {
+          this.eyeHeight = clamp(this.pinchHeight0 * d / this.pinchDist0, 0.8, 8)
+          this.pinchDist0 = d
+          this.pinchHeight0 = this.eyeHeight
+        }
+      }
     }
     const up = e => {
       if (!this.pointer.down) return
       this.pointer.down = false
+      this.touchPoints.delete(e.pointerId)
       if (this.pointer.moved < 8) this.pickAt(e.clientX, e.clientY)
+      syncTouchGesture()
     }
     el.addEventListener('pointerdown', down)
     el.addEventListener('pointermove', move)
     el.addEventListener('pointerup', up)
-    el.addEventListener('pointercancel', () => { this.pointer.down = false })
+    el.addEventListener('pointercancel', e => {
+      this.touchPoints.delete(e.pointerId)
+      this.pointer.down = false
+      syncTouchGesture()
+    })
     el.addEventListener('wheel', e => {
       e.preventDefault()
-      this.zoom = Math.max(5, Math.min(25, this.zoom + e.deltaY * 0.005))
+      this.eyeHeight = clamp(this.eyeHeight - e.deltaY * 0.005, 0.8, 8)
     }, { passive: false })
   }
 
@@ -841,9 +909,13 @@ export class World {
       const pan = this.pan
       pan.x += (pan.targetX - pan.x) * 0.1
       pan.z += (pan.targetZ - pan.z) * 0.1
-      const camY = this.targetY + this.zoom * 0.55
-      this.camera.position.lerp(new THREE.Vector3(pan.x, camY, pan.z), 0.1)
-      this.camera.lookAt(pan.x, this.targetY, pan.z)
+      // First-person floating camera: eye at pan.x/z, floats at eyeHeight,
+      // looks along the current heading with a slight downward pitch.
+      const hx = Math.sin(this.heading)
+      const hz = Math.cos(this.heading)
+      const lookY = this.eyeHeight + Math.sin(this.pitch) * 6
+      this.camera.position.lerp(new THREE.Vector3(pan.x, this.eyeHeight, pan.z), 0.1)
+      this.camera.lookAt(pan.x + hx * 6, lookY, pan.z + hz * 6)
     } else {
       const orbit = this.orbit
       if (this.autoRotate && this.mode === 'habitat') {
