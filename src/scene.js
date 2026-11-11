@@ -344,30 +344,32 @@ export class World {
     under.receiveShadow = true
     g.add(under)
 
-    // Biome patches: circular regions with distinct ground color, flora & resources.
-    const patchCount = 24
-    for (let i = 0; i < patchCount; i++) {
-      const a = Math.random() * Math.PI * 2
-      const r = 8 + Math.random() * 40
-      const x = Math.cos(a) * r
-      const z = Math.sin(a) * r
-      const biome = biomeAt(x, z)
-      this.biomes.push({ x, z, biome, radius: 6 + Math.random() * 8 })
+    // Fixed medium map: one biome patch of each type, placed at the vertices
+    // of a polygon around the centre of the habitat.
+    const ringRadius = 26
+    const patchRadius = 7
+    this.biomeDiscs = []
+    BIOMES.forEach((biome, i) => {
+      const a = (i / BIOMES.length) * Math.PI * 2
+      const x = Math.cos(a) * ringRadius
+      const z = Math.sin(a) * ringRadius
+      const disc = { x, z, radius: patchRadius, biome }
+      this.biomeDiscs.push(disc)
 
       // Biome ground disc.
-      const disc = new THREE.Mesh(
-        new THREE.CircleGeometry(this.biomes[i].radius, 24),
+      const mesh = new THREE.Mesh(
+        new THREE.CircleGeometry(patchRadius, 24),
         new THREE.MeshStandardMaterial({ color: biome.ground, roughness: 0.9, metalness: 0 })
       )
-      disc.rotation.x = -Math.PI / 2
-      disc.position.set(x, 0.02, z)
-      g.add(disc)
+      mesh.rotation.x = -Math.PI / 2
+      mesh.position.set(x, 0.02, z)
+      g.add(mesh)
 
       // Biome-appropriate flora.
       const floraCount = 3 + Math.floor(Math.random() * 4)
       for (let j = 0; j < floraCount; j++) {
         const fa = Math.random() * Math.PI * 2
-        const fr = Math.random() * (this.biomes[i].radius * 0.8)
+        const fr = Math.random() * (patchRadius * 0.8)
         const fx = x + Math.cos(fa) * fr
         const fz = z + Math.sin(fa) * fr
         if (biome.key === 'forest' || biome.key === 'jungle') {
@@ -385,13 +387,13 @@ export class World {
       const resCount = 2 + Math.floor(Math.random() * 3)
       for (let j = 0; j < resCount; j++) {
         const ra = Math.random() * Math.PI * 2
-        const rr = Math.random() * (this.biomes[i].radius * 0.7)
+        const rr = Math.random() * (patchRadius * 0.7)
         const rx = x + Math.cos(ra) * rr
         const rz = z + Math.sin(ra) * rr
         const type = biome.resources[Math.floor(Math.random() * biome.resources.length)]
         this.addResourceNode(rx, rz, type, biome)
       }
-    }
+    })
 
     // distant moon
     const moon = new THREE.Mesh(new THREE.SphereGeometry(3.2, 24, 16), new THREE.MeshBasicMaterial({ color: '#cfe9d3' }))
@@ -462,6 +464,13 @@ export class World {
   }
 
   getBiomeAt(x, z) {
+    // Prefer the visual biome patch under the point (fixed polygon map).
+    let best = null, bestD = 1e9
+    for (const d of this.biomeDiscs) {
+      const dd = Math.hypot(d.x - x, d.z - z)
+      if (dd < d.radius && dd < bestD) { bestD = dd; best = d.biome }
+    }
+    if (best) return best
     return biomeAt(x, z)
   }
 
