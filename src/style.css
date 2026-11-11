@@ -19,6 +19,30 @@
 .archive-modal-actions{padding-top:12px;border-top:1px solid #344235;flex-wrap:wrap}.archive-gene-group{margin:12px 0 0}.archive-gene-group h3{margin:0;padding:8px 0;border-bottom:1px solid #344235;color:#a8bd83;font:9px var(--mono);letter-spacing:1px}.archive-gene-row{display:grid;grid-template-columns:minmax(130px,1fr) 82px 82px;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid #29362e}.archive-gene-row label{font-size:10px;color:#cbd5c8}.archive-gene-row input{width:100%;padding:6px 7px;border:1px solid #3b493d;border-radius:4px;background:#101813;color:#e9eee5;font:10px var(--mono)}.archive-editor-scroll{min-height:0;overflow:auto;margin-top:8px;padding-right:8px}.modal:has(.archive-editor-scroll) .field-label{margin-top:10px}.modal:has(.archive-editor-scroll)>p{margin:8px 0 0}.modal:has(.archive-editor-scroll) .modal-actions{padding-top:12px;border-top:1px solid #344235}
 @media(max-width:650px){.modal:has(.archive-list),.modal:has(.archive-editor-scroll){max-height:calc(100vh - 24px);padding:20px 16px}.archive-card{grid-template-columns:34px minmax(0,1fr);gap:8px;padding:8px}.archive-swatch{width:32px;height:32px}.archive-actions{grid-column:2;justify-content:flex-start}.archive-actions .text-action{padding:5px 7px}.archive-gene-row{grid-template-columns:minmax(90px,1fr) 65px 65px;gap:5px}.archive-modal-actions{justify-content:stretch}.archive-modal-actions button{flex:1;padding:10px 7px;font-size:8px}}
 
+/* Discovery: graphic adaptation picker */
+.discover-bar{display:flex;align-items:center;justify-content:space-between;gap:10px;margin:10px 0 6px;padding:10px 12px;border:1px solid #344235;border-radius:7px;background:#151f18;font:8px var(--mono);letter-spacing:.6px}
+.discover-bar>span{color:#cbd5c8}
+.discover-cost{color:var(--lime);font-weight:700}
+.discover-reward{color:#a8bd83}
+.discover-pick{color:#ff8a7a;font-weight:700}
+.adapt-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:8px;margin:6px 0 4px}
+.adapt-card{display:grid;grid-template-columns:44px 1fr 34px;align-items:center;gap:8px;padding:10px;border:1px solid #29362e;border-radius:7px;background:#151f18;cursor:pointer;transition:border-color .15s,box-shadow .15s,background .15s}
+.adapt-card:hover{border-color:#536447;box-shadow:0 0 0 1px #536447}
+.adapt-card.selected{border-color:var(--lime);box-shadow:0 0 14px var(--lime)22;background:#1a281b}
+.adapt-card input{appearance:none;margin:0;width:0;height:0;opacity:0;pointer-events:none}
+.adapt-face{position:relative;width:40px;height:40px;border:1px solid #3b493d;border-radius:10px;background:#0e1612;display:grid;place-items:center;overflow:hidden}
+.adapt-ring{position:absolute;inset:-2px;border:2px solid transparent;border-radius:12px;opacity:0;transition:opacity .15s,border-color .15s}
+.adapt-card.selected .adapt-ring{opacity:1;border-color:var(--lime);box-shadow:0 0 10px var(--lime)66}
+.adapt-glyph{font-size:19px;line-height:1;filter:drop-shadow(0 1px 1px #0004)}
+.adapt-copy{display:flex;flex-direction:column;gap:2px;min-width:0}
+.adapt-copy>b{font-size:10px;color:#e5eddf;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.adapt-copy>small{font-size:7px;color:#8f9e8d;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.adapt-copy>em{font-size:6px;font-style:normal;color:#6b7a6d;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;line-height:1.3}
+.adapt-part{font:7px var(--mono);letter-spacing:.4px;color:#a6c970;text-align:right;white-space:nowrap}
+.adapt-mark{display:none;place-items:center;width:26px;height:26px;border-radius:8px;background:var(--lime);color:#0b1411;font-weight:800;font-size:12px}
+.adapt-card.selected .adapt-mark{display:grid}
+.discover-hint{margin:8px 0 2px;color:#829086;font-size:8px;line-height:1.5}
+@media(max-width:650px){.adapt-grid{grid-template-columns:1fr 1fr}.adapt-card{padding:8px}.adapt-copy>b{font-size:9px}}
 /* DNA forge and live research contracts */
 .forge-preview{display:grid;grid-template-columns:38px minmax(0,1fr) auto;align-items:center;gap:11px;margin:12px 0;padding:11px 12px;border:1px solid #3b4c38;border-radius:7px;background:linear-gradient(110deg,#1b2a1e,#141d18)}
 .forge-preview>i{width:36px;height:36px;border:1px solid #708451;border-radius:50%;background:radial-gradient(circle at 34% 30%,color-mix(in srgb,var(--creature-color),white 32%),var(--creature-color));box-shadow:inset -6px -5px 12px #0005,0 0 16px color-mix(in srgb,var(--creature-color),transparent 65%);position:relative}

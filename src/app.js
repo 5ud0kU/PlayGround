@@ -159,10 +159,22 @@ function playerDialog() {
 function guideDialog() {
   showModal(`<button class="modal-close" data-action="close" aria-label="Close guide">×</button><div class="eyebrow">FIELD MANUAL · HELIX FORGE</div><h2>How to play</h2><p>Raise a living collection, shape its inherited traits, and put your designs to the test.</p><div class="guide-grid"><article><span>◈</span><div><b>Sanctuary & care</b><p>Select a creature to read its dossier. Feed with nectar, play to lift enrichment, and rest to restore energy. Needs slowly change while you are in the habitat.</p></div></article><article><span>✧</span><div><b>Discover specimens</b><p>Spend 60 shards to search the Hollow. Pick up to three adaptations to guarantee visible features in your new creature; each discovery also brings 4 nectar.</p></div></article><article><span>♧</span><div><b>Breed a lineage</b><p>Choose two creatures to combine their DNA. Offspring inherit a new genome, may mutate, and gain a generation number.</p></div></article><article><span>⚔</span><div><b>Enter the Crucible</b><p>Choose an opponent and use DNA-shaped abilities. Manage stamina: defending recovers it, while stronger attacks cost more. Victories award shards and XP.</p></div></article><article><span>▤</span><div><b>Archive & forge DNA</b><p>Save an independent copy from the DNA Archive. Edit both alleles in the Forge; the live preview updates as you tune traits. Saving a design never changes its source creature.</p></div></article><article><span>✦</span><div><b>Research contracts</b><p>Meet the paired trait targets shown on a forged record, then save it to claim that record’s one-time shard and XP rewards. Hatch any archived sequence as a separate creature.</p></div></article><article><span>◎</span><div><b>Grow your profile</b><p>Earn XP through battles, breeding, discovery, archives, contracts, hatching, and creature care. Your level has no cap; the XP needed rises gradually each level.</p></div></article></div><div class="modal-actions"><button class="primary-btn" data-action="close">GOT IT — LET’S PLAY</button></div>`)
 }
+const ADAPT_PART = {
+  antlers: '♧ Crown of bone',
+  fins: '≋ Dorsal sail',
+  gills: '❋ Frilled cheek fans',
+  antennae: '⌁ Sensory feelers',
+  carapace: '⬡ Glossy shell',
+  pincers: '⚯ Grasping claws',
+  tusks: '🦷 Protruding teeth',
+  mane: '🌊 Furred neck crest',
+  biolum: '✨ Glowing markings',
+}
+
 function discover() {
   if(mode==='arena')return toast('Return to the Hollow before discovering a creature.')
   if(game.coins<60)return toast('You need 60 shards to discover a creature.')
-  showModal(`<button class="modal-close" data-action="close" aria-label="Close discovery">×</button><div class="eyebrow">VERDANT HOLLOW · FIELD FIND</div><h2>Shape a new foundling</h2><p>Choose up to three adaptations to guarantee in this creature’s DNA. Every pick grows into a visible body part.</p><div class="adapt-grid">${ADAPTATIONS.map(a=>`<label class="adapt-option"><input type="checkbox" name="adaptation" value="${a.key}"><span class="adapt-icon">${a.icon}</span><span class="adapt-copy"><b>${a.name}</b><small>${a.source}</small><em>${a.note}</em></span><i class="adapt-check">＋</i></label>`).join('')}</div><div class="adapt-footer"><span id="adapt-count">0 / 3 SELECTED</span><small>60 ✧ · +4 NECTAR</small></div><div class="modal-actions"><button class="secondary-btn" data-action="close">CANCEL</button><button class="primary-btn" data-action="discover-confirm">SEARCH THE HOLLOW ↗</button></div>`)
+  showModal(`<button class="modal-close" data-action="close" aria-label="Close discovery">×</button><div class="eyebrow">VERDANT HOLLOW · FIELD FIND</div><h2>Shape a new foundling</h2><p>Choose up to three adaptations to guarantee in this creature’s DNA. Every pick grows into a visible body part.</p><div class="discover-bar"><span class="discover-cost">60 ✧</span><span class="discover-reward">+4 NECTAR</span><span id="adapt-count" class="discover-pick">0 / 3 chosen</span></div><div class="adapt-grid">${ADAPTATIONS.map(a=>`<label class="adapt-card"><input type="checkbox" name="adaptation" value="${a.key}"><div class="adapt-face"><div class="adapt-ring"></div><span class="adapt-glyph">${a.icon}</span></div><div class="adapt-copy"><b>${esc(a.name)}</b><small>${esc(a.source)}</small><em>${esc(a.note)}</em></div><span class="adapt-part">${ADAPT_PART[a.key]}</span><i class="adapt-mark">✓</i></label>`).join('')}</div><div class="discover-hint">Pick adaptations that suit the niche you want to fill. Unpicked traits stay dormant in the wild genome.</div><div class="modal-actions"><button class="secondary-btn" data-action="close">CANCEL</button><button class="primary-btn" data-action="discover-confirm" disabled>SEARCH THE HOLLOW ↗</button></div>`)
 }
 function discoverConfirm() {
   if(mode==='arena')return toast('Return to the Hollow before discovering a creature.')
@@ -493,9 +505,14 @@ document.addEventListener('input', e => {
 document.addEventListener('change',e=>{
   const input=e.target.closest('input[name="adaptation"]')
   if(!input)return
+  const card=input.closest('.adapt-card')
   const checked=[...document.querySelectorAll('input[name="adaptation"]:checked')]
-  if(checked.length>3){input.checked=false;toast('Choose up to three adaptations.')}
-  $('#adapt-count').textContent=`${document.querySelectorAll('input[name="adaptation"]:checked').length} / 3 SELECTED`
+  if(checked.length>3){input.checked=false;card?.classList.remove('selected');toast('Choose up to three adaptations.')}
+  card?.classList.toggle('selected', input.checked)
+  const n=document.querySelectorAll('input[name="adaptation"]:checked').length
+  $('#adapt-count').textContent=`${n} / 3 chosen`
+  const confirm=$('[data-action="discover-confirm"]')
+  if(confirm)confirm.disabled=n===0
 })
 document.addEventListener('click',e=>{
   const actionTarget=e.target.closest('[data-action]')
