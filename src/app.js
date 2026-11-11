@@ -179,7 +179,8 @@ function discover() {
 function discoverConfirm() {
   if(mode==='arena')return toast('Return to the Hollow before discovering a creature.')
   if(game.coins<60)return toast('You need 60 shards to discover a creature.')
-  const selectedTraits=[...document.querySelectorAll('input[name="adaptation"]:checked')].map(input=>input.value).filter(key=>ADAPTATIONS.some(a=>a.key===key)).slice(0,3)
+  const selectedTraits=[...document.querySelectorAll('#modal input[name="adaptation"]:checked')].map(input=>input.value).filter(key=>ADAPTATIONS.some(a=>a.key===key)).slice(0,3)
+  if(selectedTraits.length===0)return toast('Choose at least one adaptation.')
   game.coins-=60
   game.food+=4
   const c=generateWild()
@@ -509,9 +510,9 @@ document.addEventListener('change',e=>{
   const checked=[...document.querySelectorAll('input[name="adaptation"]:checked')]
   if(checked.length>3){input.checked=false;card?.classList.remove('selected');toast('Choose up to three adaptations.')}
   card?.classList.toggle('selected', input.checked)
-  const n=document.querySelectorAll('input[name="adaptation"]:checked').length
+  const n=document.querySelectorAll('#modal input[name="adaptation"]:checked').length
   $('#adapt-count').textContent=`${n} / 3 chosen`
-  const confirm=$('[data-action="discover-confirm"]')
+  const confirm=$('#modal [data-action="discover-confirm"]')
   if(confirm)confirm.disabled=n===0
 })
 document.addEventListener('click',e=>{
