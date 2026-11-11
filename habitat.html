@@ -8,8 +8,9 @@
   * { box-sizing: border-box; margin: 0; padding: 0; }
   html, body { width: 100%; height: 100%; background: #0b1620; color: #e8f2ea;
     font-family: system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, sans-serif;
-    overflow: hidden; }
-  #canvas { display: block; cursor: grab; background: #0b1620; width: 100%; height: 100%; }
+    overflow: hidden; touch-action: none; }
+  #canvas { display: block; cursor: grab; background: #0b1620; width: 100%; height: 100%;
+    touch-action: none; }
   #canvas:active { cursor: grabbing; }
   #ui { position: absolute; top: 14px; left: 14px; width: 320px; pointer-events: none;
     user-select: none; }
@@ -279,25 +280,66 @@ function screenX(wx) { return (wx - cam.x) * cam.zoom; }
 function screenY(wy) { return (wy - cam.y) * cam.zoom; }
 
 /* Interaction */
-let dragging = false, lastSx, lastSy, dragStartSx, dragStartSy;
-canvas.addEventListener('mousedown', e => {
+let dragging = false, lastSx, lastSy, dragStartSx, dragStartSy, touchId = null;
+
+function pointerDown(sx, sy) {
   dragging = true;
-  lastSx = dragStartSx = e.clientX;
-  lastSy = dragStartSy = e.clientY;
-});
-window.addEventListener('mousemove', e => {
-  const dx = e.clientX - lastSx, dy = e.clientY - lastSy;
-  lastSx = e.clientX; lastSy = e.clientY;
+  lastSx = dragStartSx = sx;
+  lastSy = dragStartSy = sy;
+}
+function pointerMove(sx, sy) {
+  const dx = sx - lastSx, dy = sy - lastSy;
+  lastSx = sx; lastSy = sy;
   if (dragging) {
     cam.x -= dx / cam.zoom;
     cam.y -= dy / cam.zoom;
     clampCam();
   }
-});
-window.addEventListener('mouseup', () => { dragging = false; });
-canvas.addEventListener('click', e => {
-  if (Math.abs(e.clientX - dragStartSx) < 8 && Math.abs(e.clientY - dragStartSy) < 8) {
-    selectCreatureAt(e.clientX, e.clientY);
+}
+function pointerUp() { dragging = false; }
+function pointerClick(sx, sy) {
+  if (Math.abs(sx - dragStartSx) < 10 && Math.abs(sy - dragStartSy) < 10) {
+    selectCreatureAt(sx, sy);
+  }
+}
+
+// Mouse
+canvas.addEventListener('mousedown', e => pointerDown(e.clientX, e.clientY));
+window.addEventListener('mousemove', e => pointerMove(e.clientX, e.clientY));
+window.addEventListener('mouseup', pointerUp);
+canvas.addEventListener('click', e => pointerClick(e.clientX, e.clientY));
+
+// Touch (pan with one finger, tap to inspect)
+canvas.addEventListener('touchstart', e => {
+  if (e.touches.length === 1) {
+    const t = e.touches[0];
+    touchId = t.identifier;
+    pointerDown(t.clientX, t.clientY);
+    e.preventDefault();
+  }
+}, { passive: false });
+canvas.addEventListener('touchmove', e => {
+  for (const t of e.changedTouches) {
+    if (t.identifier === touchId) {
+      pointerMove(t.clientX, t.clientY);
+      e.preventDefault();
+      break;
+    }
+  }
+}, { passive: false });
+canvas.addEventListener('touchend', e => {
+  for (const t of e.changedTouches) {
+    if (t.identifier === touchId) {
+      pointerUp();
+      pointerClick(t.clientX, t.clientY);
+      touchId = null;
+      break;
+    }
+  }
+}, { passive: false });
+canvas.addEventListener('touchcancel', e => {
+  for (const t of e.changedTouches) {
+    if (t.identifier === touchId) { pointerUp(); touchId = null; break; }
   }
 });
 window.addEventListener('wheel', e => {
