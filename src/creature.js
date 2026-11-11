@@ -1,8 +1,8 @@
 import * as THREE from 'three'
 import { phenotype } from './dna.js'
 
-// Proportional templates for twenty sculptural families. Each has ten
-// DNA-derived variants with subtly different proportions (200 total forms).
+// Proportional templates for thirty sculptural families. Each has ten
+// DNA-derived variants with subtly different proportions (300 total forms).
 const MORPHOLOGY_SHAPES = [
   { width: 0.94, height: 0.94, length: 1.16, head: 0.96, neck: 0.96, legs: 1.16, tail: 1.06 },
   { width: 1.18, height: 1.16, length: 0.92, head: 1.08, neck: 0.84, legs: 0.9, tail: 0.84 },
@@ -26,6 +26,18 @@ const MORPHOLOGY_SHAPES = [
   { width: 0.9, height: 0.9, length: 1.3, head: 0.88, neck: 0.82, legs: 0.88, tail: 1.24 },
   { width: 0.86, height: 1.16, length: 0.96, head: 1.28, neck: 1.3, legs: 0.92, tail: 0.9 },
   { width: 1.3, height: 1.18, length: 1.08, head: 1.12, neck: 0.88, legs: 0.84, tail: 0.96 },
+  // Ten further morphologies: hollow-boned, iron-plated, swift-winged, glimmer-finned,
+  // deep-gilled, wild-tusked, frost-jawed, thorn-shelled, bright-crested, and nightshrieked.
+  { width: 0.82, height: 0.9, length: 1.14, head: 0.88, neck: 1.08, legs: 1.08, tail: 0.9 },
+  { width: 1.22, height: 0.92, length: 1.0, head: 0.94, neck: 0.84, legs: 0.8, tail: 0.94 },
+  { width: 0.8, height: 0.86, length: 1.18, head: 0.92, neck: 0.94, legs: 1.04, tail: 1.12 },
+  { width: 0.78, height: 0.84, length: 1.24, head: 0.9, neck: 0.84, legs: 0.78, tail: 1.26 },
+  { width: 1.04, height: 1.0, length: 0.96, head: 1.14, neck: 0.9, legs: 0.88, tail: 0.92 },
+  { width: 1.1, height: 1.08, length: 1.0, head: 1.32, neck: 0.9, legs: 0.9, tail: 0.84 },
+  { width: 1.0, height: 0.84, length: 1.16, head: 1.12, neck: 0.78, legs: 0.86, tail: 0.9 },
+  { width: 1.26, height: 1.1, length: 0.92, head: 0.92, neck: 0.82, legs: 0.8, tail: 0.88 },
+  { width: 0.9, height: 1.22, length: 1.0, head: 0.94, neck: 1.12, legs: 0.94, tail: 1.0 },
+  { width: 0.86, height: 1.02, length: 1.08, head: 0.98, neck: 0.98, legs: 0.9, tail: 1.04 },
 ]
 
 // ─── materials & procedural coat texture ───────────────────────────────────
