@@ -114,9 +114,36 @@ button:focus-visible,input:focus-visible,select:focus-visible{outline-color:#38d
 @media(max-width:420px){.genome-summary{grid-template-columns:34px minmax(0,1fr) auto;gap:5px;padding:6px}.chromosome-art{width:33px;height:31px}.genome-summary>span{font-size:6px;padding:3px}.gene-visual{grid-template-columns:17px minmax(0,1fr);gap:4px}.gene-glyph{width:16px;height:16px;font-size:9px}.ability-graphic-card{grid-template-columns:23px minmax(0,1fr);padding:5px}.ability-graphic-card .move-icon{width:22px;height:22px;font-size:12px}.move-title-line>span{font-size:5px;padding:2px 3px}}
 @media(prefers-reduced-motion:reduce){.chromosome-locus,.ability-graphic-card{transition:none!important}}
 
+/* Mobile virtual joystick (touch habitats) */
+#joy-base {
+  position: absolute !important;
+  left: 16px !important;
+  bottom: 18px !important;
+  width: 92px !important;
+  height: 92px !important;
+  border-radius: 50% !important;
+  background: rgba(255,255,255,0.09) !important;
+  border: 1px solid rgba(255,255,255,0.22) !important;
+  pointer-events: none !important;
+  z-index: 6 !important;
+  filter: drop-shadow(0 0 8px rgba(0,0,0,0.45)) !important;
+  display: block !important;
+}
+#joy-stick {
+  position: absolute !important;
+  left: 50% !important;
+  top: 50% !important;
+  width: 52px !important;
+  height: 52px !important;
+  border-radius: 50% !important;
+  background: rgba(255,255,255,0.35) !important;
+  border: 1px solid rgba(255,255,255,0.55) !important;
+  transform: translate(-50%,-50%) !important;
+  filter: drop-shadow(0 0 6px rgba(216,255,95,0.35)) !important;
+}
+
 /* First-person crosshair */
-.crosshair {
-  position: absolute;
+.crosshair {  position: absolute;
   left: 50%;
   top: 50%;
   width: 20px;

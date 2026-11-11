@@ -231,7 +231,6 @@ export class World {
     this.player = {
       x: 0, y: 1.6, z: 3.5,
       yaw: 0, pitch: -0.25,
-      locked: false,
       speed: 5.5,
       bob: 0,
       keys: { w: false, s: false, a: false, d: false },
@@ -239,6 +238,11 @@ export class World {
     this.fov = 45
     this.crosshair = null
     this.hintEl = null
+    this.touch = {
+      mode: null,        // 'look' | 'joystick'
+      start: { x: 0, y: 0 },
+      joy: { cx: 0, cy: 0, dx: 0, dy: 0, active: false },
+    }
     // Drag-to-pan camera state (retained for reference).
     this.pan = { x: 0, z: 0, targetX: 0, targetZ: 0 }
     this.targetY = 1.35
@@ -267,6 +271,7 @@ export class World {
       this.crosshair = document.createElement('div')
       this.crosshair.className = 'crosshair'
       wrap.appendChild(this.crosshair)
+      this.buildJoystick(wrap)
       this.hintEl = wrap.querySelector('.camera-hint')
       this.updateHint()
     }
@@ -304,12 +309,8 @@ export class World {
     this.buildHabitat()
     this.buildArena()
     this.setMode('habitat', true)
-    this.bindPointer()
+    this.bindTouch()
     this.bindKeys()
-    document.addEventListener('pointerlockchange', () => {
-      this.player.locked = document.pointerLockElement === this.renderer.domElement
-      this.updateHint()
-    })
     this.resize()
     this.resizeObserver = new ResizeObserver(() => this.resize())
     this.resizeObserver.observe(this.container)
@@ -788,52 +789,118 @@ export class World {
     this.shakeAmt = Math.min(0.5, this.shakeAmt + amount)
   }
 
-  bindPointer() {
+  buildJoystick(wrap) {
+    const base = document.createElement('div')
+    const stick = document.createElement('div')
+    base.appendChild(stick)
+    wrap.appendChild(base)
+    Object.assign(base.style, {
+      position: 'absolute', left: '16px', bottom: '18px',
+      width: '92px', height: '92px', borderRadius: '50%',
+      background: 'rgba(255,255,255,0.09)', border: '1px solid rgba(255,255,255,0.22)',
+      pointerEvents: 'none', zIndex: '6',
+      filter: 'drop-shadow(0 0 8px rgba(0,0,0,0.45))',
+    })
+    Object.assign(stick.style, {
+      position: 'absolute', left: '50%', top: '50%', width: '52px', height: '52px',
+      borderRadius: '50%', background: 'rgba(255,255,255,0.35)', border: '1px solid rgba(255,255,255,0.55)',
+      transform: 'translate(-50%,-50%)',
+      filter: 'drop-shadow(0 0 6px rgba(216,255,95,0.35))',
+    })
+    this.joyBase = base
+    this.joyStick = stick
+  }
+
+  bindTouch() {
     const el = this.renderer.domElement
-    const sens = 0.002
-    const down = e => {
-      this.pointer.down = true
-      this.pointer.moved = 0
-      this.pointer.x = e.clientX
-      this.pointer.y = e.clientY
-      this.pointer.lx = e.clientX
-      this.pointer.ly = e.clientY
-      this.autoRotate = false
-      el.setPointerCapture?.(e.pointerId)
-    }
-    const move = e => {
-      if (!this.pointer.down) return
-      const dx = e.clientX - this.pointer.lx
-      const dy = e.clientY - this.pointer.ly
-      this.pointer.moved += Math.abs(dx) + Math.abs(dy)
-      this.pointer.lx = e.clientX
-      this.pointer.ly = e.clientY
-      if (this.player.locked) {
-        this.player.yaw += e.movementX * sens
-        this.player.pitch -= e.movementY * sens
+    const sens = 0.0026
+    const joyZone = 0.34
+    let activeId = null
+    let lookStart = { x: 0, y: 0 }
+    let lookMoved = 0
+    let touchStartTime = 0
+    let joyAnchor = { x: 0, y: 0 }
+
+    const start = (x, y, id) => {
+      activeId = id
+      touchStartTime = performance.now()
+      this.touch.start = { x, y }
+      lookMoved = 0
+      const isJoy = x < el.clientWidth * joyZone
+      this.touch.mode = isJoy ? 'joystick' : 'look'
+      if (isJoy) {
+        joyAnchor = { x, y }
+        this.touch.joy.active = true
+        this.touch.joy.dx = 0
+        this.touch.joy.dy = 0
+        this.updateJoystickVisual(x, y)
       } else {
-        this.player.yaw += dx * sens
-        this.player.pitch -= dy * sens
-      }
-      this.player.pitch = Math.max(-1.4, Math.min(1.4, this.player.pitch))
-    }
-    const up = e => {
-      if (!this.pointer.down) return
-      this.pointer.down = false
-      if (this.pointer.moved < 8) {
-        if (this.player.locked) this.pickCenter()
-        else el.requestPointerLock()
+        lookStart = { x, y }
       }
     }
-    el.addEventListener('pointerdown', down)
-    el.addEventListener('pointermove', move)
-    el.addEventListener('pointerup', up)
-    el.addEventListener('pointercancel', () => { this.pointer.down = false })
+
+    const move = (x, y) => {
+      if (this.touch.mode === 'joystick') {
+        const dx = (x - joyAnchor.x) / el.clientWidth
+        const dy = (y - joyAnchor.y) / el.clientHeight
+        const len = Math.hypot(dx, dy)
+        const cap = 0.30
+        const k = len > cap ? cap / len : 1
+        this.touch.joy.dx = dx * k
+        this.touch.joy.dy = dy * k
+        this.updateJoystickVisual(joyAnchor.x + dx * k * el.clientWidth, joyAnchor.y + dy * k * el.clientHeight)
+      } else {
+        lookMoved += Math.abs(x - lookStart.x) + Math.abs(y - lookStart.y)
+        this.player.yaw += (x - lookStart.x) * sens
+        this.player.pitch -= (y - lookStart.y) * sens
+        this.player.pitch = Math.max(-1.4, Math.min(1.4, this.player.pitch))
+        lookStart = { x, y }
+      }
+    }
+
+    const end = (id) => {
+      if (id !== activeId) return
+      if (this.touch.mode === 'look' && lookMoved < 14 && performance.now() - touchStartTime < 260) {
+        this.pickCenter()
+      }
+      if (this.touch.mode === 'joystick') {
+        this.touch.joy.active = false
+        this.touch.joy.dx = 0
+        this.touch.joy.dy = 0
+        this.updateJoystickVisual(joyAnchor.x, joyAnchor.y)
+      }
+      activeId = null
+      this.touch.mode = null
+    }
+
+    el.addEventListener('touchstart', e => {
+      e.preventDefault()
+      for (const t of e.changedTouches) start(t.clientX, t.clientY, t.identifier)
+    }, { passive: false })
+    el.addEventListener('touchmove', e => {
+      e.preventDefault()
+      for (const t of e.changedTouches) move(t.clientX, t.clientY)
+    }, { passive: false })
+    el.addEventListener('touchend', e => {
+      for (const t of e.changedTouches) end(t.identifier)
+    })
+    el.addEventListener('touchcancel', e => {
+      for (const t of e.changedTouches) end(t.identifier)
+    })
     el.addEventListener('wheel', e => {
       e.preventDefault()
       this.camera.fov = Math.max(30, Math.min(90, this.camera.fov - e.deltaY * 0.05))
       this.camera.updateProjectionMatrix()
     }, { passive: false })
+  }
+
+  updateJoystickVisual(cx, cy) {
+    if (!this.joyBase || !this.joyStick) return
+    this.joyBase.style.left = `${Math.round(cx - 46)}px`
+    this.joyBase.style.top = `${Math.round(cy - 46)}px`
+    this.joyBase.style.bottom = 'auto'
+    this.joyStick.style.left = '50%'
+    this.joyStick.style.top = '50%'
   }
 
   bindKeys() {
@@ -857,17 +924,24 @@ export class World {
 
   updatePlayer(dt) {
     const p = this.player
-    const spd = p.speed * dt
+    const j = this.touch.joy
     const yaw = p.yaw
     const fx = Math.sin(yaw), fz = -Math.cos(yaw)
     const rx = Math.cos(yaw), rz = Math.sin(yaw)
     let mx = 0, mz = 0
-    if (p.keys.w) { mx += fx; mz += fz }
-    if (p.keys.s) { mx -= fx; mz -= fz }
-    if (p.keys.d) { mx += rx; mz += rz }
-    if (p.keys.a) { mx -= rx; mz -= rz }
-    if (mx || mz) {
-      const len = Math.hypot(mx, mz)
+    const add = (ax, az) => { mx += ax; mz += az }
+    if (p.keys.w) add(fx, fz)
+    if (p.keys.s) add(-fx, -fz)
+    if (p.keys.d) add(rx, rz)
+    if (p.keys.a) add(-rx, -rz)
+    if (j.active) {
+      // Screen-space joystick: up = forward, down = back, right = strafe right.
+      add(-j.dy * fx + j.dx * rx, -j.dy * fz + j.dx * rz)
+    }
+    const len = Math.hypot(mx, mz)
+    if (len > 0) {
+      const strength = Math.min(len, 1)
+      const spd = p.speed * dt * strength
       mx = (mx / len) * spd
       mz = (mz / len) * spd
       const nx = p.x + mx, nz = p.z + mz
@@ -881,9 +955,7 @@ export class World {
 
   updateHint() {
     if (!this.hintEl) return
-    this.hintEl.innerHTML = this.player.locked
-      ? 'LOOK <b>·</b> WASD WALK <b>·</b> CLICK CREATURE TO INSPECT <b>·</b> ESC RELEASE'
-      : 'CLICK TO LOOK AROUND <b>·</b> WASD TO WALK'
+    this.hintEl.innerHTML = 'DRAG RIGHT SIDE TO LOOK <b>·</b> LEFT JOYSTICK TO WALK <b>·</b> TAP CREATURE TO INSPECT'
   }
 
   pickCenter() {
