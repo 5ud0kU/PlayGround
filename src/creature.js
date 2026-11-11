@@ -38,6 +38,10 @@ const MORPHOLOGY_SHAPES = [
   { width: 1.26, height: 1.1, length: 0.92, head: 0.92, neck: 0.82, legs: 0.8, tail: 0.88 },
   { width: 0.9, height: 1.22, length: 1.0, head: 0.94, neck: 1.12, legs: 0.94, tail: 1.0 },
   { width: 0.86, height: 1.02, length: 1.08, head: 0.98, neck: 0.98, legs: 0.9, tail: 1.04 },
+  // Mammal: rounded, compact, warm-blooded silhouette with a shorter tail.
+  { width: 1.1, height: 1.0, length: 0.9, head: 1.0, neck: 0.9, legs: 0.9, tail: 0.8 },
+  // Reptile: long, low-slung, cold-blooded silhouette with an elongated tail.
+  { width: 0.9, height: 0.8, length: 1.2, head: 1.0, neck: 0.7, legs: 0.7, tail: 1.4 },
 ]
 
 // ─── materials & procedural coat texture ───────────────────────────────────
@@ -344,6 +348,42 @@ export function buildCreature(genome, opts = {}) {
       addMesh(bodyGroup, new THREE.CapsuleGeometry(headScale * 0.075, len, 4, 6), mat(p.accentColor, { roughness: 0.6 }),
         [0, torsoRY * 0.55 - t * torsoRY * 0.4, -torsoRZ * 0.15],
         [-0.3 + t * 0.4, 0, 0], [1, 1, 1])
+    }
+  }
+  // Mammal traits: rounded ear tufts and a fluffy chest ruff when expressed.
+  if (p.mammifere > 0.3) {
+    const earLen = headScale * (0.3 + p.mammifere * 0.5)
+    for (const side of [-1, 1]) {
+      addMesh(headGroup, new THREE.CapsuleGeometry(headScale * 0.07, earLen, 4, 6), bodyMat,
+        [side * headScale * 0.62, headScale * 0.42, -headScale * 0.1],
+        [0, 0, side * -0.6], [1, 1, 1])
+      addMesh(headGroup, new THREE.SphereGeometry(headScale * 0.1, 8, 6), bodyMat,
+        [side * headScale * 0.72, headScale * 0.95, -headScale * 0.15])
+    }
+    const ruffCount = 2 + Math.floor(p.mammifere * 3)
+    for (let i = 0; i < ruffCount; i++) {
+      const t = i / (ruffCount - 1 || 1)
+      addMesh(bodyGroup, new THREE.CapsuleGeometry(headScale * 0.08, headScale * (0.35 + p.mammifere * 0.4) * (1 - t * 0.3), 4, 6), mat(p.accentColor, { roughness: 0.6 }),
+        [0, torsoRY * 0.5 - t * torsoRY * 0.25, torsoRZ * 0.1],
+        [-0.4 + t * 0.3, 0, 0], [1, 1, 1])
+    }
+  }
+  // Reptile traits: a dorsal scale ridge and slit pupils when expressed.
+  if (p.reptile > 0.3) {
+    const ridgeCount = 2 + Math.floor(p.reptile * 5)
+    for (let i = 0; i < ridgeCount; i++) {
+      const t = i / (ridgeCount - 1 || 1)
+      const h = headScale * (0.2 + p.reptile * 0.5) * (1 - t * 0.35)
+      addMesh(bodyGroup, new THREE.ConeGeometry(headScale * 0.12, h, 4), darkMat,
+        [0, torsoRY * 0.5 - t * torsoRY * 0.35, -torsoRZ * 0.25 + t * torsoRZ * 0.5],
+        [-0.2, 0, 0], [1, 1, 1])
+    }
+    // Slit pupils replace round pupils on reptile-dominant creatures.
+    for (const side of [-1, 1]) {
+      const ex = side * headScale * (insect || fish ? 0.76 : 0.58), ey = headScale * 0.16, ez = headScale * 0.62
+      const pupilR = headScale * (0.12 + p.eyes * 0.1) * (insect ? 1.42 : 1)
+      addMesh(headGroup, new THREE.CylinderGeometry(pupilR * 0.35, pupilR * 0.35, pupilR * 2.2, 8), pupilMat,
+        [ex, ey, ez], [0, Math.PI / 2, 0], [1, 1, 1])
     }
   }
   // Animal adaptations are independent loci so inherited combinations reshape the silhouette.

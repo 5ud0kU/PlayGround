@@ -21,6 +21,8 @@ export const GENES = [
   { key: 'antennae',  label: 'Antennae',         group: 'adapt', desc: 'Sensitive insect feelers' },
   { key: 'carapace',  label: 'Carapace',         group: 'adapt', desc: 'Armored beetle shell' },
   { key: 'pincers',   label: 'Pincers',          group: 'adapt', desc: 'Paired grasping claws' },
+  { key: 'mammifere', label: 'Mammifère',        group: 'adapt', desc: 'Mammalian traits: fur, warm-blooded, live birth' },
+  { key: 'reptile',   label: 'Reptilian',        group: 'adapt', desc: 'Reptilian traits: scales, cold-blooded, leathery eggs' },
   { key: 'tusks',     label: 'Tusks',            group: 'weapon', desc: 'Protruding gore teeth' },
   { key: 'mane',      label: 'Neck Mane',        group: 'adapt',  desc: 'Furred crest along the neck and back' },
   { key: 'muscle',    label: 'Myofiber',       group: 'core',   desc: 'Raw contractile power' },
@@ -50,8 +52,8 @@ export const BODY_PLANS = [
   { key: 'biped', label: 'Biped', icon: '♙', source: 'Primate · drake', note: 'Upright stance with grasping forelimbs' },
 ]
 
-// Thirty sculptural families, each with ten DNA-selected variants, provide a
-// stable catalog of 300 heritable forms without adding artificial alleles.
+// Thirty-two sculptural families, each with ten DNA-selected variants, provide a
+// stable catalog of 320 heritable forms without adding artificial alleles.
 const MORPHOLOGY_FAMILIES = [
   'Longstride', 'Bulwark', 'Spindle', 'Crownback', 'Sailcrest',
   'Barrel', 'Thornhide', 'Highneck', 'Paddletail', 'Ridgeback',
@@ -59,8 +61,9 @@ const MORPHOLOGY_FAMILIES = [
   'Fantail', 'Paddlelimb', 'Coilback', 'Lanterncrest', 'Crownshield',
   'Duskhusk', 'Ironspine', 'Swiftwing', 'Glimmerfin', 'Deepgill',
   'Wildtusk', 'Frostjaw', 'Thornshell', 'Brightcrest', 'Nightshriek',
+  'Mammal', 'Reptile',
 ]
-const MORPHOLOGY_KEYS = ['size', 'length', 'girth', 'neck', 'head', 'snout', 'legs', 'stance', 'tail', 'armor', 'wings', 'posture', 'bodyPlan', 'archetype']
+const MORPHOLOGY_KEYS = ['size', 'length', 'girth', 'neck', 'head', 'snout', 'legs', 'stance', 'tail', 'armor', 'wings', 'posture', 'bodyPlan', 'archetype', 'mammifere', 'reptile']
 
 const clamp = (v, a = 0, b = 1) => Math.max(a, Math.min(b, v))
 export const clamp01 = v => clamp(v)
@@ -119,7 +122,7 @@ export function phenotype(genome) {
     morphologyHash ^= Math.round(clamp(p[key]) * 255)
     morphologyHash = Math.imul(morphologyHash, 16777619)
   }
-  const morphologyIndex = (morphologyHash >>> 0) % 300
+  const morphologyIndex = (morphologyHash >>> 0) % 320
   // Derived composite values used by the mesh builder.
   const size = p.size
   p.height = 0.72 + size * 0.62 + p.legs * 0.18
