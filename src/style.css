@@ -1,0 +1,162 @@
+html,
+body {
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  overflow: hidden;
+  background: #070d18;
+  color: #e7f2ff;
+  font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+
+* { box-sizing: border-box; }
+
+canvas {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+#hud {
+  position: fixed;
+  z-index: 2;
+  inset: 0;
+  pointer-events: none;
+}
+
+#brand {
+  position: absolute;
+  top: 24px;
+  left: 28px;
+  color: #69e5ff;
+  font-size: 13px;
+  font-weight: 900;
+  letter-spacing: .22em;
+  text-shadow: 0 0 16px #36cfff8c;
+}
+
+#stats {
+  position: absolute;
+  top: 23px;
+  right: 28px;
+  display: flex;
+  gap: 20px;
+  color: #e7f2ff;
+  font-size: 13px;
+  font-weight: 800;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+  text-shadow: 0 2px 6px #000;
+}
+
+#healthWrap {
+  position: absolute;
+  left: 28px;
+  bottom: 28px;
+  width: min(250px, 42vw);
+  height: 10px;
+  padding: 2px;
+  border: 1px solid #97c9dd88;
+  background: #081522aa;
+  transform: skewX(-16deg);
+}
+
+#healthFill {
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(90deg, #47dfab, #9dfc91);
+  box-shadow: 0 0 12px #42e7bd;
+  transition: width .15s, background .15s;
+}
+
+#crosshair {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 18px;
+  height: 18px;
+  margin: -9px;
+  opacity: .9;
+}
+#crosshair::before, #crosshair::after {
+  content: "";
+  position: absolute;
+  background: #d7fbff;
+  box-shadow: 0 0 8px #48dcff;
+}
+#crosshair::before { width: 2px; height: 18px; left: 8px; top: 0; }
+#crosshair::after { height: 2px; width: 18px; top: 8px; left: 0; }
+
+#touchControls { display: none; }
+#touchControls button {
+  border: 1px solid #c7f5ff72;
+  color: #e8fbff;
+  background: #10232cb8;
+  font: inherit;
+  font-weight: 900;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+#overlay {
+  position: fixed;
+  z-index: 4;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  background: linear-gradient(130deg, #080f1ccf, #07141bb8);
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity .25s, visibility .25s;
+}
+#overlay.visible { opacity: 1; visibility: visible; }
+.panel {
+  width: min(440px, calc(100vw - 36px));
+  padding: 36px;
+  text-align: center;
+  border: 1px solid #8ceaff47;
+  background: linear-gradient(145deg, #142634ed, #0b1421ee);
+  box-shadow: 0 25px 90px #0009, 0 0 55px #30dfff16;
+  backdrop-filter: blur(15px);
+}
+.panel h1 {
+  margin: 0 0 14px;
+  color: #eafcff;
+  font-size: clamp(30px, 7vw, 46px);
+  letter-spacing: -.055em;
+  line-height: 1;
+}
+.panel p { margin: 0 0 24px; color: #a9c5d4; line-height: 1.6; font-size: 14px; }
+.panel button {
+  min-width: 154px;
+  padding: 13px 20px;
+  border: 0;
+  color: #04121a;
+  background: linear-gradient(100deg, #4de1e0, #9dffbf);
+  font: inherit;
+  font-weight: 900;
+  text-transform: uppercase;
+  letter-spacing: .16em;
+  cursor: pointer;
+  box-shadow: 0 0 24px #49e8dc4f;
+}
+.panel button:hover { filter: brightness(1.12); }
+
+@media (max-width: 800px), (pointer: coarse) {
+  #touchControls { display: block; position: fixed; z-index: 3; inset: 0; pointer-events: none; }
+  .move-pad { position: absolute; left: 18px; bottom: 22px; display: grid; justify-items: center; gap: 5px; pointer-events: auto; }
+  .move-pad > div { display: flex; gap: 5px; }
+  .move-pad button { width: 48px; height: 44px; border-radius: 10px; font-size: 17px; }
+  #touchFire { position: absolute; right: 22px; bottom: 30px; width: 76px; height: 76px; border-radius: 50%; pointer-events: auto; color: #04121a; background: #71eddfd9; }
+  #healthWrap { bottom: 26px; left: 50%; width: min(200px, 30vw); transform: translateX(-50%) skewX(-16deg); }
+}
+
+@media (max-width: 600px) {
+  #brand { top: 16px; left: 16px; font-size: 11px; }
+  #stats { top: 15px; right: 16px; gap: 10px; font-size: 10px; }
+  #healthWrap { bottom: 18px; }
+  .panel { padding: 28px 24px; }
+}

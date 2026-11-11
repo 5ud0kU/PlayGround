@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%23091b23'/%3E%3Cpath d='M32 8 52 46H12z' fill='none' stroke='%2371eddf' stroke-width='5'/%3E%3Ccircle cx='32' cy='37' r='5' fill='%23ffcb7c'/%3E%3C/svg%3E" />
+    <title>Neon City Siege</title>
+    <meta
+      name="description"
+      content="A compact 3D city FPS survival game built with Three.js."
+    />
+  </head>
+  <body>
+    <div id="hud">
+      <div id="brand">NEXUS SQUAD</div>
+      <div id="stats">
+        <span id="waveLabel">Wave 1</span>
+        <span id="scoreLabel">Score 0</span>
+      </div>
+      <div id="healthWrap">
+        <div id="healthFill"></div>
+      </div>
+      <div id="crosshair" aria-hidden="true"></div>
+    </div>
+
+    <div id="touchControls" aria-label="Touch controls">
+      <div class="move-pad">
+        <button type="button" data-key="KeyW" aria-label="Move forward">▲</button>
+        <div>
+          <button type="button" data-key="KeyA" aria-label="Move left">◀</button>
+          <button type="button" data-key="KeyS" aria-label="Move backward">▼</button>
+          <button type="button" data-key="KeyD" aria-label="Move right">▶</button>
+        </div>
+      </div>
+      <button id="touchFire" type="button" aria-label="Fire weapon">FIRE</button>
+    </div>
+
+    <div id="overlay" class="visible">
+      <div class="panel">
+        <h1>Neon City Siege</h1>
+        <p>WASD to move, Shift to sprint, click to fire, survive the drone waves.</p>
+        <button id="startBtn" type="button">Deploy</button>
+      </div>
+    </div>
+
+    <script type="module" src="/src/main.js"></script>
+  </body>
+</html>
