@@ -1,8 +1,8 @@
 import * as THREE from 'three'
 import { phenotype } from './dna.js'
 
-// Proportional templates for ten sculptural families. Each has ten
-// DNA-derived variants with subtly different proportions (100 total forms).
+// Proportional templates for twenty sculptural families. Each has ten
+// DNA-derived variants with subtly different proportions (200 total forms).
 const MORPHOLOGY_SHAPES = [
   { width: 0.94, height: 0.94, length: 1.16, head: 0.96, neck: 0.96, legs: 1.16, tail: 1.06 },
   { width: 1.18, height: 1.16, length: 0.92, head: 1.08, neck: 0.84, legs: 0.9, tail: 0.84 },
@@ -14,6 +14,18 @@ const MORPHOLOGY_SHAPES = [
   { width: 0.9, height: 0.96, length: 1.02, head: 0.96, neck: 1.32, legs: 1.02, tail: 0.94 },
   { width: 0.94, height: 0.94, length: 1.08, head: 0.92, neck: 0.94, legs: 0.94, tail: 1.32 },
   { width: 1.08, height: 1.1, length: 1.02, head: 1.04, neck: 1.0, legs: 0.94, tail: 1.12 },
+  // New families: streamlined, massive, jaw-forward, low-slung, and crested forms.
+  { width: 0.72, height: 0.82, length: 1.28, head: 0.9, neck: 0.82, legs: 0.94, tail: 1.18 },
+  { width: 1.34, height: 1.26, length: 0.98, head: 1.04, neck: 0.82, legs: 0.76, tail: 0.82 },
+  { width: 0.98, height: 1.0, length: 1.06, head: 1.34, neck: 0.94, legs: 0.94, tail: 0.92 },
+  { width: 1.18, height: 0.82, length: 0.92, head: 0.94, neck: 0.76, legs: 0.66, tail: 0.9 },
+  { width: 0.88, height: 1.34, length: 1.0, head: 0.94, neck: 1.14, legs: 0.92, tail: 1.02 },
+  // Tail-heavy, broad-limbed, coiled, lantern-headed, and shielded silhouettes.
+  { width: 0.94, height: 0.94, length: 1.04, head: 0.94, neck: 0.9, legs: 0.9, tail: 1.5 },
+  { width: 1.1, height: 1.0, length: 1.0, head: 0.96, neck: 0.86, legs: 1.28, tail: 0.94 },
+  { width: 0.9, height: 0.9, length: 1.3, head: 0.88, neck: 0.82, legs: 0.88, tail: 1.24 },
+  { width: 0.86, height: 1.16, length: 0.96, head: 1.28, neck: 1.3, legs: 0.92, tail: 0.9 },
+  { width: 1.3, height: 1.18, length: 1.08, head: 1.12, neck: 0.88, legs: 0.84, tail: 0.96 },
 ]
 
 // ─── materials & procedural coat texture ───────────────────────────────────

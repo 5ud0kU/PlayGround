@@ -50,11 +50,13 @@ export const BODY_PLANS = [
   { key: 'biped', label: 'Biped', icon: '♙', source: 'Primate · drake', note: 'Upright stance with grasping forelimbs' },
 ]
 
-// Ten sculptural families, each with ten DNA-selected variants, provide a
-// stable catalog of 100 additional forms without adding artificial alleles.
+// Twenty sculptural families, each with ten DNA-selected variants, provide a
+// stable catalog of 200 heritable forms without adding artificial alleles.
 const MORPHOLOGY_FAMILIES = [
   'Longstride', 'Bulwark', 'Spindle', 'Crownback', 'Sailcrest',
   'Barrel', 'Thornhide', 'Highneck', 'Paddletail', 'Ridgeback',
+  'Razorfin', 'Boulderback', 'Longjaw', 'Burrower', 'Spirespine',
+  'Fantail', 'Paddlelimb', 'Coilback', 'Lanterncrest', 'Crownshield',
 ]
 const MORPHOLOGY_KEYS = ['size', 'length', 'girth', 'neck', 'head', 'snout', 'legs', 'stance', 'tail', 'armor', 'wings', 'posture', 'bodyPlan', 'archetype']
 
@@ -115,7 +117,7 @@ export function phenotype(genome) {
     morphologyHash ^= Math.round(clamp(p[key]) * 255)
     morphologyHash = Math.imul(morphologyHash, 16777619)
   }
-  const morphologyIndex = (morphologyHash >>> 0) % 100
+  const morphologyIndex = (morphologyHash >>> 0) % 200
   // Derived composite values used by the mesh builder.
   const size = p.size
   p.height = 0.72 + size * 0.62 + p.legs * 0.18
