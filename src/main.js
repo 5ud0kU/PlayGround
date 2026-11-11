@@ -186,6 +186,14 @@ const lifeNodes = [
   { key: 'club', name: 'Night Club', color: 0xf87eb0, position: new THREE.Vector3(-15, 1.8, 8), radius: 3.5 },
 ];
 
+const roomZones = [
+  { key: 'home', name: 'Home Room', center: new THREE.Vector3(-12, 0, -24), size: new THREE.Vector3(8, 4.5, 8), color: 0x70f0d7 },
+  { key: 'work', name: 'Office Room', center: new THREE.Vector3(-2.5, 0, 26), size: new THREE.Vector3(9, 4.8, 9), color: 0x8abaf5 },
+  { key: 'cafe', name: 'Cafe Room', center: new THREE.Vector3(11.5, 0, 20), size: new THREE.Vector3(8, 4.5, 8), color: 0xffb46a },
+  { key: 'park', name: 'Park Room', center: new THREE.Vector3(14.5, 0, -11), size: new THREE.Vector3(10, 3.2, 10), color: 0x72d77c },
+  { key: 'club', name: 'Night Club Room', center: new THREE.Vector3(-15, 0, 8), size: new THREE.Vector3(10, 4.8, 8), color: 0xf87eb0 },
+];
+
 function makeNodeMarker(node) {
   const group = new THREE.Group();
   const base = new THREE.Mesh(new THREE.CylinderGeometry(1.1, 1.35, 0.45, 18), new THREE.MeshStandardMaterial({ color: 0x172830, emissive: node.color, emissiveIntensity: 0.45 }));
@@ -321,21 +329,39 @@ function nearestNode() {
   return best;
 }
 
+function inRoom(zone) {
+  const dx = Math.abs(camera.position.x - zone.center.x);
+  const dy = Math.abs(camera.position.y - zone.center.y);
+  const dz = Math.abs(camera.position.z - zone.center.z);
+  return dx <= zone.size.x / 2 && dy <= zone.size.y / 2 && dz <= zone.size.z / 2;
+}
+
+function currentRoom() {
+  for (const zone of roomZones) {
+    if (inRoom(zone)) {
+      return zone;
+    }
+  }
+  return null;
+}
+
 function interact() {
   if (!state.started || state.interactCooldown > 0) {
     return;
   }
 
+  const current = currentRoom();
   const closest = nearestNode();
-  if (!closest || closest.distance > 4.5) {
-    setStatus('Move closer to a city activity to interact.');
+  const targetNode = current ? lifeNodes.find((node) => node.key === current.key) : closest?.node;
+
+  if (!targetNode || (closest && closest.distance > 4.5 && !current)) {
+    setStatus('Move inside a building or room to interact.');
     return;
   }
 
   state.interactCooldown = 0.45;
-  const { node } = closest;
 
-  switch (node.key) {
+  switch (targetNode.key) {
     case 'home':
       if (state.time < 21 && state.time > 6) {
         state.energy = clamp(state.energy + 36, 0, 100);
@@ -482,8 +508,8 @@ function update(dt) {
 
     camera.position.addScaledVector(forward, -move.z * speed * dt);
     camera.position.addScaledVector(right, move.x * speed * dt);
-    camera.position.x = clamp(camera.position.x, -18.5, 18.5);
-    camera.position.z = clamp(camera.position.z, -96, 30);
+    camera.position.x = clamp(camera.position.x, -30, 30);
+    camera.position.z = clamp(camera.position.z, -96, 38);
 
     state.energy = clamp(state.energy - dt * 1.8, 0, 100);
     state.hunger = clamp(state.hunger - dt * 2.2, 0, 100);
@@ -495,8 +521,11 @@ function update(dt) {
       return;
     }
 
+    const room = currentRoom();
     const nearest = nearestNode();
-    if (nearest && nearest.distance < 4.5) {
+    if (room) {
+      setStatus(`${room.name}: press E to act`);
+    } else if (nearest && nearest.distance < 4.5) {
       setStatus(`${nearest.node.name}: press E to act`);
     } else {
       setStatus('Explore the city and keep your needs balanced.');
