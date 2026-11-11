@@ -8,9 +8,10 @@
     "dev": "node --watch src/index.js"
   },
   "dependencies": {
-    "three": "^0.165.0",
-    "@react-three/fiber": "^8.15.14",
     "@react-three/drei": "^9.104.0",
-    "stats.js": "^3.0.0"
+    "@react-three/fiber": "^8.15.14",
+    "playwright": "^1.65.0",
+    "stats.js": "0.17.0",
+    "three": "^0.165.0"
   }
 }
