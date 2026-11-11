@@ -6,7 +6,7 @@
 <title>Town — First Person</title>
 <style>
   html, body { margin: 0; height: 100%; overflow: hidden; background: #091520; font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif; }
-  #canvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; display: block; cursor: crosshair; }
+  #canvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; display: block; cursor: crosshair; touch-action: none; }
   #hud { position: absolute; inset: 0; pointer-events: none; display: flex; flex-direction: column; justify-content: space-between; padding: 22px; color: #fff; }
   .crosshair { position: absolute; top: 50%; left: 50%; width: 12px; height: 12px; border: 2px solid rgba(255,255,255,0.55); border-radius: 50%; transform: translate(-50%,-50%); pointer-events: none; }
   .crosshair::after { content: ''; position: absolute; top: 50%; left: 50%; width: 3px; height: 3px; background: #fff; transform: translate(-50%,-50%); border-radius: 50%; }
@@ -27,6 +27,18 @@
   #startBtn:hover { background: #4fc9aa; }
   #startBtn:active { transform: translateY(4px); box-shadow: 0 3px 0 #1d7a64; }
   #fps { position: absolute; bottom: 12px; left: 12px; font-size: 12px; color: #8fb0c4; pointer-events: none; }
+  /* mobile controls */
+  #mobile { position: absolute; inset: 0; display: none; z-index: 24; pointer-events: none; }
+  .touch-device #mobile { display: block; }
+  .touch-device .hintline { display: none; }
+  .joy { position: absolute; bottom: 18px; left: 18px; width: 96px; height: 96px; pointer-events: auto; }
+  .joy .zone { position: absolute; inset: 0; background: rgba(255,255,255,0.10); border-radius: 50%; border: 1px solid rgba(255,255,255,0.25); }
+  .joy .knob { position: absolute; width: 44px; height: 44px; background: rgba(47,179,150,0.8); border-radius: 50%; border: 1px solid rgba(255,255,255,0.7); transform: translate(-50%,-50%); pointer-events: none; }
+  .btns { position: absolute; bottom: 18px; right: 18px; display: flex; gap: 10px; pointer-events: auto; }
+  .btn { width: 66px; height: 66px; border-radius: 50%; border: none; color: #fff; font-weight: 800; font-size: 12px; letter-spacing: 0.5px; text-transform: uppercase; background: rgba(255,255,255,0.13); box-shadow: 0 4px 0 rgba(0,0,0,0.45); display: flex; align-items: center; justify-content: center; cursor: pointer; pointer-events: auto; }
+  .btn:active { background: rgba(255,255,255,0.28); transform: translateY(2px); box-shadow: 0 2px 0 rgba(0,0,0,0.45); }
+  #btnInteract { background: rgba(47,179,150,0.9); }
+  #btnJump { background: rgba(96,165,250,0.85); }
 </style>
 </head>
 <body>
@@ -47,6 +59,16 @@
   <h2>Entering Town</h2>
   <div class="track"><div class="bar" id="bar"></div></div>
   <p id="loadText">Generating blocks…</p>
+</div>
+<div id="mobile">
+  <div class="joy" id="joystick">
+    <div class="zone" id="joystickZone"></div>
+    <div class="knob" id="joystickKnob"></div>
+  </div>
+  <div class="btns">
+    <button class="btn" id="btnJump">Jump</button>
+    <button class="btn" id="btnInteract">E</button>
+  </div>
 </div>
 <script type="importmap">
 {
@@ -196,6 +218,32 @@ controls.addEventListener('lock', () => {
 });
 controls.addEventListener('unlock', () => { startScreen.style.display = 'flex'; loader.style.display = 'none'; });
 
+/* ---------------- mobile / touch controls ---------------- */
+const isTouch = ('ontouchstart' in window) || navigator.maxTouchPoints > 0;
+document.body.classList.toggle('touch-device', isTouch);
+
+let yaw = camera.rotation.y;
+let pitch = camera.rotation.x;
+camera.rotation.order = 'YXZ';
+
+const stick = { x: 0, y: 0 }; // x: left/right, y: forward/back (positive = forward)
+let stickActive = false;
+let stickId = null;
+let stickOrigin = { x: 0, y: 0 };
+const STICK_R = 44;
+
+const lookTouches = {};
+const LOOK_SENS = 0.0012;
+
+function doJump() {
+  if (onGround) { vy = JUMP; onGround = false; camera.position.y += 0.1; }
+}
+let lastTouchInteract = 0;
+function mobileInteract() {
+  const t = performance.now();
+  if (t - lastTouchInteract > 350) { lastTouchInteract = t; interact(); }
+}
+
 function beginLoading() {
   startScreen.style.display = 'none';
   loader.style.display = 'flex';
@@ -209,15 +257,78 @@ function beginLoading() {
     if (i <= steps.length - 1) {
       setTimeout(tick, 220);
     } else {
-      setTimeout(() => { loader.style.display = 'none'; controls.lock(); }, 300);
+      setTimeout(() => { loader.style.display = 'none'; if (!isTouch) controls.lock(); }, 300);
     }
   };
   tick();
 }
 
+document.getElementById('prompt').textContent = isTouch ? 'Interact' : 'E — Ouvrir / Interagir';
 const keys = {};
 window.addEventListener('keydown', (e) => { if (e.code === 'Escape') controls.unlock(); keys[e.code] = true; });
 window.addEventListener('keyup', (e) => { keys[e.code] = false; });
+
+const btnJump = document.getElementById('btnJump');
+const btnInteract = document.getElementById('btnInteract');
+const pressBtn = (b, fn) => {
+  b.addEventListener('touchstart', (e) => { e.preventDefault(); fn(); }, { passive: false });
+  b.addEventListener('mousedown', (e) => { e.preventDefault(); fn(); });
+};
+pressBtn(btnJump, doJump);
+pressBtn(btnInteract, mobileInteract);
+
+const canvas = document.getElementById('canvas');
+const joyKnob = document.getElementById('joystickKnob');
+const joyZone = document.getElementById('joystickZone');
+function tpos(t) { const r = canvas.getBoundingClientRect(); return { x: t.clientX - r.left, y: t.clientY - r.top }; }
+function setKnob(x, y) { joyKnob.style.left = x + 'px'; joyKnob.style.top = y + 'px'; }
+
+canvas.addEventListener('touchstart', (e) => {
+  e.preventDefault();
+  for (const t of e.changedTouches) {
+    const p = tpos(t);
+    if (p.x < innerWidth * 0.42) {
+      stickId = t.identifier; stickActive = true;
+      stickOrigin = { x: p.x, y: p.y };
+      stick.x = 0; stick.y = 0;
+      setKnob(stickOrigin.x, stickOrigin.y);
+    } else {
+      lookTouches[t.identifier] = { x: p.x, y: p.y, yaw, pitch };
+    }
+  }
+}, { passive: false });
+
+canvas.addEventListener('touchmove', (e) => {
+  e.preventDefault();
+  for (const t of e.changedTouches) {
+    const p = tpos(t);
+    if (t.identifier === stickId && stickActive) {
+      const dx = p.x - stickOrigin.x, dy = p.y - stickOrigin.y;
+      const d = Math.hypot(dx, dy);
+      if (d > 10) {
+        stick.x = dx / d; stick.y = -dy / d; // up on screen = forward
+        const k = Math.min(d, STICK_R);
+        setKnob(stickOrigin.x + (dx / d) * k, stickOrigin.y + (dy / d) * k);
+      } else {
+        stick.x = 0; stick.y = 0; setKnob(p.x, p.y);
+      }
+    } else if (lookTouches[t.identifier] !== undefined) {
+      const lt = lookTouches[t.identifier];
+      yaw += (p.x - lt.x) * LOOK_SENS;
+      pitch += (p.y - lt.y) * LOOK_SENS;
+      pitch = Math.max(-Math.PI / 2 + 0.05, Math.min(Math.PI / 2 - 0.05, pitch));
+      lt.x = p.x; lt.y = p.y;
+    }
+  }
+}, { passive: false });
+
+function endTouch(id) {
+  if (id === stickId) { stickActive = false; stickId = null; stick.x = 0; stick.y = 0; setKnob(stickOrigin.x, stickOrigin.y); }
+  delete lookTouches[id];
+}
+canvas.addEventListener('touchend', (e) => { for (const t of e.changedTouches) endTouch(t.identifier); }, { passive: false });
+canvas.addEventListener('touchcancel', (e) => { for (const t of e.changedTouches) endTouch(t.identifier); }, { passive: false });
+
 window.addEventListener('resize', () => {
   camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix();
   renderer.setSize(innerWidth, innerHeight);
@@ -625,21 +736,36 @@ const clock = new THREE.Clock();
 
 function update(dt) {
   const time = performance.now();
-  const wishX = (keys['KeyD'] ? 1 : 0) - (keys['KeyA'] ? 1 : 0);
-  const wishZ = (keys['KeyS'] ? 1 : 0) - (keys['KeyW'] ? 1 : 0);
-  let len = Math.sqrt(wishX * wishX + wishZ * wishZ);
-  if (len > 0) { wishX /= len; wishZ /= len; }
 
+  // movement intent (keyboard when pointer-locked, virtual joystick on touch)
+  let mx = 0, mz = 0;
   if (controls.isLocked) {
+    const kx = (keys['KeyD'] ? 1 : 0) - (keys['KeyA'] ? 1 : 0);
+    const kz = (keys['KeyS'] ? 1 : 0) - (keys['KeyW'] ? 1 : 0);
     const dir = new THREE.Vector3(); controls.getDirection(dir); dir.y = 0; dir.normalize();
     const right = new THREE.Vector3(0, 1, 0).cross(dir).normalize();
-    const wx = dir.x * (-wishZ) + right.x * wishX;
-    const wz = dir.z * (-wishZ) + right.z * wishZ;
-    const acc = 14;
-    vx += (wx * MOVE_SPEED - vx) * acc * dt;
-    vz += (wz * MOVE_SPEED - vz) * acc * dt;
-  } else {
-    vx *= Math.pow(0.4, dt); vz *= Math.pow(0.4, dt);
+    mx = dir.x * (-kz) + right.x * kx;
+    mz = dir.z * (-kz) + right.z * kz;
+  }
+  if (isTouch) {
+    const dir = new THREE.Vector3(0, 0, -1).applyEuler(new THREE.Euler(pitch, yaw, 0, 'YXZ'));
+    dir.y = 0; dir.normalize();
+    const right = new THREE.Vector3(0, 1, 0).cross(dir).normalize();
+    mx = stick.x * right.x + stick.y * dir.x;
+    mz = stick.x * right.z + stick.y * dir.z;
+  }
+  let len = Math.sqrt(mx * mx + mz * mz);
+  if (len > 0) { mx /= len; mz /= len; }
+  const acc = 14;
+  const moving = len > 0;
+  vx += (mx * MOVE_SPEED - vx) * acc * dt;
+  vz += (mz * MOVE_SPEED - vz) * acc * dt;
+  if (!moving) { vx *= Math.pow(0.4, dt); vz *= Math.pow(0.4, dt); }
+
+  // apply camera rotation on touch (no pointer lock on mobile)
+  if (isTouch) {
+    camera.rotation.y = yaw;
+    camera.rotation.x = pitch;
   }
 
   const py = camera.position.y;
