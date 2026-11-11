@@ -1,0 +1,16 @@
+{
+  "name": "reality-unbound",
+  "version": "1.0.0",
+  "description": "Ultra-Realistic 3D First-Person Open-World Life Simulator - Prototype",
+  "type": "module",
+  "scripts": {
+    "start": "node src/index.js",
+    "dev": "node --watch src/index.js"
+  },
+  "dependencies": {
+    "three": "^0.165.0",
+    "@react-three/fiber": "^8.15.14",
+    "@react-three/drei": "^9.104.0",
+    "stats.js": "^3.0.0"
+  }
+}
