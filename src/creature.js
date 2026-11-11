@@ -1,8 +1,8 @@
 import * as THREE from 'three'
 import { phenotype } from './dna.js'
 
-// Proportional templates for twenty sculptural families. Each has ten
-// DNA-derived variants with subtly different proportions (200 total forms).
+// Proportional templates for thirty sculptural families. Each has ten
+// DNA-derived variants with subtly different proportions (300 total forms).
 const MORPHOLOGY_SHAPES = [
   { width: 0.94, height: 0.94, length: 1.16, head: 0.96, neck: 0.96, legs: 1.16, tail: 1.06 },
   { width: 1.18, height: 1.16, length: 0.92, head: 1.08, neck: 0.84, legs: 0.9, tail: 0.84 },
@@ -26,6 +26,18 @@ const MORPHOLOGY_SHAPES = [
   { width: 0.9, height: 0.9, length: 1.3, head: 0.88, neck: 0.82, legs: 0.88, tail: 1.24 },
   { width: 0.86, height: 1.16, length: 0.96, head: 1.28, neck: 1.3, legs: 0.92, tail: 0.9 },
   { width: 1.3, height: 1.18, length: 1.08, head: 1.12, neck: 0.88, legs: 0.84, tail: 0.96 },
+  // Ten more families: gossamer, crushing, soaring, skulking, crested, rocky,
+  // volcanic, hooked, cloaked, and radiant silhouettes.
+  { width: 0.84, height: 0.78, length: 1.22, head: 0.88, neck: 0.94, legs: 1.08, tail: 1.04 },
+  { width: 1.28, height: 1.14, length: 1.0, head: 1.24, neck: 0.82, legs: 0.74, tail: 0.88 },
+  { width: 0.82, height: 0.96, length: 1.04, head: 0.94, neck: 0.96, legs: 1.16, tail: 0.92 },
+  { width: 0.9, height: 0.86, length: 1.02, head: 0.94, neck: 0.9, legs: 0.96, tail: 1.18 },
+  { width: 0.96, height: 1.18, length: 0.98, head: 1.04, neck: 1.24, legs: 0.92, tail: 1.0 },
+  { width: 1.16, height: 1.06, length: 0.94, head: 0.96, neck: 0.86, legs: 0.78, tail: 0.86 },
+  { width: 1.0, height: 1.08, length: 1.02, head: 0.98, neck: 0.96, legs: 0.94, tail: 1.34 },
+  { width: 0.92, height: 0.88, length: 1.0, head: 1.14, neck: 0.94, legs: 0.82, tail: 0.94 },
+  { width: 0.94, height: 1.08, length: 1.02, head: 0.94, neck: 1.04, legs: 1.02, tail: 1.0 },
+  { width: 1.2, height: 1.04, length: 0.96, head: 1.02, neck: 0.9, legs: 0.8, tail: 0.92 },
 ]
 
 // ─── materials & procedural coat texture ───────────────────────────────────
