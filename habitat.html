@@ -65,7 +65,7 @@
       <button id="btnZoomOut">Zoom –</button>
       <button id="btnCamReset">Reset vue</button>
     </div>
-    <div class="hint">Glisser pour déplacer la carte • Molette pour zoomer • Cliquer une créature pour l’inspecter • Espace : pause</div>
+    <div class="hint">Tactile : glisser pour regarder/avancer • pincer pour zoomer • Souris : glisser pour déplacer la carte • Cliquer/toucher une créature pour l’inspecter • Espace : pause · WASD + flèches : bureau</div>
   </div>
   <div class="panel">
     <h2>Biomes</h2>
@@ -206,7 +206,11 @@ function resize() {
 window.addEventListener('resize', resize);
 resize();
 
-const cam = { x: WORLD_W / 2 - width / 2, y: WORLD_H / 2 - height / 2, zoom: 1 };
+const cam = { x: WORLD_W / 2 - width / 2, y: WORLD_H / 2 - height / 2, zoom: 1, yaw: 0 };
+
+// Camera heading (radians). 0 = facing up (-world Y), increases clockwise.
+function camForward() { return { x: Math.sin(cam.yaw), y: -Math.cos(cam.yaw) } }
+function camRight() { return { x: Math.cos(cam.yaw), y: Math.sin(cam.yaw) } }
 
 const creatures = [];
 const foods = [];
@@ -279,8 +283,19 @@ function worldY(sy) { return cam.y + sy / cam.zoom; }
 function screenX(wx) { return (wx - cam.x) * cam.zoom; }
 function screenY(wy) { return (wy - cam.y) * cam.zoom; }
 
-/* Interaction */
-let dragging = false, lastSx, lastSy, dragStartSx, dragStartSy, touchId = null;
+/* Interaction
+ * Desktop: drag pans the map, wheel zooms (unchanged). WASD / arrows move the
+ * floating camera and rotate its heading.
+ * Mobile (first-person floating camera):
+ *   - one finger drag: rotate the view horizontally + move forward/back along the heading
+ *   - two finger pinch: zoom toward the pinch midpoint
+ *   - tap (little movement): inspect the creature under the finger
+ */
+let dragging = false, lastSx, lastSy, dragStartSx, dragStartSy;
+const keys = {};
+const touchFingers = new Map(); // id -> { sx, sy, lx, ly, moved }
+let touchGesture = null; // 'look' | 'pinch' | null
+let pinch = { startDist: 0, startZoom: 0, startCamX: 0, startCamY: 0, startMx: 0, startMy: 0 };
 
 function pointerDown(sx, sy) {
   dragging = true;
@@ -297,51 +312,119 @@ function pointerMove(sx, sy) {
   }
 }
 function pointerUp() { dragging = false; }
-function pointerClick(sx, sy) {
-  if (Math.abs(sx - dragStartSx) < 10 && Math.abs(sy - dragStartSy) < 10) {
+function pointerClick(sx, sy, startSx = sx, startSy = sy) {
+  if (Math.abs(sx - startSx) < 10 && Math.abs(sy - startSy) < 10) {
     selectCreatureAt(sx, sy);
   }
 }
 
-// Mouse
+// --- keyboard (desktop): move / rotate the floating camera ---
+function onKeyDown(e) {
+  if (e.code === 'Space') { e.preventDefault(); paused = !paused; document.getElementById('btnPause').textContent = paused ? 'Reprendre' : 'Pause'; }
+  if (e.code === 'KeyR') resetWorld();
+  keys[e.code] = true;
+}
+function onKeyUp(e) { keys[e.code] = false; }
+window.addEventListener('keydown', onKeyDown);
+window.addEventListener('keyup', onKeyUp);
+
+function applyKeyboard() {
+  if (paused) return;
+  const spd = 7 / cam.zoom;
+  const rot = 0.05;
+  const f = camForward(), r = camRight();
+  let mx = 0, my = 0;
+  if (keys['KeyW'] || keys['ArrowUp']) { mx += f.x * spd; my += f.y * spd; }
+  if (keys['KeyS'] || keys['ArrowDown']) { mx -= f.x * spd; my -= f.y * spd; }
+  if (keys['KeyQ']) { mx -= r.x * spd; my -= r.y * spd; }
+  if (keys['KeyE']) { mx += r.x * spd; my += r.y * spd; }
+  if (keys['ArrowLeft']) cam.yaw -= rot;
+  if (keys['ArrowRight']) cam.yaw += rot;
+  if (mx || my) { cam.x += mx; cam.y += my; clampCam(); }
+}
+
+// --- mobile: first-person floating touch camera ---
+function touchStart(e) {
+  for (const t of e.changedTouches) {
+    touchFingers.set(t.identifier, { sx: t.clientX, sy: t.clientY, lx: t.clientX, ly: t.clientY, moved: 0 });
+  }
+  e.preventDefault();
+  syncTouchGesture();
+}
+function syncTouchGesture() {
+  touchGesture = null;
+  if (touchFingers.size === 1) touchGesture = 'look';
+  else if (touchFingers.size >= 2) {
+    touchGesture = 'pinch';
+    const ids = [...touchFingers.keys()];
+    const a = touchFingers.get(ids[0]), b = touchFingers.get(ids[1]);
+    pinch.startDist = Math.hypot(b.lx - a.lx, b.ly - a.ly);
+    pinch.startZoom = cam.zoom;
+    pinch.startCamX = cam.x; pinch.startCamY = cam.y;
+    pinch.startMx = (a.lx + b.lx) / 2; pinch.startMy = (a.ly + b.ly) / 2;
+  }
+}
+function touchMove(e) {
+  let lookDx = 0, lookDy = 0;
+  for (const t of e.changedTouches) {
+    const f = touchFingers.get(t.identifier);
+    if (!f) continue;
+    const dx = t.clientX - f.lx, dy = t.clientY - f.ly;
+    f.lx = t.clientX; f.ly = t.clientY;
+    f.moved += Math.abs(dx) + Math.abs(dy);
+    if (touchGesture === 'look' && touchFingers.size === 1) { lookDx += dx; lookDy += dy; }
+  }
+  e.preventDefault();
+  if (touchGesture === 'look' && touchFingers.size === 1) {
+    cam.yaw += lookDx * 0.0025;
+    const move = -lookDy / cam.zoom; // pull finger up = move forward in facing direction
+    const fwd = camForward();
+    cam.x += fwd.x * move;
+    cam.y += fwd.y * move;
+    clampCam();
+  }
+  if (touchGesture === 'pinch' && touchFingers.size >= 2) {
+    const ids = [...touchFingers.keys()];
+    const a = touchFingers.get(ids[0]), b = touchFingers.get(ids[1]);
+    const dist = Math.hypot(b.lx - a.lx, b.ly - a.ly);
+    if (dist > 0 && pinch.startDist > 0) {
+      const nextZoom = clamp(pinch.startZoom * dist / pinch.startDist, [0.35, 3.5]);
+      // keep the world point under the gesture midpoint pinned to the screen
+      cam.x = pinch.startCamX + pinch.startMx / pinch.startZoom - pinch.startMx / nextZoom;
+      cam.y = pinch.startCamY + pinch.startMy / pinch.startZoom - pinch.startMy / nextZoom;
+      cam.zoom = nextZoom;
+      clampCam();
+      pinch.startDist = dist;
+      pinch.startZoom = nextZoom;
+      pinch.startCamX = cam.x; pinch.startCamY = cam.y;
+    }
+  }
+}
+function touchEnd(e) {
+  for (const t of e.changedTouches) {
+    const f = touchFingers.get(t.identifier);
+    if (f && f.moved < 12) pointerClick(f.sx, f.sy, f.sx, f.sy);
+    touchFingers.delete(t.identifier);
+  }
+  e.preventDefault();
+  syncTouchGesture();
+}
+function touchCancel(e) {
+  for (const t of e.changedTouches) touchFingers.delete(t.identifier);
+  e.preventDefault();
+  syncTouchGesture();
+}
+
 canvas.addEventListener('mousedown', e => pointerDown(e.clientX, e.clientY));
 window.addEventListener('mousemove', e => pointerMove(e.clientX, e.clientY));
 window.addEventListener('mouseup', pointerUp);
 canvas.addEventListener('click', e => pointerClick(e.clientX, e.clientY));
 
-// Touch (pan with one finger, tap to inspect)
-canvas.addEventListener('touchstart', e => {
-  if (e.touches.length === 1) {
-    const t = e.touches[0];
-    touchId = t.identifier;
-    pointerDown(t.clientX, t.clientY);
-    e.preventDefault();
-  }
-}, { passive: false });
-canvas.addEventListener('touchmove', e => {
-  for (const t of e.changedTouches) {
-    if (t.identifier === touchId) {
-      pointerMove(t.clientX, t.clientY);
-      e.preventDefault();
-      break;
-    }
-  }
-}, { passive: false });
-canvas.addEventListener('touchend', e => {
-  for (const t of e.changedTouches) {
-    if (t.identifier === touchId) {
-      pointerUp();
-      pointerClick(t.clientX, t.clientY);
-      touchId = null;
-      break;
-    }
-  }
-}, { passive: false });
-canvas.addEventListener('touchcancel', e => {
-  for (const t of e.changedTouches) {
-    if (t.identifier === touchId) { pointerUp(); touchId = null; break; }
-  }
-});
+canvas.addEventListener('touchstart', touchStart, { passive: false });
+canvas.addEventListener('touchmove', touchMove, { passive: false });
+canvas.addEventListener('touchend', touchEnd, { passive: false });
+canvas.addEventListener('touchcancel', touchCancel, { passive: false });
+
 window.addEventListener('wheel', e => {
   e.preventDefault();
   const dir = e.deltaY > 0 ? -0.12 : 0.12;
@@ -506,6 +589,7 @@ function resetWorld() {
   cam.x = WORLD_W / 2 - width / 2;
   cam.y = WORLD_H / 2 - height / 2;
   cam.zoom = 1;
+  cam.yaw = 0;
   clampCam();
   for (let i = 0; i < 45; i++) {
     creatures.push(createCreature(Math.random() * WORLD_W, Math.random() * WORLD_H));
@@ -576,6 +660,24 @@ function draw() {
     }
     ctx.globalAlpha = 1;
   }
+
+  // First-person heading indicator (floating camera view)
+  const cx = width / 2, cy = height / 2;
+  ctx.save();
+  ctx.translate(cx, cy);
+  ctx.strokeStyle = 'rgba(255, 255, 255, 0.15)';
+  ctx.lineWidth = 1;
+  ctx.beginPath(); ctx.arc(0, 0, 10, 0, Math.PI * 2); ctx.stroke();
+  ctx.rotate(cam.yaw);
+  ctx.fillStyle = 'rgba(110, 210, 200, 0.85)';
+  ctx.beginPath(); ctx.moveTo(0, -14); ctx.lineTo(-4.5, 5); ctx.lineTo(4.5, 5); ctx.closePath(); ctx.fill();
+  ctx.restore();
+  const card = 'NESW';
+  const dir = card[Math.round(((cam.yaw / (Math.PI / 2)) % 4 + 4) % 4)];
+  ctx.fillStyle = 'rgba(255, 255, 250, 0.5)';
+  ctx.font = '11px system-ui, -apple-system, Segoe UI, Roboto, sans-serif';
+  ctx.textAlign = 'center';
+  ctx.fillText(dir + ' · yaw ' + (cam.yaw * 180 / Math.PI).toFixed(0) + '°', cx, 22);
 }
 
 /* Stats + inspector UI */
@@ -625,6 +727,7 @@ function buildLegend() {
 
 /* Main loop */
 function loop() {
+  applyKeyboard();
   if (!paused) {
     stats.frame++;
     trySpawnFood();
@@ -676,6 +779,7 @@ document.getElementById('btnCamReset').addEventListener('click', () => {
   cam.x = WORLD_W / 2 - width / 2;
   cam.y = WORLD_H / 2 - height / 2;
   cam.zoom = 1;
+  cam.yaw = 0;
   clampCam();
 });
 
