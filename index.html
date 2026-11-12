@@ -31,6 +31,7 @@ html, body { margin: 0; padding: 0; overflow: hidden; background: #0a0b0c; font-
 .btn:hover { background: #e11d48; color: #000; }
 #pause { display: none; }
 #gameover { display: none; }
+#victory { display: none; }
 @keyframes fadeIn { to { opacity: 1; } }
 </style>
 </head>
@@ -60,6 +61,12 @@ html, body { margin: 0; padding: 0; overflow: hidden; background: #0a0b0c; font-
     <div class="sub" id="goStats">Wave 1 &mdash; Kills 0</div>
     <button class="btn" id="restartBtn">Paint Again</button>
   </div>
+  <div id="victory" class="overlay">
+    <div class="title" style="color:#facc15">Town Saved</div>
+    <div class="sub" id="victoryStats">Wave 9 &mdash; Kills 46</div>
+    <div class="hint">THE CITY IS CLEAN.<br>PRESS ENTER OR CLICK TO PLAY AGAIN.</div>
+    <button class="btn" id="victoryBtn">Run It Back</button>
+  </div>
 </div>
 <script type="importmap">
 {
@@ -87,6 +94,7 @@ const MAX_ENEMIES = 40;
 const MAX_DECALS = 150;
 
 const $ = id => document.getElementById(id);
+const VICTORY_WAVE = 8;
 
 /* ============================ AUDIO ============================ */
 let ACtx;
@@ -193,12 +201,13 @@ const matEnemyBody = new THREE.MeshLambertMaterial({ color: 0x8e1616 });
 const matEnemyHead = new THREE.MeshLambertMaterial({ color: 0x6a0f0f });
 
 /* ============================ STATE ============================ */
-let state = 'menu'; // menu | playing | paused | gameover
+let state = 'menu'; // menu | playing | paused | gameover | victory
 let P = { x: 34, y: 1.6, z: 35, vx: 0, vy: 0, vz: 0, health: 100, maxHealth: 100, grounded: true };
 const keys = {};
 const GUN = { ammo: 12, cap: 12, nextFire: 0, reloading: false, reloadUntil: 0, recoil: 0, flashOff: 0 };
 const WAVE = { n: 1, targets: 5, spawned: 0, killed: 0, timer: 0, interval: 1.4, clearShow: 0 };
 let KILLS = 0;
+let victoryTriggered = false;
 let timeScale = 1;
 let shake = 0, hurtFlash = 0, recoilPitch = 0, bobPhase = 0;
 
@@ -438,6 +447,12 @@ function startReload() {
   if (GUN.reloading || GUN.ammo === GUN.cap) return;
   GUN.reloading = true; GUN.reloadUntil = t + 0.95; SND.reload();
 }
+function updateReload() {
+  if (GUN.reloading && now() >= GUN.reloadUntil) {
+    GUN.ammo = GUN.cap;
+    GUN.reloading = false;
+  }
+}
 
 function segHitsBox(ox, oy, oz, dx, dy, dz, min, max) {
   let t0 = 0, t1 = 1;
@@ -558,8 +573,25 @@ function movePlayer(dt) {
 
 /* ============================ WAVES ============================ */
 function waveInterval() { return Math.max(0.45, 1.4 - WAVE.n * 0.055); }
+function triggerVictory() {
+  if (victoryTriggered) return;
+  victoryTriggered = true;
+  state = 'victory';
+  try { if (controls) controls.disconnect(); document.exitPointerLock(); } catch (e) {}
+  $('victory').style.display = 'flex';
+  $('victoryStats').innerHTML = 'WAVE ' + WAVE.n + ' &mdash; KILLS ' + KILLS;
+  $('waveannounce').style.opacity = 0;
+  $('overlay').style.display = 'none';
+  $('pause').style.display = 'none';
+  $('gameover').style.display = 'none';
+  SND.wave();
+}
 function checkWaveClear() {
   if (WAVE.spawned >= WAVE.targets && (WAVE.activeEnemies || 0) === 0 && WAVE.clearShow <= 0) {
+    if (WAVE.n >= VICTORY_WAVE) {
+      triggerVictory();
+      return;
+    }
     WAVE.clearShow = 1.6;
     $('waveannounce').textContent = 'WAVE ' + WAVE.n + ' CLEAR';
     $('waveannounce').style.opacity = 1;
@@ -571,6 +603,7 @@ function startNextWave() {
   WAVE.timer = 0; WAVE.interval = waveInterval();
 }
 function updateWave(dt) {
+  if (state !== 'playing') return;
   if (WAVE.clearShow > 0) {
     WAVE.clearShow -= dt;
     if (WAVE.clearShow <= 0) { $('waveannounce').style.opacity = 0; startNextWave(); }
@@ -626,6 +659,7 @@ function resetWorld() {
   staticMeshes.length = 0;
   KILLS = 0; WAVE.n = 1; WAVE.targets = 5; WAVE.spawned = 0; WAVE.killed = 0;
   WAVE.timer = 0; WAVE.interval = waveInterval(); WAVE.clearShow = 0;
+  victoryTriggered = false;
   $('waveannounce').style.opacity = 0;
   shake = 0; hurtFlash = 0; recoilPitch = 0; bobPhase = 0;
   timeScale = 1;
@@ -633,24 +667,33 @@ function resetWorld() {
 }
 
 function startGame() {
-  if (state !== 'menu') return;
+  if (state === 'playing' || state === 'paused') return;
   tryAudio();
   state = 'playing';
   $('overlay').style.display = 'none';
+  $('gameover').style.display = 'none';
+  $('victory').style.display = 'none';
+  $('pause').style.display = 'none';
   try { document.body.requestPointerLock().catch(() => {}); } catch (e) {}
   resetWorld();
   if (controls) controls.connect();
+  for (const key in keys) keys[key] = false;
 }
 
 function pauseGame(p) {
-  if (state !== 'playing') return;
+  if (p && state !== 'playing') return;
+  if (!p && state !== 'paused') return;
   state = p ? 'paused' : 'playing';
   $('pause').style.display = p ? 'flex' : 'none';
   if (controls) controls.disconnect();
-  if (!p && controls) controls.connect();
+  if (!p && controls) {
+    controls.connect();
+    try { document.body.requestPointerLock().catch(() => {}); } catch (e) {}
+  }
 }
 
 function gameOver() {
+  if (state === 'gameover' || state === 'victory') return;
   state = 'gameover';
   try { if (controls) controls.disconnect(); document.exitPointerLock(); } catch (e) {}
   $('gameover').style.display = 'flex';
@@ -663,16 +706,18 @@ window.addEventListener('keydown', e => {
   keys[k] = true;
   if (state === 'menu') { startGame(); return; }
   if (state === 'paused' && (k === 'escape' || k === 'enter')) { pauseGame(false); return; }
-  if (k === 'escape') { pauseGame(true); }
+  if (state === 'victory' && k === 'enter') { startGame(); return; }
+  if (state === 'gameover' && k === 'enter') { startGame(); return; }
+  if (k === 'escape') { if (state === 'playing') pauseGame(true); }
   if (state === 'playing' && k === 'r') startReload();
-  if (state === 'gameover' && k === 'enter') { startGame(); }
 });
 window.addEventListener('keyup', e => { keys[e.key.toLowerCase()] = false; });
 canvas.addEventListener('contextmenu', e => e.preventDefault());
 canvas.addEventListener('mousedown', e => {
   if (state === 'menu') { startGame(); return; }
   if (state === 'paused') { pauseGame(false); return; }
-  if (state === 'playing' && (document.pointerLockElement === document.body || !controls)) shoot();
+  if (state === 'victory' || state === 'gameover') { startGame(); return; }
+  if (state === 'playing') shoot();
 });
 document.addEventListener('pointerlockchange', () => {
   const locked = document.pointerLockElement === document.body;
@@ -684,8 +729,12 @@ document.addEventListener('pointerlockchange', () => {
   }
 });
 
-// auto-start for convenience (also lets the page run without interaction)
-setTimeout(() => { if (state === 'menu') startGame(); }, 900);
+const startBtn = document.getElementById('startBtn');
+if (startBtn) startBtn.addEventListener('click', startGame);
+const restartBtn = document.getElementById('restartBtn');
+if (restartBtn) restartBtn.addEventListener('click', startGame);
+const victoryBtn = document.getElementById('victoryBtn');
+if (victoryBtn) victoryBtn.addEventListener('click', startGame);
 
 /* ============================ MAIN LOOP ============================ */
 let last = performance.now();
@@ -702,6 +751,7 @@ function loop(t) {
     updateChunks();
     updateBullets(dt);
     updateEnemies(dt);
+    updateReload();
     updateGibs(dt);
     updateDecals(dt);
     updateWave(dt);
