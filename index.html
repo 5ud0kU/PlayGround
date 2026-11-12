@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <meta name="theme-color" content="#050607" />
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' fill='%23050707'/%3E%3Cpath d='M8 8h16v16H8z' fill='none' stroke='%23e74438' stroke-width='2'/%3E%3Ctext x='10' y='21' fill='%23f2eee7' font-size='10' font-family='monospace'%3E0%3C/text%3E%3C/svg%3E" />
+  <title>NULL / HOME</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="./style.css" />
+</head>
+<body>
+  <main id="game-shell">
+    <canvas id="world"></canvas>
+    <div class="grain"></div>
+    <div class="vignette"></div>
+    <div id="hud" class="hidden">
+      <header class="topline"><span class="brand"><i></i> NULL / HOME</span><span class="dimension">DIMENSION <b>0x00</b></span></header>
+      <div class="objective"><span class="eyebrow">YOUR ONLY WAY BACK</span><strong id="objective-text">REWRITE THE THREE ANCHORS</strong><div class="progress"><span id="progress-fill"></span></div><small id="progress-label">ANCHORS RESTORED 0 / 3</small></div>
+      <div class="coords"><span>LOCAL REALITY</span><b id="coords">X 00.0&nbsp;&nbsp; Z 00.0</b></div>
+      <div id="nearby" class="nearby hidden"><span class="signal">◉ SIGNAL FOUND</span><b id="nearby-name">UNSTABLE OBJECT</b><small>PRESS <kbd>E</kbd> TO INTERFACE</small></div>
+      <div class="crosshair"><i></i><i></i></div>
+      <div id="toast" class="toast"></div>
+      <footer><span><kbd>W A S D</kbd> MOVE</span><span><kbd>MOUSE</kbd> LOOK</span><span><kbd>E</kbd> INTERFACE</span><span><kbd>SHIFT</kbd> RUN</span></footer>
+      <div class="watch-silhouette"><span>⌚</span><small>CHRONO<br>PATCHER</small></div>
+      <div class="touch-controls" aria-label="Touch controls">
+        <div class="touch-pad"><button data-move="f">▲</button><div><button data-move="l">◀</button><button data-move="b">▼</button><button data-move="r">▶</button></div></div>
+        <button id="touch-interact" class="touch-interact">E<br><small>USE</small></button>
+      </div>
+    </div>
+    <section id="intro" class="screen">
+      <div class="intro-card">
+        <p class="eyebrow"><span class="pulse-dot"></span> RECEIVED TRANSMISSION // 00:00:01</p>
+        <h1>NULL<span>/</span><br>HOME</h1>
+        <p class="subtitle">You are not supposed to be here.</p>
+        <div class="story">The world has mistaken you for one of its errors.<br>Three anchors hold this dimension together. Rewrite them<br>with your chrono-patcher. Find the door that remembers you.</div>
+        <div class="start-row"><button id="start-button">ENTER THE NULL <span>↗</span></button><span class="hint">HEADPHONES RECOMMENDED<br>WASD + MOUSE · E TO INTERACT</span></div>
+        <div class="intro-code">01001110 01001111 01010100 00100000 01011001 01001111 01010101</div>
+      </div>
+      <div class="intro-aside"><span>FIELD NOTE 01 / 03</span><p>THE WALLS<br>ARE LISTENING.</p><span>NO EXIT FOUND<br>IN THIS DIRECTION</span></div>
+      <div class="corner-label">AN INTERDIMENSIONAL INCIDENT<br>CASE FILE 0x7F-A</div>
+    </section>
+    <section id="watch-panel" class="screen hidden" aria-modal="true">
+      <div class="watch-card">
+        <div class="watch-head"><span class="eyebrow">CHRONO-PATCHER // LIVE LINK</span><button id="close-watch" aria-label="Close">×</button></div>
+        <h2 id="watch-title">ANCHOR 01</h2>
+        <p id="watch-description" class="watch-copy">Reality is miswritten. Correct its sequence.</p>
+        <div class="readout"><div><small>EXISTING CODE</small><strong id="current-code">00000000</strong></div><div class="arrow">→</div><div><small>REQUIRED</small><strong id="target-code" class="target-code">00000000</strong></div></div>
+        <p class="bit-label">SELECT BITS TO FLIP <span>· 8-BIT STRING</span></p>
+        <div id="bit-grid" class="bit-grid"></div>
+        <div id="watch-feedback" class="watch-feedback">Tap a digit to invert it.</div>
+        <button id="apply-button" class="apply-button">COMMIT PATCH <span>↗</span></button>
+        <div class="watch-foot"><span>CHRONO-PATCHER v.0.0.1</span><span>DON'T TRUST THE CLOCK</span></div>
+      </div>
+    </section>
+    <section id="ending" class="screen hidden">
+      <div class="ending-card"><p class="eyebrow">SIGNAL ACQUIRED // HOME REALITY</p><h2>YOU<br>REMEMBER.</h2><p>The door opens into your own dimension.<br>Behind you, something uses your voice.</p><button id="return-button">RETURN TO THE NULL ↺</button><span class="end-code">01001000 01001111 01001101 01000101</span></div>
+    </section>
+    <div id="lock-hint" class="lock-hint hidden">CLICK TO RECAPTURE THE VIEW</div>
+  </main>
+  <script type="module" src="./game.js"></script>
+</body>
+</html>
