@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+  <meta name="theme-color" content="#101513"><title>The Town: The Sinner's Testament</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com"><link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=DM+Sans:wght@400;500;600;700&family=Playfair+Display:wght@500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <main id="game">
+    <canvas id="view" aria-label="First-person view of Gloamwood"></canvas>
+    <div class="vignette"></div><div class="grain"></div>
+    <header class="topbar">
+      <div class="brand"><span class="brand-mark">✣</span><div><div class="brand-name">GLOAMWOOD <span>COUNTY</span></div><div class="brand-sub">MAJOR CRIMES · CASE 07-14</div></div></div>
+      <div class="top-center"><span class="live-dot"></span><span id="weather">COLD RAIN</span><i></i><span id="clock">11:42 PM</span><i></i><span>OCT 17</span></div>
+      <div class="top-actions"><button id="saveBtn" class="icon-btn" title="Save game">▣<span>SAVE</span></button><button id="helpBtn" class="icon-btn" title="Controls">?</button></div>
+    </header>
+    <section class="hud-left"><div class="case-label">ACTIVE INVESTIGATION</div><h1>The Sinner's<br>Testament</h1><p id="objective">Search the scene. The rain is washing away the night.</p><div class="objective-progress"><span id="progressText">0 / 3</span><div class="progress-track"><i id="progressBar"></i></div></div><div class="location-line"><span class="pin">⌖</span><span id="locationLabel">OLD MERCY CHAPEL · GROUNDS</span></div></section>
+    <section class="hud-right"><div class="stat"><span>CONDITION</span><div class="stat-row"><b id="healthNum">86</b><div class="meter"><i id="healthBar"></i></div><span class="stat-unit">%</span></div></div><div class="stat"><span>COMPOSURE</span><div class="stat-row"><b id="stressNum">24</b><div class="meter stress"><i id="stressBar"></i></div><span class="stat-unit">%</span></div></div><div class="weather-note">◌ &nbsp; Visibility: poor</div></section>
+    <div class="crosshair"><i></i><b></b></div><div id="prompt" class="interaction-prompt"></div>
+    <div id="toast" class="toast"></div>
+    <footer class="bottom-hud"><div class="control-hint"><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd><span>MOVE</span><kbd>SHIFT</kbd><span>RUN</span><kbd>E</kbd><span>INTERACT</span></div><nav><button data-panel="case" class="nav-button active"><span>▤</span> CASE FILE <b id="evidenceCount">0</b></button><button data-panel="map" class="nav-button"><span>⌖</span> TOWN MAP</button><button data-panel="notes" class="nav-button"><span>≡</span> FIELD NOTES</button></nav><div class="radio"><span>◖</span><div><b>DISPATCH</b><small>All units, check in.</small></div></div></footer>
+    <div id="panel" class="panel hidden"><div class="panel-head"><div><span id="panelKicker" class="case-label">MAJOR CRIMES · 07-14</span><h2 id="panelTitle">Case file</h2></div><button id="closePanel" class="close-btn">×</button></div><div id="panelContent" class="panel-content"></div></div>
+    <div id="dialogue" class="dialogue hidden"><div class="dialogue-card"><div class="person-head"><div class="avatar" id="avatar">?</div><div><span id="personRole" class="case-label">WITNESS</span><h2 id="personName">Mara Voss</h2></div><button id="closeDialogue" class="close-btn">×</button></div><p id="personLine"></p><div id="dialogueOptions" class="dialogue-options"></div></div></div>
+    <div id="startScreen" class="screen-cover"><div class="title-wrap"><div class="title-eyebrow"><span></span> A GLOAMWOOD COUNTY INVESTIGATION <span></span></div><h1>THE TOWN</h1><div class="subtitle">THE SINNER'S TESTAMENT</div><div class="title-rule"><i></i>✣<i></i></div><p>A rain-darkened town. A congregation with a secret.<br>Someone here is listening.</p><button id="beginBtn" class="primary-btn">ENTER GLOAMWOOD <span>→</span></button><div class="start-foot">FIRST PERSON · INVESTIGATION HORROR · AUTOSAVE ENABLED</div></div><div class="start-bg"></div></div>
+    <div id="helpScreen" class="modal hidden"><div class="modal-card"><button class="close-btn modal-close">×</button><span class="case-label">FIELD GUIDE</span><h2>Stay observant.</h2><p>Walk the town, examine anything that catches your eye, and listen closely. Evidence is not a conclusion.</p><div class="key-grid"><span><kbd>W A S D</kbd> Move</span><span><kbd>MOUSE</kbd> Look</span><span><kbd>E</kbd> Examine / speak</span><span><kbd>SHIFT</kbd> Run</span><span><kbd>F</kbd> Toggle flashlight</span><span><kbd>ESC</kbd> Close interface</span></div><p class="muted">The world advances while you investigate. Your choices are remembered.</p><button class="primary-btn modal-ok">UNDERSTOOD</button></div></div>
+    <div id="ending" class="screen-cover hidden"><div class="title-wrap"><div class="title-eyebrow">GLOAMWOOD COUNTY · CASE CLOSED</div><h1 id="endingTitle">THE TESTAMENT</h1><div class="subtitle" id="endingSub">THE TOWN REMEMBERS</div><div class="title-rule">✣</div><p id="endingText"></p><button id="restartBtn" class="primary-btn">BEGIN AGAIN <span>↻</span></button></div></div>
+  </main>
+  <script src="game.js"></script>
+</body>
+</html>
