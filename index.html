@@ -288,7 +288,6 @@ function makeBuilding(cx, cy, bx, by) {
     max: new THREE.Vector3(gx + w / 2, bh, gz + d / 2),
     _chunk: null
   };
-  buildings.push(b);
   return { mesh, mat, box: b };
 }
 
@@ -339,7 +338,6 @@ function makeEnemy() {
   const head = new THREE.Mesh(new THREE.BoxGeometry(0.48, 0.48, 0.48), matEnemyHead);
   head.position.y = 1.42 + 0.24;
   g.add(body); g.add(head);
-  g.position.y = 0.71;
   return g;
 }
 function spawnEnemy() {
@@ -409,8 +407,8 @@ function updateDecals(dt) {
   for (let i = decals.length - 1; i >= 0; i--) {
     const d = decals[i]; d.userData.age += dt;
     const o = 1 - d.userData.age / d.userData.life;
-    d.mesh.material.opacity = Math.max(0, o);
-    if (o <= 0) { scene.remove(d); d.userData.mat.dispose(); decals.splice(i, 1); }
+    d.material.opacity = Math.max(0, o);
+    if (o <= 0) { scene.remove(d); d.material.dispose(); decals.splice(i, 1); }
   }
 }
 
@@ -517,12 +515,12 @@ function updateGibs(dt) {
   const scaled = dt * timeScale;
   for (let i = gibs.length - 1; i >= 0; i--) {
     const g = gibs[i]; g.age += dt;
-    g.mesh.position.x += g.vx * scaled; g.mesh.position.y += g.vy * scaled; g.mesh.position.z += g.vz * scaled;
+    g.m.position.x += g.vx * scaled; g.m.position.y += g.vy * scaled; g.m.position.z += g.vz * scaled;
     g.vy -= 22 * scaled;
-    if (g.mesh.position.y < 0.05) { g.mesh.position.y = 0.05; g.vy = 0; g.vx *= 0.25; g.vz *= 0.25; }
-    g.mesh.rotation.x += g.rx * scaled; g.mesh.rotation.y += g.ry * scaled; g.mesh.rotation.z += g.rz * scaled;
+    if (g.m.position.y < 0.05) { g.m.position.y = 0.05; g.vy = 0; g.vx *= 0.25; g.vz *= 0.25; }
+    g.m.rotation.x += g.rx * scaled; g.m.rotation.y += g.ry * scaled; g.m.rotation.z += g.rz * scaled;
     g.mat.opacity = Math.max(0, 1 - g.age / g.life);
-    if (g.age >= g.life) { scene.remove(g.mesh); g.mat.dispose(); gibs.splice(i, 1); }
+    if (g.age >= g.life) { scene.remove(g.m); g.m.geometry.dispose(); g.mat.dispose(); gibs.splice(i, 1); }
   }
 }
 
@@ -620,9 +618,9 @@ function resetWorld() {
   for (const e of enemies) { if (e.mesh.parent) scene.remove(e.mesh); e.mesh.children.forEach(c => c.geometry.dispose()); }
   enemies.length = 0;
   bullets.forEach(b => scene.remove(b.mesh)); bullets.length = 0;
-  gibs.forEach(g => { scene.remove(g.mesh); g.mat.dispose(); }); gibs.length = 0;
-  decals.forEach(d => { scene.remove(d.mesh); d.mat.dispose(); }); decals.length = 0;
-  flashes.forEach(f => { if (f.mesh.parent) f.mesh.parent.remove(f.mesh); }); flashes.length = 0;
+  gibs.forEach(g => { scene.remove(g.m); g.m.geometry.dispose(); g.m.material.dispose(); }); gibs.length = 0;
+  decals.forEach(d => { scene.remove(d); d.material.dispose(); }); decals.length = 0;
+  flashes.forEach(f => { if (f.mesh.parent) f.mesh.parent.remove(f.mesh); f.mesh.geometry.dispose(); f.mesh.material.dispose(); }); flashes.length = 0;
   chunks.forEach(disposeChunk); chunks.clear();
   buildings.length = 0;
   staticMeshes.length = 0;
