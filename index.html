@@ -4,6 +4,7 @@
   <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
   <meta name="theme-color" content="#101513"><title>The Town: The Sinner's Testament</title>
   <link rel="preconnect" href="https://fonts.googleapis.com"><link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=DM+Sans:wght@400;500;600;700&family=Playfair+Display:wght@500;600&display=swap" rel="stylesheet">
+  <link rel="icon" href="data:,">
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -20,6 +21,10 @@
     <div class="crosshair"><i></i><b></b></div><div id="prompt" class="interaction-prompt"></div>
     <div id="toast" class="toast"></div>
     <footer class="bottom-hud"><div class="control-hint"><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd><span>MOVE</span><kbd>SHIFT</kbd><span>RUN</span><kbd>E</kbd><span>INTERACT</span></div><nav><button data-panel="case" class="nav-button active"><span>▤</span> CASE FILE <b id="evidenceCount">0</b></button><button data-panel="map" class="nav-button"><span>⌖</span> TOWN MAP</button><button data-panel="notes" class="nav-button"><span>≡</span> FIELD NOTES</button></nav><div class="radio"><span>◖</span><div><b>DISPATCH</b><small>All units, check in.</small></div></div></footer>
+    <div class="mobile-controls" aria-label="Touch controls">
+      <div id="movePad" class="move-pad" aria-label="Move"><div class="move-pad-ring"><i id="moveStick"></i></div></div>
+      <div class="mobile-actions"><button id="runTouch" class="touch-action" aria-label="Run">RUN</button><button id="flashTouch" class="touch-action" aria-label="Toggle flashlight">☼</button><button id="interactTouch" class="touch-action touch-interact" aria-label="Interact">INTERACT</button></div>
+    </div>
     <div id="panel" class="panel hidden"><div class="panel-head"><div><span id="panelKicker" class="case-label">MAJOR CRIMES · 07-14</span><h2 id="panelTitle">Case file</h2></div><button id="closePanel" class="close-btn">×</button></div><div id="panelContent" class="panel-content"></div></div>
     <div id="dialogue" class="dialogue hidden"><div class="dialogue-card"><div class="person-head"><div class="avatar" id="avatar">?</div><div><span id="personRole" class="case-label">WITNESS</span><h2 id="personName">Mara Voss</h2></div><button id="closeDialogue" class="close-btn">×</button></div><p id="personLine"></p><div id="dialogueOptions" class="dialogue-options"></div></div></div>
     <div id="startScreen" class="screen-cover"><div class="title-wrap"><div class="title-eyebrow"><span></span> A GLOAMWOOD COUNTY INVESTIGATION <span></span></div><h1>THE TOWN</h1><div class="subtitle">THE SINNER'S TESTAMENT</div><div class="title-rule"><i></i>✣<i></i></div><p>A rain-darkened town. A congregation with a secret.<br>Someone here is listening.</p><button id="beginBtn" class="primary-btn">ENTER GLOAMWOOD <span>→</span></button><div class="start-foot">FIRST PERSON · INVESTIGATION HORROR · AUTOSAVE ENABLED</div></div><div class="start-bg"></div></div>
