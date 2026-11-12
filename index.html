@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+  <meta name="theme-color" content="#101619">
+  <link rel="icon" href="data:,">
+  <title>ATELIER 09 — Ingénieur de rue</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <main id="game">
+    <canvas id="view" aria-label="Vue à la première personne"></canvas>
+    <div class="vignette"></div>
+    <header class="topbar">
+      <div class="brand"><span class="brand-mark">A<span>09</span></span><div><b>ATELIER <i>09</i></b><small>INGÉNIEUR DE RUE</small></div></div>
+      <div class="location"><span class="live-dot"></span><span id="locationLabel">GARAGE · BAIE 01</span></div>
+      <button class="icon-button" id="soundButton" aria-label="Activer ou couper le son">♫ <span>SON</span></button>
+    </header>
+    <section class="mission-card" id="missionCard">
+      <div class="eyebrow"><span class="eyebrow-line"></span> CONTRAT DU JOUR <span>01 / 01</span></div>
+      <h1>Construis.<br><em>Pars rouler.</em></h1>
+      <p>Un châssis nu. Une ville entière.<br>À toi d’inventer la machine.</p>
+      <div class="mission-progress"><div class="progress-copy"><span>VÉHICULE</span><strong id="progressText">0 / 6 PIÈCES</strong></div><div class="progress-track"><i id="progressBar"></i></div></div>
+      <button class="primary-button" id="buildButton"><span>OUVRIR L’ATELIER</span><b>↗</b></button>
+      <div class="help-row"><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd><span>SE DÉPLACER</span><kbd>←</kbd><kbd>→</kbd><span>REGARDER</span></div>
+    </section>
+    <aside class="objective-chip" id="objectiveChip"><span class="chip-icon">⌁</span><div><small>OBJECTIF</small><b id="objectiveText">Assembler ton premier véhicule</b></div><span class="chip-arrow">↗</span></aside>
+    <div class="interact-hint" id="interactHint"><kbd>E</kbd> <span>OUVRIR L’ÉTABLI</span></div>
+    <div class="crosshair" id="crosshair"><i></i><b></b></div>
+    <div class="drive-hud" id="driveHud"><div><small>VITESSE</small><strong><span id="speedValue">0</span><i> km/h</i></strong></div><div class="gear">D</div><div class="drive-tip">W ACCÉLÉRER <span>·</span> A / D TOURNER <span>·</span> ESPACE FREINER</div></div>
+    <div class="minimap-frame" id="minimapFrame"><div class="mini-label">SECTEUR <b>V-09</b></div><canvas id="minimap" width="120" height="120"></canvas></div>
+    <div class="toast" id="toast"></div>
+    <div class="modal-backdrop" id="assemblyModal" aria-hidden="true">
+      <section class="assembly-window" role="dialog" aria-modal="true" aria-labelledby="assemblyTitle">
+        <header class="assembly-head"><div><div class="eyebrow"><span class="eyebrow-line"></span> POSTE DE CONCEPTION</div><h2 id="assemblyTitle">Ton véhicule, <em>ta règle.</em></h2></div><button class="close-button" id="closeAssembly" aria-label="Fermer">×</button></header>
+        <div class="assembly-body">
+          <aside class="parts-panel"><div class="panel-kicker">01 — PIÈCES DISPONIBLES</div><div id="partsList"></div><p class="parts-note">Clique une pièce, puis choisis son emplacement sur le plan.</p></aside>
+          <section class="blueprint-panel"><div class="blueprint-top"><span>VUE ÉCLATÉE <i>·</i> PROTOTYPE 09</span><span class="blueprint-status" id="buildStatus">CHÂSSIS NU</span></div>
+            <div class="blueprint-stage" id="blueprintStage">
+              <div class="blueprint-grid"></div>
+              <svg class="vehicle-blueprint" viewBox="0 0 640 360" role="img" aria-label="Plan d'assemblage du véhicule">
+                <path class="blueprint-line" d="M120 210 L180 168 L430 168 L500 210 L505 248 L115 248 Z"/>
+                <path class="blueprint-line faint" d="M185 168 L218 125 L387 125 L430 168 M220 126 L220 168 M385 126 L385 168 M140 210 L480 210"/>
+                <path class="blueprint-line faint" d="M180 169 L152 199 M430 169 L464 199 M190 248 L205 268 L414 268 L433 248"/>
+                <circle class="wheel-guide" cx="190" cy="249" r="39"/><circle class="wheel-guide" cx="426" cy="249" r="39"/>
+                <circle class="hub-guide" cx="190" cy="249" r="13"/><circle class="hub-guide" cx="426" cy="249" r="13"/>
+                <g id="partVisuals"></g>
+                <g class="slot" data-slot="chassis"><circle cx="320" cy="207" r="19"/><text x="320" y="212">01</text></g>
+                <g class="slot" data-slot="engine"><circle cx="400" cy="190" r="18"/><text x="400" y="195">02</text></g>
+                <g class="slot" data-slot="seat"><circle cx="276" cy="152" r="18"/><text x="276" y="157">03</text></g>
+                <g class="slot" data-slot="wheels"><circle cx="190" cy="249" r="18"/><text x="190" y="254">04</text><circle cx="426" cy="249" r="18"/><text x="426" y="254">04</text></g>
+                <g class="slot" data-slot="steering"><circle cx="247" cy="161" r="16"/><text x="247" y="166">05</text></g>
+                <g class="slot" data-slot="battery"><circle cx="333" cy="187" r="16"/><text x="333" y="192">06</text></g>
+              </svg>
+              <div class="blueprint-caption"><span>LONGUEUR <b>3,8 M</b></span><span>PUISSANCE <b id="powerReadout">—</b></span><span>MASSE <b id="massReadout">—</b></span></div>
+            </div>
+            <div class="assembly-footer"><span id="assemblyMessage">Sélectionne le châssis pour commencer.</span><button class="primary-button launch-button" id="launchButton" disabled><span>ESSAI EN VILLE</span><b>↗</b></button></div>
+          </section>
+        </div>
+      </section>
+    </div>
+    <div class="start-screen" id="startScreen"><div class="start-card"><div class="eyebrow"><span class="eyebrow-line"></span> ATELIER 09 PRÉSENTE</div><h1>LA VILLE<br><em>EST TON CIRCUIT.</em></h1><p>Assemble un véhicule pièce par pièce. Puis prends le volant dans les rues de V-09.</p><button class="primary-button" id="startButton"><span>ENTRER DANS L’ATELIER</span><b>↗</b></button><div class="start-foot">PREMIÈRE PERSONNE <span>·</span> LIBERTÉ TOTALE</div></div><div class="start-stamp">09<br><small>ENGINEERING</small></div></div>
+    <footer class="bottom-note"><span>ATELIER 09</span><i>·</i> LA MÉCANIQUE EST UNE FORME DE LIBERTÉ</footer>
+  </main>
+  <script src="game.js"></script>
+</body>
+</html>
