@@ -1,94 +1,1113 @@
-(()=>{'use strict';
-const canvas=document.getElementById('view'),ctx=canvas.getContext('2d',{alpha:false});
-const $=id=>document.getElementById(id);
-const ui={clock:$('clock'),weather:$('weather'),location:$('location'),prompt:$('prompt'),toast:$('toast'),health:$('healthBar'),sanity:$('sanityBar'),stamina:$('stamina'),hunger:$('hunger'),thirst:$('thirst'),objective:$('objective'),objectiveSub:$('objectiveSub'),panel:$('panel'),panelKicker:$('panelKicker'),panelTitle:$('panelTitle'),panelBody:$('panelBody'),panelActions:$('panelActions'),map:$('mapPanel'),mapGrid:$('mapGrid'),start:$('startScreen'),ending:$('ending')};
-const clamp=(v,a,b)=>Math.max(a,Math.min(b,v)),rand=(a,b)=>a+Math.random()*(b-a),dist=(a,b)=>Math.hypot(a.x-b.x,a.y-b.y);
-let W=960,H=600,started=false,last=0,toastTimer=0,keys={},mouseDown=false,focus=false,hidden=false,runTouch=false;
-const game={area:'town',x:14.5,y:18.1,angle:-Math.PI/2,health:100,sanity:88,stamina:100,hunger:12,thirst:18,time:6.23,weather:'OVERCAST',inventory:['Mara’s photograph','Small flashlight'],notes:[],visited:new Set(['town']),flags:{},relationships:{},objective:'Find out why Mara Bell vanished.',objectiveSub:'Talk to the people who remember her.',eventIn:24,elapsed:0,worlds:{},sounds:null,death:false,doorReturn:null,ending:false};
-const areas={};
-function area(name,label,rows,spawn,objects){areas[name]={name,label,map:rows.map(r=>r.split('')),spawn,objects:objects||[]};}
-function entity(id,name,x,y,type,opts={}){return{id,name,x,y,type,...opts};}
-function grid(w,h){return Array.from({length:h},(_,y)=>Array.from({length:w},(_,x)=>(x===0||y===0||x===w-1||y===h-1)?'#':'.'));}
-function block(m,x,y,w,h,tile='#'){for(let j=y;j<y+h;j++)for(let i=x;i<x+w;i++)if(m[j]&&m[j][i]!==undefined)m[j][i]=tile;}
-function buildWorld(){
- let m=grid(29,21);
- // The grid is a handful of connected streets; buildings interrupt the sightlines.
- [[2,2,5,4],[9,2,5,4],[17,2,5,4],[24,2,3,4],[3,9,5,4],[11,8,6,5],[21,9,5,4],[8,16,5,3],[18,16,6,3]].forEach(r=>block(m,...r));
- // tree-lined outskirts and a road that seems to continue beyond the town.
- for(let y=1;y<20;y++)for(let x=1;x<28;x++)if((x<2||x>26)&&(y<2||y>18))m[y][x]='T';
- area('town','WILLOW STREET',m.map(r=>r.join('')),{x:14.5,y:18.1,a:-Math.PI/2},[
- entity('maraDoor','BELL HOUSE',5.5,6.1,'door',{to:'mara',desc:'A yellow house with its porch light on.',return:{x:5.5,y:7.1}}),
- entity('hospitalDoor','ASHFALL HOSPITAL',11.5,6.1,'door',{to:'hospital',desc:'The automatic doors are dark.',return:{x:11.5,y:7.1}}),
- entity('schoolDoor','ASHFALL SCHOOL',19.5,6.1,'door',{to:'school',desc:'A notice is still pinned to the locked door.',return:{x:19.5,y:7.1}}),
- entity('motelDoor','MOTEL NO. 6',25,6.1,'door',{to:'motel',desc:'The vacancy sign buzzes without electricity.',return:{x:25,y:7.1}}),
- entity('policeDoor','POLICE STATION',5.5,13.2,'door',{to:'police',desc:'The station smells of wet paper.',return:{x:5.5,y:14.2}}),
- entity('dinerDoor','LARKSPUR DINER',14,13.2,'door',{to:'diner',desc:'Coffee, even at this hour.',return:{x:14,y:14.2}}),
- entity('chapelDoor','SAINT ORAN’S CHAPEL',23.5,13.2,'door',{to:'chapel',desc:'Someone has scratched names into the door.',return:{x:23.5,y:14.2}}),
- entity('woodsRoad','COUNTY ROAD 9',14.5,19,'exit',{desc:'The road out of Ashfall. The fog beyond it is almost solid.'}),
- entity('June','June Harlow',12.6,14.4,'npc',{role:'diner',personality:'kind',path:[{x:12.6,y:14.4},{x:13.5,y:14.1},{x:15.2,y:14.6}],line:'I saw Mara on Tuesday. Or I saw you. I’m sorry—some days those are the same face.',trust:0}),
- entity('Eli','Deputy Eli Ward',8.5,11.6,'npc',{role:'police',personality:'guarded',path:[{x:8.5,y:11.6},{x:8,y:13.9}],line:'There is no missing-person report for Mara Bell. I checked twice. I remember checking.',trust:0}),
- entity('Child','A child in a red coat',21.5,7.8,'npc',{role:'child',personality:'uneasy',path:[{x:21.5,y:7.8},{x:22.3,y:7.4}],line:'Your sister is in the room where the clocks go backward.',trust:0}),
- entity('notice','WANTED · MISSING',15.8,7.2,'clue',{clue:'notice',title:'Missing-person notice',description:'The paper shows your own photograph. The date is six days from now. Someone has written: “She came back alone.”'}),
- entity('payphone','Dead payphone',3.3,7.4,'clue',{clue:'voice',title:'A voice on the line',description:'The disconnected phone clicks alive. A woman whispers your childhood nickname, then asks why you left her under the house.'}),
- entity('shadow','A figure in the fog',26.2,15.1,'stalker',{active:true})
- ]);
- const interiors={
- mara:{label:'BELL HOUSE · FRONT ROOM',clue:'photo',title:'Mara’s photograph',description:'You and Mara at the county fair. In the background, the town clock has no hands. On the back: “If you find me, don’t let me wake up.”'},
- hospital:{label:'ASHFALL HOSPITAL · RECORDS',clue:'record',title:'Patient transfer log',description:'A transfer order lists Mara Bell, admitted six days ago. The destination field has been cut out. Your signature is at the bottom.'},
- school:{label:'ASHFALL SCHOOL · ROOM 12',clue:'drawing',title:'A child’s drawing',description:'A house with a door beneath it. Two stick figures stand inside. One has been rubbed away until the paper tore.'},
- motel:{label:'MOTEL NO. 6 · ROOM 09',clue:'tape',title:'Room 09 cassette',description:'A voice that sounds like yours: “If I come back, it isn’t me. Don’t open the cellar.” The tape ends with three knocks.'},
- police:{label:'POLICE STATION · EVIDENCE',clue:'report',title:'Incident report 114',description:'Three residents vanished over thirty years. Each was declared “never present.” A note in the margin reads: YOU REMEMBER WRONG.'},
- diner:{label:'LARKSPUR DINER · AFTER HOURS',clue:'rumor',title:'June’s account',description:'June remembers Mara as a girl who worked here. Then as a woman who never existed. She offers a brass key and asks you not to tell the deputy.'},
- chapel:{label:'SAINT ORAN’S CHAPEL',clue:'ledger',title:'The names ledger',description:'Every page lists a family, then a single survivor. The last entry is your name, dated tomorrow.'}
- };
- for(const [id,d] of Object.entries(interiors)){
-  const a=grid(13,11); // A small hollow room with a single open doorway on its south wall.
-  for(let y=2;y<=7;y++){a[y][3]='#';a[y][9]='#';}
-  for(let x=3;x<=9;x++){a[2][x]='#';a[7][x]='#';}
-  a[7][6]='.';
-  const things=[entity('back-'+id,'Return to Willow Street',6.5,8.2,'back',{desc:'Go back outside.'}),entity('clue-'+id,d.title,6.5,4.1,'clue',d),entity('person-'+id,id==='diner'?'June Harlow':id==='police'?'Deputy Ward':'A room that listens',4.4,5.2,'npc',{role:id,personality:'uneasy',line:id==='diner'?'Take it. I’ve kept it long enough.':id==='police'?'I never saw that report. You should leave it where you found it.':'The room is holding its breath.',trust:0})];
-  area(id,d.label,a.map(r=>r.join('')),{x:6.5,y:8.6,a:-Math.PI/2},things);
- }
-}
-function init(){buildWorld();resize();document.getElementById('startButton').onclick=begin;document.getElementById('panelClose').onclick=closePanel;document.getElementById('restart').onclick=()=>location.reload();document.addEventListener('keydown',onKeyDown);document.addEventListener('keyup',e=>keys[e.key.toLowerCase()]=false);canvas.addEventListener('click',()=>{if(started&&!ui.panel.classList.contains('open'))canvas.requestPointerLock?.();});document.addEventListener('mousemove',e=>{if(document.pointerLockElement===canvas&&!ui.panel.classList.contains('open'))game.angle+=e.movementX*.0022;});let touchLook=null;canvas.addEventListener('pointerdown',e=>{if(e.pointerType==='touch'){touchLook={id:e.pointerId,x:e.clientX};canvas.setPointerCapture(e.pointerId);}});canvas.addEventListener('pointermove',e=>{if(touchLook&&e.pointerId===touchLook.id){game.angle+=(e.clientX-touchLook.x)*.008;touchLook.x=e.clientX;}});for(const ev of ['pointerup','pointercancel','lostpointercapture'])canvas.addEventListener(ev,()=>touchLook=null);setupMobile();loop(0);}
-function resize(){const d=Math.min(devicePixelRatio||1,1.5);W=innerWidth;H=innerHeight;canvas.width=Math.floor(W*d);canvas.height=Math.floor(H*d);canvas.style.width=W+'px';canvas.style.height=H+'px';ctx.setTransform(d,0,0,d,0,0);}
-function onKeyDown(e){const k=e.key.toLowerCase();keys[k]=true;if([' ','arrowup','arrowdown','arrowleft','arrowright'].includes(k))e.preventDefault();if(!started)return;if(k==='e'||k===' ')interact();if(k==='j')showJournal();if(k==='i')showInventory();if(k==='m')toggleMap();if(k==='f')focus=!focus;if(k==='q')toggleHide();if(k==='r')rest();if(k==='escape'){closePanel();ui.map.classList.remove('open');}}
-function setupMobile(){for(const b of document.querySelectorAll('[data-key]')){const k=b.dataset.key;const release=()=>{keys[k]=false;b.classList.remove('pressed');};b.addEventListener('pointerdown',e=>{e.preventDefault();keys[k]=true;b.classList.add('pressed');b.setPointerCapture(e.pointerId);});['pointerup','pointercancel','lostpointercapture'].forEach(ev=>b.addEventListener(ev,release));}const actions={j:showJournal,i:showInventory,m:toggleMap,q:toggleHide,f:()=>focus=!focus,r:rest};for(const b of document.querySelectorAll('[data-action]'))b.addEventListener('click',()=>actions[b.dataset.action]?.());document.getElementById('mobileE').addEventListener('click',interact);const run=document.getElementById('mobileRun');const stopRun=()=>{runTouch=false;run.classList.remove('pressed');};run.addEventListener('pointerdown',e=>{e.preventDefault();runTouch=true;run.classList.add('pressed');run.setPointerCapture(e.pointerId);});['pointerup','pointercancel','lostpointercapture'].forEach(ev=>run.addEventListener(ev,stopRun));}
-function begin(){started=true;document.getElementById('game').classList.add('started');ui.start.classList.add('gone');game.sounds=makeAudio();notify('The road behind you disappears in the rear-view mirror.');game.visited.add('town');}
-function makeAudio(){try{const A=window.AudioContext||window.webkitAudioContext;if(!A)return null;const ac=new A(),osc=ac.createOscillator(),gain=ac.createGain();osc.type='sine';osc.frequency.value=47;gain.gain.value=.018;osc.connect(gain);gain.connect(ac.destination);osc.start();return{ac,osc,gain};}catch{return null}}
-function notify(text){ui.toast.textContent=text;ui.toast.classList.add('show');toastTimer=4.2;}
-function loop(t){const dt=Math.min(.05,(t-last)/1000||0);last=t;if(started&&!game.ending)update(dt);render();requestAnimationFrame(loop);}
-function castRay(angle){const m=areas[game.area].map,dx=Math.cos(angle),dy=Math.sin(angle);let mx=Math.floor(game.x),my=Math.floor(game.y),sx=dx<0?-1:1,sy=dy<0?-1:1,ddx=Math.abs(1/(dx||1e-8)),ddy=Math.abs(1/(dy||1e-8)),vx=dx<0?(game.x-mx)*ddx:(mx+1-game.x)*ddx,vy=dy<0?(game.y-my)*ddy:(my+1-game.y)*ddy,side=0,tile='#';for(let i=0;i<80;i++){if(vx<vy){vx+=ddx;mx+=sx;side=0}else{vy+=ddy;my+=sy;side=1}tile=m[my]?.[mx]||'#';if(tile!=='.')break;}let d=side===0?vx-ddx:vy-ddy;return{d:Math.max(.05,d*Math.cos(angle-game.angle)),side,tile,mx,my,hit:(side===0?game.y+d*dy:game.x+d*dx)%1};}
-function render(){const w=W,h=H,hz=h*.47,cols=Math.ceil(w/2),step=w/cols,depth=[];let sky=ctx.createLinearGradient(0,0,0,hz);sky.addColorStop(0,game.time>19||game.time<5?'#070a0d':'#39403e');sky.addColorStop(1,game.time>19||game.time<5?'#1a2022':'#73756b');ctx.fillStyle=sky;ctx.fillRect(0,0,w,hz);let floor=ctx.createLinearGradient(0,hz,0,h);floor.addColorStop(0,'#383a35');floor.addColorStop(.45,'#212522');floor.addColorStop(1,'#0b0e0d');ctx.fillStyle=floor;ctx.fillRect(0,hz,w,h-hz);
- for(let i=0;i<cols;i++){const x=i*step,ray=game.angle+(i/cols-.5)*1.12,r=castRay(ray),d=r.d;depth[i]=d;const wh=Math.min(h*2,h*.9/d),top=hz-wh*.5,shade=clamp(1.05-d/15,.16,.9)*(r.side?.78:1);if(r.tile==='T'){ctx.fillStyle=`rgb(${Math.floor(13*shade)},${Math.floor(20*shade)},${Math.floor(18*shade)})`;ctx.fillRect(x,top,step+1,wh);ctx.fillStyle=`rgba(92,105,82,${shade*.35})`;ctx.fillRect(x,top+wh*.22,step+1,wh*.06)}else{ctx.fillStyle=r.tile==='D'?'#51443b':'#55544d';ctx.fillRect(x,top,step+1,wh);ctx.fillStyle=`rgba(8,10,9,${1-shade})`;ctx.fillRect(x,top,step+1,wh);if((Math.floor(r.hit*10)%2===0)&&d<9){ctx.fillStyle=`rgba(160,146,118,${shade*.11})`;ctx.fillRect(x,top+wh*.1,step+1,Math.max(1,wh*.015));if(wh>80){ctx.fillStyle=`rgba(190,171,126,${shade*.15})`;ctx.fillRect(x,top+wh*.31,step+1,wh*.12);ctx.fillStyle=`rgba(11,15,14,${shade*.8})`;ctx.fillRect(x,top+wh*.33,step+1,wh*.09)}}ctx.fillStyle=`rgba(0,0,0,${clamp(d/30,.05,.46)})`;ctx.fillRect(x,top,step+1,wh);}if(i%8===0){ctx.strokeStyle=`rgba(151,151,131,${clamp(.05/d,.003,.035)})`;ctx.beginPath();ctx.moveTo(x,hz);ctx.lineTo(w*.5+(x-w*.5)*7,h);ctx.stroke();}}
- drawWorldSprites(depth,cols,step,hz);drawAtmosphere();drawHud();}
-function poly(points,color){ctx.fillStyle=color;ctx.beginPath();ctx.moveTo(points[0][0],points[0][1]);for(let i=1;i<points.length;i++)ctx.lineTo(points[i][0],points[i][1]);ctx.closePath();ctx.fill();}
-function drawWorldSprites(depth,cols,step,hz){const list=areas[game.area].objects.filter(o=>!o.hidden&&(o.type!=='stalker'||o.active)).map(o=>({o,d:dist(game,o)})).filter(s=>s.d<19).sort((a,b)=>b.d-a.d);for(const q of list){const o=q.o,d=q.d,da=Math.atan2(Math.sin(Math.atan2(o.y-game.y,o.x-game.x)-game.angle),Math.cos(Math.atan2(o.y-game.y,o.x-game.x)-game.angle));if(Math.abs(da)>.78)continue;const x=W/2+Math.tan(da)*W*.83,s=clamp(H*.53/d,10,190),base=H*.47+s*.48,ix=clamp(Math.floor(x/(W/cols)),0,cols-1);if(depth[ix]<d-.2)continue;drawSprite(o,x,base,s,d);}}
-function drawSprite(o,x,b,s,d){if(o.type==='npc'||o.type==='stalker'){const ghost=o.type==='stalker'||o.personality==='uneasy',c=o.role==='child'?'#7b2828':ghost?'#555c56':o.role==='police'?'#333d3a':'#777365';if(o.type==='stalker'&&Math.sin(game.elapsed*2)>0)ctx.globalAlpha=.42;poly([[x-s*.12,b-s*.52],[x-s*.18,b-s*.2],[x-s*.1,b-s*.52],[x+s*.1,b-s*.52],[x+s*.19,b-s*.2],[x+s*.14,b-s*.52]],c);poly([[x-s*.12,b-s*.52],[x-s*.1,b-s*.75],[x+s*.1,b-s*.75],[x+s*.13,b-s*.52]],ghost?'#9b9b87':'#9a8d7a');ctx.fillStyle='#171715';ctx.fillRect(x-s*.1,b-s*.68,s*.035,s*.02);ctx.fillRect(x+s*.045,b-s*.68,s*.035,s*.02);ctx.globalAlpha=1;}else if(o.type==='clue'){ctx.fillStyle=o.clue==='notice'?'#d0c8b0':o.clue==='voice'?'#514e48':'#a59577';ctx.fillRect(x-s*.14,b-s*.54,s*.28,s*.34);ctx.fillStyle='#242824';for(let j=0;j<3;j++)ctx.fillRect(x-s*.1,b-s*.46+j*s*.07,s*.2,s*.012);}else if(o.type==='door'||o.type==='back'){ctx.fillStyle='#302d29';ctx.fillRect(x-s*.24,b-s*.72,s*.48,s*.72);ctx.fillStyle='#6b6558';ctx.fillRect(x-s*.19,b-s*.66,s*.38,s*.66);ctx.fillStyle='#252725';ctx.fillRect(x-s*.15,b-s*.61,s*.3,s*.59);ctx.fillStyle='#b9a67c';ctx.fillRect(x+s*.09,b-s*.34,s*.025,s*.025);}else if(o.type==='exit'){ctx.strokeStyle='#87816c';ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(x-s*.35,b);ctx.lineTo(x-s*.22,b-s*.54);ctx.lineTo(x+s*.22,b-s*.54);ctx.lineTo(x+s*.35,b);ctx.stroke();}if(s>18&&d<6&&o.name){ctx.font=`${clamp(s*.12,10,15)}px Georgia`;ctx.textAlign='center';ctx.fillStyle='rgba(232,224,205,.76)';ctx.fillText(o.name,x,b-s*.79);}}
-function drawAtmosphere(){const night=game.time>19||game.time<5,fog=ctx.createLinearGradient(0,H*.32,0,H);fog.addColorStop(0,'rgba(151,160,151,0)');fog.addColorStop(.8,night?'rgba(130,143,137,.09)':'rgba(197,193,174,.14)');fog.addColorStop(1,night?'rgba(146,157,150,.22)':'rgba(207,200,179,.27)');ctx.fillStyle=fog;ctx.fillRect(0,0,W,H);if(game.weather==='RAIN'){ctx.strokeStyle='rgba(191,203,199,.18)';for(let i=0;i<75;i++){let x=(i*137+game.elapsed*190)%W,y=(i*71+game.elapsed*370)%H;ctx.beginPath();ctx.moveTo(x,y);ctx.lineTo(x-3,y+12);ctx.stroke();}}if(game.sanity<45){ctx.fillStyle=`rgba(72,10,16,${(45-game.sanity)/400})`;ctx.fillRect(0,0,W,H);if(Math.random()<.03){ctx.fillStyle='rgba(205,210,194,.08)';ctx.fillRect(rand(0,W),rand(0,H),rand(40,200),rand(2,20));}}if(focus){ctx.strokeStyle='rgba(196,185,151,.55)';ctx.beginPath();ctx.arc(W/2,H/2,36,0,7);ctx.stroke();}}
-function drawHud(){const nearest=nearestEntity();ui.objective.textContent=game.objective;ui.objectiveSub.textContent=game.objectiveSub;if(started&&nearest&&nearest.d<2.35&&!ui.panel.classList.contains('open')){ui.prompt.innerHTML=`<kbd>E</kbd> ${nearest.o.name}`;ui.prompt.classList.add('show')}else ui.prompt.classList.remove('show');ui.location.textContent=areas[game.area].label;const hh=Math.floor(game.time)%24,mm=Math.floor((game.time%1)*60);ui.clock.textContent=`${String(hh%12||12).padStart(2,'0')}:${String(mm).padStart(2,'0')} ${hh>=12?'PM':'AM'}`;ui.weather.textContent=game.weather;ui.health.style.width=game.health+'%';ui.sanity.style.width=game.sanity+'%';ui.stamina.textContent=Math.floor(game.stamina);ui.hunger.textContent=Math.floor(game.hunger);ui.thirst.textContent=Math.floor(game.thirst);}
-function nearestEntity(){let best=null;for(const o of areas[game.area].objects){if(o.type==='stalker'&&!o.active)continue;const d=dist(game,o);if(d<(best?.d??Infinity))best={o,d};}return best;}
-function refreshObjective(){if(game.flags.ledger){game.objective='Decide what to do with Mara.';game.objectiveSub='The names ledger is dated tomorrow.';}else if(game.flags.key){game.objective='Find the room beneath the town.';game.objectiveSub=`Evidence gathered: ${game.notes.length}/3 · Follow County Road 9.`;}else if(game.flags.record){game.objective='Ask June about the brass key.';game.objectiveSub='She waits outside Larkspur Diner.';}else if(game.flags.notice){game.objective='Find a record at the hospital.';game.objectiveSub='The emergency release needs a patient ID.';}else{game.objective='Find out why Mara Bell vanished.';game.objectiveSub='Talk to the people who remember her.';}}
-function isBlocked(x,y){const m=areas[game.area].map;return(m[Math.floor(y)]?.[Math.floor(x)]||'#')!==' .'.trim();}
-function tryMove(dx,dy){const nx=game.x+dx,ny=game.y+dy;if(!isBlocked(nx,game.y))game.x=nx;if(!isBlocked(game.x,ny))game.y=ny;}
-function update(dt){game.elapsed+=dt;game.time=(game.time+dt*.009)%24;game.hunger=clamp(game.hunger+dt*.026,0,100);game.thirst=clamp(game.thirst+dt*.04,0,100);if(game.hunger>85||game.thirst>88)game.health=clamp(game.health-dt*.17,0,100);const fwd=(keys.w||keys.arrowup?1:0)-(keys.s||keys.arrowdown?1:0),side=(keys.d?1:0)-(keys.a?1:0),moving=!!(fwd||side),running=(keys.shift||runTouch)&&game.stamina>2&&!hidden;let speed=running?3.2:1.75;if(moving&&!hidden){const l=Math.hypot(fwd,side)||1,vx=(Math.cos(game.angle)*fwd+Math.cos(game.angle+Math.PI/2)*side)/l*speed*dt,vy=(Math.sin(game.angle)*fwd+Math.sin(game.angle+Math.PI/2)*side)/l*speed*dt;tryMove(vx,vy);}game.stamina=clamp(game.stamina+(running&&moving?-28:18)*dt,0,100);if(hidden)game.stamina=clamp(game.stamina+9*dt,0,100);
- for(const o of areas.town.objects){if(o.path){o.step=(o.step||0)+dt;if(o.step>7){o.step=0;o.pathIndex=((o.pathIndex||0)+1)%o.path.length;}const p=o.path[o.pathIndex||0],q=o.path[((o.pathIndex||0)+1)%o.path.length],t=clamp(o.step/7,0,1);o.x=p.x+(q.x-p.x)*t;o.y=p.y+(q.y-p.y)*t;}}
- const stalk=areas.town.objects.find(o=>o.type==='stalker');if(stalk&&game.area==='town'){if(game.time>19||game.time<5){stalk.active=true;if(dist(game,stalk)<7){game.sanity=clamp(game.sanity-dt*1.1,0,100);if(dist(game,stalk)<1.15&&!hidden){game.health=clamp(game.health-dt*8,0,100);if(Math.random()<.008)notify('Something brushes past you.');}}else{stalk.x+=(game.x-stalk.x)*dt*.025;stalk.y+=(game.y-stalk.y)*dt*.025;}}else{stalk.active=false;stalk.x=26.2;stalk.y=15.1;}}
- game.eventIn-=dt;if(game.eventIn<0){game.eventIn=rand(28,55);const events=['A door closes somewhere behind you.','The lights flicker. When they return, the street feels narrower.','Footsteps follow yours for three steps, then stop.','A telephone rings once in an empty building.','You hear Mara say your name from far away.'];notify(events[Math.floor(Math.random()*events.length)]);game.sanity=clamp(game.sanity-rand(1.2,3.8),0,100);}
- if(game.sounds){game.sounds.ac.resume?.();game.sounds.osc.frequency.setTargetAtTime(45+Math.max(0,45-game.sanity)*.7,game.sounds.ac.currentTime,.5);}if(toastTimer>0&&(toastTimer-=dt)<=0)ui.toast.classList.remove('show');if(game.health<=0)finish('THE HOUSE KEEPS YOU','By morning, Ashfall has no record of your arrival. Someone leaves flowers at the locked door. They are always fresh.');}
-function interact(){if(!started||ui.panel.classList.contains('open'))return;const near=nearestEntity();if(!near||near.d>2.5){notify('Nothing close enough to touch.');return;}const o=near.o;if(o.type==='door'){if(o.to==='school'&&!game.flags.notice){showText('The school door is locked','The notice is fresh. Someone has pinned it up from the inside.');return;}if(o.to==='hospital'&&!game.flags.record&&game.notes.length<1){showText('The hospital doors won’t open','The emergency release blinks: PATIENT ID REQUIRED. Find a record in town.');return;}game.doorReturn={area:game.area,x:o.return.x,y:o.return.y};game.area=o.to;game.x=areas[o.to].spawn.x;game.y=areas[o.to].spawn.y;game.angle=areas[o.to].spawn.a;game.visited.add(o.to);notify(o.desc);return;}if(o.type==='back'){game.area=game.doorReturn?.area||'town';game.x=game.doorReturn?.x??14.5;game.y=game.doorReturn?.y??15.2;game.angle=Math.PI/2;game.doorReturn=null;game.visited.add('town');return;}if(o.type==='exit'){if(!game.flags.key||game.notes.length<3){const reason=!game.flags.key?'The road ends at the town line. June has the cellar key. Find her outside the diner.':'The road ends at the town line. Gather at least three clues before deciding what happened to Mara.';showText('The county road',reason,[{label:'Turn back',action:closePanel}]);}else showChoiceEnding();return;}if(o.type==='clue'){if(!game.flags[o.clue]){game.flags[o.clue]=true;game.notes.push(o.title);if(o.clue==='photo'||o.clue==='record'||o.clue==='report'||o.clue==='drawing'||o.clue==='tape'||o.clue==='ledger')game.sanity=clamp(game.sanity-4,0,100);refreshObjective();}showText(o.title,o.description,[{label:'Keep looking',action:closePanel}]);return;}if(o.type==='npc'){talk(o);return;}if(o.type==='stalker'){notify('It is not there when you look directly at it.');game.sanity=clamp(game.sanity-5,0,100);}}
-function showText(title,text,actions=[]){openPanel('FIELD NOTE',title,`<p>${text}</p>`,actions.length?actions:[{label:'Close',action:closePanel}]);}
-function openPanel(kicker,title,body,actions=[]){ui.panelKicker.textContent=kicker;document.getElementById('panelTitle').textContent=title;document.getElementById('panelBody').innerHTML=body;const el=document.getElementById('panelActions');el.innerHTML='';for(const a of actions){const b=document.createElement('button');b.textContent=a.label;b.onclick=a.action;el.appendChild(b);}ui.panel.classList.add('open');document.exitPointerLock?.();}
-function closePanel(){ui.panel.classList.remove('open');}
-function talk(o){let line=o.line;if(o.role==='diner'&&game.flags.notice)line='That’s Mara, isn’t it? She asked me to keep this for you. Please don’t make me remember why.';if(o.role==='police'&&game.notes.length>1)line='You have the report. I never gave it to you. You should leave town while you still remember the road.';if(o.role==='child'&&game.notes.length>3)line='She’s waiting under the chapel. You can’t take both of us home.';openPanel(o.personality==='kind'?'A LOCAL · LARKSPUR DINER':'A LOCAL · ASHFALL COUNTY',o.name,`<p>“${line}”</p><p><em>${o.trust>0?'They seem to recognize you.':'Their eyes keep returning to the street behind you.'}</em></p>`,[{label:'Ask about Mara',action:()=>{o.trust++;game.relationships[o.id]=o.trust;closePanel();notify(o.trust>1?'They repeat the same story, but one detail has changed.':'They tell you what they remember. You write it down.');if(o.role==='diner'&&game.flags.record&&!game.flags.key){game.flags.key=true;game.inventory.push('Brass cellar key');refreshObjective();notify('June presses the brass key into your palm. “Don’t let it hear you coming.”');}}},{label:'Leave',action:closePanel}]);}
-function showJournal(){openPanel('CASE FILE 01 · FIELD NOTES','Mara Bell',`<p><strong>Current lead</strong><br>${game.objective}</p><p>${game.notes.length?game.notes.map(n=>'— '+n).join('<br>'):'No evidence collected. The town remembers things differently.'}</p><p><em>“Your memories are not evidence.”</em></p>`,[{label:'Close',action:closePanel}]);}
-function showInventory(){openPanel('PERSONAL EFFECTS','Pockets',`<p>${game.inventory.map(item=>'• '+item).join('<br>')}</p><p>Food and water are scarce. There may be supplies inside the diner or hospital.</p>`,[{label:'Close',action:closePanel}]);}
-function toggleMap(){ui.map.classList.toggle('open');if(ui.map.classList.contains('open')){const places=[['town','WILLOW ST.'],['mara','BELL HOUSE'],['hospital','HOSPITAL'],['school','SCHOOL'],['motel','MOTEL'],['police','POLICE'],['diner','DINER'],['chapel','CHAPEL']];ui.mapGrid.innerHTML='';for(const [id,label] of places){const d=document.createElement('div');d.textContent=game.visited.has(id)?label:'—';if(game.visited.has(id))d.classList.add('visited');if(game.area===id)d.classList.add('current');ui.mapGrid.appendChild(d);}}}
-function toggleHide(){hidden=!hidden;notify(hidden?'You hold your breath behind the nearest shadow.':'You step back into the open.');}
-function rest(){if(game.area!=='diner'){notify('You need a safer place to rest.');return;}game.health=clamp(game.health+20,0,100);game.stamina=100;game.sanity=clamp(game.sanity+8,0,100);game.hunger=clamp(game.hunger-18,0,100);game.thirst=clamp(game.thirst-16,0,100);notify('A cup of coffee. For a moment, you know where you are.');}
-function showChoiceEnding(){openPanel('THE ROOM BENEATH THE TOWN','A door in the earth',`<p>The cellar stairs descend through damp soil. At the bottom, Mara waits beside a stopped clock. She looks exactly as she did six days ago.</p><p>“You took your time,” she says. Behind her, a second shadow wears your face.</p>`,[{label:'Take Mara’s hand',action:()=>finish('SOMEONE COMES HOME','At dawn, a woman walks out of Ashfall. She says her name is Mara. The family photograph on her mantle shows only one child.'),},{label:'Close the door',action:()=>finish('THE TOWN REMEMBERS','You turn the key. From below, two voices call your name—one furious, one relieved. You cannot tell which is Mara.'),},{label:'Go back alone',action:()=>finish('THE ROAD OUT','You drive until the sun rises. Your phone rings. The caller ID says HOME. You let it ring until the battery dies.')}]);}
-function finish(title,text){game.ending=true;document.getElementById('endingTitle').textContent=title;document.getElementById('endingText').textContent=text;ui.ending.classList.add('open');closePanel();document.exitPointerLock?.();}
-window.addEventListener('load',init);
-window.addEventListener('resize',resize);resize();
-window.__THE_TOWN_TEST__={game,areas,interact,closePanel};
+(() => {
+  "use strict";
+  const canvas = document.getElementById("view"),
+    ctx = canvas.getContext("2d", { alpha: false });
+  const $ = (id) => document.getElementById(id);
+  const ui = {
+    clock: $("clock"),
+    weather: $("weather"),
+    location: $("location"),
+    prompt: $("prompt"),
+    toast: $("toast"),
+    health: $("healthBar"),
+    sanity: $("sanityBar"),
+    stamina: $("stamina"),
+    hunger: $("hunger"),
+    thirst: $("thirst"),
+    objective: $("objective"),
+    objectiveSub: $("objectiveSub"),
+    panel: $("panel"),
+    panelKicker: $("panelKicker"),
+    panelTitle: $("panelTitle"),
+    panelBody: $("panelBody"),
+    panelActions: $("panelActions"),
+    map: $("mapPanel"),
+    mapGrid: $("mapGrid"),
+    start: $("startScreen"),
+    ending: $("ending"),
+  };
+  const clamp = (v, a, b) => Math.max(a, Math.min(b, v)),
+    rand = (a, b) => a + Math.random() * (b - a),
+    dist = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
+  let W = 960,
+    H = 600,
+    started = false,
+    last = 0,
+    toastTimer = 0,
+    keys = {},
+    focus = false,
+    hidden = false,
+    runTouch = false;
+  const game = {
+    area: "town",
+    x: 14.5,
+    y: 18.1,
+    angle: -Math.PI / 2,
+    health: 100,
+    sanity: 88,
+    stamina: 100,
+    hunger: 12,
+    thirst: 18,
+    time: 6.23,
+    weather: "OVERCAST",
+    inventory: ["Mara’s photograph", "Small flashlight"],
+    notes: [],
+    visited: new Set(["town"]),
+    flags: {},
+    objective: "Find out why Mara Bell vanished.",
+    objectiveSub: "Talk to the people who remember her.",
+    eventIn: 24,
+    elapsed: 0,
+    sounds: null,
+    doorReturn: null,
+    ending: false,
+  };
+  const areas = {};
+  function area(name, label, rows, spawn, objects = []) {
+    areas[name] = {
+      name,
+      label,
+      map: rows.map((r) => r.split("")),
+      spawn,
+      objects,
+    };
+  }
+  function entity(id, name, x, y, type, opts = {}) {
+    return { id, name, x, y, type, ...opts };
+  }
+  function grid(w, h) {
+    return Array.from({ length: h }, (_, y) =>
+      Array.from({ length: w }, (_, x) =>
+        x === 0 || y === 0 || x === w - 1 || y === h - 1 ? "#" : ".",
+      ),
+    );
+  }
+  function block(m, x, y, w, h, tile = "#") {
+    for (let j = y; j < y + h; j++)
+      for (let i = x; i < x + w; i++)
+        if (m[j] && m[j][i] !== undefined) m[j][i] = tile;
+  }
+  function buildWorld() {
+    const m = grid(29, 21);
+    // The grid is a handful of connected streets; buildings interrupt the sightlines.
+    [
+      [2, 2, 5, 4],
+      [9, 2, 5, 4],
+      [17, 2, 5, 4],
+      [24, 2, 3, 4],
+      [3, 9, 5, 4],
+      [11, 8, 6, 5],
+      [21, 9, 5, 4],
+      [8, 16, 5, 3],
+      [18, 16, 6, 3],
+    ].forEach((r) => block(m, ...r));
+    // tree-lined outskirts and a road that seems to continue beyond the town.
+    for (let y = 1; y < 20; y++)
+      for (let x = 1; x < 28; x++)
+        if ((x < 2 || x > 26) && (y < 2 || y > 18)) m[y][x] = "T";
+    area(
+      "town",
+      "WILLOW STREET",
+      m.map((r) => r.join("")),
+      { x: 14.5, y: 18.1, a: -Math.PI / 2 },
+      [
+        entity("maraDoor", "BELL HOUSE", 5.5, 6.1, "door", {
+          to: "mara",
+          desc: "A yellow house with its porch light on.",
+          return: { x: 5.5, y: 7.1 },
+        }),
+        entity("hospitalDoor", "ASHFALL HOSPITAL", 11.5, 6.1, "door", {
+          to: "hospital",
+          desc: "The automatic doors are dark.",
+          return: { x: 11.5, y: 7.1 },
+        }),
+        entity("schoolDoor", "ASHFALL SCHOOL", 19.5, 6.1, "door", {
+          to: "school",
+          desc: "A notice is still pinned to the locked door.",
+          return: { x: 19.5, y: 7.1 },
+        }),
+        entity("motelDoor", "MOTEL NO. 6", 25, 6.1, "door", {
+          to: "motel",
+          desc: "The vacancy sign buzzes without electricity.",
+          return: { x: 25, y: 7.1 },
+        }),
+        entity("policeDoor", "POLICE STATION", 5.5, 13.2, "door", {
+          to: "police",
+          desc: "The station smells of wet paper.",
+          return: { x: 5.5, y: 14.2 },
+        }),
+        entity("dinerDoor", "LARKSPUR DINER", 14, 13.2, "door", {
+          to: "diner",
+          desc: "Coffee, even at this hour.",
+          return: { x: 14, y: 14.2 },
+        }),
+        entity("chapelDoor", "SAINT ORAN’S CHAPEL", 23.5, 13.2, "door", {
+          to: "chapel",
+          desc: "Someone has scratched names into the door.",
+          return: { x: 23.5, y: 14.2 },
+        }),
+        entity("woodsRoad", "COUNTY ROAD 9", 14.5, 19, "exit", {
+          desc: "The road out of Ashfall. The fog beyond it is almost solid.",
+        }),
+        entity("June", "June Harlow", 12.6, 14.4, "npc", {
+          role: "diner",
+          personality: "kind",
+          path: [
+            { x: 12.6, y: 14.4 },
+            { x: 13.5, y: 14.1 },
+            { x: 15.2, y: 14.6 },
+          ],
+          line: "I saw Mara on Tuesday. Or I saw you. I’m sorry—some days those are the same face.",
+          trust: 0,
+        }),
+        entity("Eli", "Deputy Eli Ward", 8.5, 11.6, "npc", {
+          role: "police",
+          personality: "guarded",
+          path: [
+            { x: 8.5, y: 11.6 },
+            { x: 8, y: 13.9 },
+          ],
+          line: "There is no missing-person report for Mara Bell. I checked twice. I remember checking.",
+          trust: 0,
+        }),
+        entity("Child", "A child in a red coat", 21.5, 7.8, "npc", {
+          role: "child",
+          personality: "uneasy",
+          path: [
+            { x: 21.5, y: 7.8 },
+            { x: 22.3, y: 7.4 },
+          ],
+          line: "Your sister is in the room where the clocks go backward.",
+          trust: 0,
+        }),
+        entity("notice", "WANTED · MISSING", 15.8, 7.2, "clue", {
+          clue: "notice",
+          title: "Missing-person notice",
+          description:
+            "The paper shows your own photograph. The date is six days from now. Someone has written: “She came back alone.”",
+        }),
+        entity("payphone", "Dead payphone", 3.3, 7.4, "clue", {
+          clue: "voice",
+          title: "A voice on the line",
+          description:
+            "The disconnected phone clicks alive. A woman whispers your childhood nickname, then asks why you left her under the house.",
+        }),
+        entity("shadow", "A figure in the fog", 26.2, 15.1, "stalker", {
+          active: true,
+        }),
+      ],
+    );
+    const interiors = {
+      mara: {
+        label: "BELL HOUSE · FRONT ROOM",
+        clue: "photo",
+        title: "Mara’s photograph",
+        description:
+          "You and Mara at the county fair. In the background, the town clock has no hands. On the back: “If you find me, don’t let me wake up.”",
+      },
+      hospital: {
+        label: "ASHFALL HOSPITAL · RECORDS",
+        clue: "record",
+        title: "Patient transfer log",
+        description:
+          "A transfer order lists Mara Bell, admitted six days ago. The destination field has been cut out. Your signature is at the bottom.",
+      },
+      school: {
+        label: "ASHFALL SCHOOL · ROOM 12",
+        clue: "drawing",
+        title: "A child’s drawing",
+        description:
+          "A house with a door beneath it. Two stick figures stand inside. One has been rubbed away until the paper tore.",
+      },
+      motel: {
+        label: "MOTEL NO. 6 · ROOM 09",
+        clue: "tape",
+        title: "Room 09 cassette",
+        description:
+          "A voice that sounds like yours: “If I come back, it isn’t me. Don’t open the cellar.” The tape ends with three knocks.",
+      },
+      police: {
+        label: "POLICE STATION · EVIDENCE",
+        clue: "report",
+        title: "Incident report 114",
+        description:
+          "Three residents vanished over thirty years. Each was declared “never present.” A note in the margin reads: YOU REMEMBER WRONG.",
+      },
+      diner: {
+        label: "LARKSPUR DINER · AFTER HOURS",
+        clue: "rumor",
+        title: "June’s account",
+        description:
+          "June remembers Mara as a girl who worked here. Then as a woman who never existed. She offers a brass key and asks you not to tell the deputy.",
+      },
+      chapel: {
+        label: "SAINT ORAN’S CHAPEL",
+        clue: "ledger",
+        title: "The names ledger",
+        description:
+          "Every page lists a family, then a single survivor. The last entry is your name, dated tomorrow.",
+      },
+    };
+    for (const [id, d] of Object.entries(interiors)) {
+      const a = grid(13, 11); // A small hollow room with a single open doorway on its south wall.
+      for (let y = 2; y <= 7; y++) {
+        a[y][3] = "#";
+        a[y][9] = "#";
+      }
+      for (let x = 3; x <= 9; x++) {
+        a[2][x] = "#";
+        a[7][x] = "#";
+      }
+      a[7][6] = ".";
+      const things = [
+        entity("back-" + id, "Return to Willow Street", 6.5, 8.2, "back", {
+          desc: "Go back outside.",
+        }),
+        entity("clue-" + id, d.title, 6.5, 4.1, "clue", d),
+        entity(
+          "person-" + id,
+          id === "diner"
+            ? "June Harlow"
+            : id === "police"
+              ? "Deputy Ward"
+              : "A room that listens",
+          4.4,
+          5.2,
+          "npc",
+          {
+            role: id,
+            personality: "uneasy",
+            line:
+              id === "diner"
+                ? "Take it. I’ve kept it long enough."
+                : id === "police"
+                  ? "I never saw that report. You should leave it where you found it."
+                  : "The room is holding its breath.",
+            trust: 0,
+          },
+        ),
+      ];
+      area(
+        id,
+        d.label,
+        a.map((r) => r.join("")),
+        { x: 6.5, y: 8.6, a: -Math.PI / 2 },
+        things,
+      );
+    }
+  }
+  function init() {
+    buildWorld();
+    resize();
+    document.getElementById("startButton").onclick = begin;
+    document.getElementById("panelClose").onclick = closePanel;
+    document.getElementById("restart").onclick = () => location.reload();
+    document.addEventListener("keydown", onKeyDown);
+    document.addEventListener(
+      "keyup",
+      (e) => (keys[e.key.toLowerCase()] = false),
+    );
+    canvas.addEventListener("click", () => {
+      if (started && !ui.panel.classList.contains("open"))
+        canvas.requestPointerLock?.();
+    });
+    document.addEventListener("mousemove", (e) => {
+      if (
+        document.pointerLockElement === canvas &&
+        !ui.panel.classList.contains("open")
+      )
+        game.angle += e.movementX * 0.0022;
+    });
+    let touchLook = null;
+    canvas.addEventListener("pointerdown", (e) => {
+      if (e.pointerType === "touch") {
+        touchLook = { id: e.pointerId, x: e.clientX };
+        canvas.setPointerCapture(e.pointerId);
+      }
+    });
+    canvas.addEventListener("pointermove", (e) => {
+      if (touchLook && e.pointerId === touchLook.id) {
+        game.angle += (e.clientX - touchLook.x) * 0.008;
+        touchLook.x = e.clientX;
+      }
+    });
+    for (const ev of ["pointerup", "pointercancel", "lostpointercapture"])
+      canvas.addEventListener(ev, () => (touchLook = null));
+    setupMobile();
+    loop(0);
+  }
+  function resize() {
+    const d = Math.min(devicePixelRatio || 1, 1.5);
+    W = innerWidth;
+    H = innerHeight;
+    canvas.width = Math.floor(W * d);
+    canvas.height = Math.floor(H * d);
+    canvas.style.width = W + "px";
+    canvas.style.height = H + "px";
+    ctx.setTransform(d, 0, 0, d, 0, 0);
+  }
+  function onKeyDown(e) {
+    const k = e.key.toLowerCase();
+    keys[k] = true;
+    if ([" ", "arrowup", "arrowdown", "arrowleft", "arrowright"].includes(k))
+      e.preventDefault();
+    if (!started) return;
+    if (k === "e" || k === " ") interact();
+    if (k === "j") showJournal();
+    if (k === "i") showInventory();
+    if (k === "m") toggleMap();
+    if (k === "f") focus = !focus;
+    if (k === "q") toggleHide();
+    if (k === "r") rest();
+    if (k === "escape") {
+      closePanel();
+      ui.map.classList.remove("open");
+    }
+  }
+  function setupMobile() {
+    for (const b of document.querySelectorAll("[data-key]")) {
+      const k = b.dataset.key;
+      const release = () => {
+        keys[k] = false;
+        b.classList.remove("pressed");
+      };
+      b.addEventListener("pointerdown", (e) => {
+        e.preventDefault();
+        keys[k] = true;
+        b.classList.add("pressed");
+        b.setPointerCapture(e.pointerId);
+      });
+      ["pointerup", "pointercancel", "lostpointercapture"].forEach((ev) =>
+        b.addEventListener(ev, release),
+      );
+    }
+    const actions = {
+      j: showJournal,
+      i: showInventory,
+      m: toggleMap,
+      q: toggleHide,
+      f: () => (focus = !focus),
+      r: rest,
+    };
+    for (const b of document.querySelectorAll("[data-action]"))
+      b.addEventListener("click", () => actions[b.dataset.action]?.());
+    document.getElementById("mobileE").addEventListener("click", interact);
+    const run = document.getElementById("mobileRun");
+    const stopRun = () => {
+      runTouch = false;
+      run.classList.remove("pressed");
+    };
+    run.addEventListener("pointerdown", (e) => {
+      e.preventDefault();
+      runTouch = true;
+      run.classList.add("pressed");
+      run.setPointerCapture(e.pointerId);
+    });
+    ["pointerup", "pointercancel", "lostpointercapture"].forEach((ev) =>
+      run.addEventListener(ev, stopRun),
+    );
+  }
+  function begin() {
+    started = true;
+    document.getElementById("game").classList.add("started");
+    ui.start.classList.add("gone");
+    game.sounds = makeAudio();
+    notify("The road behind you disappears in the rear-view mirror.");
+    game.visited.add("town");
+  }
+  function makeAudio() {
+    try {
+      const A = window.AudioContext || window.webkitAudioContext;
+      if (!A) return null;
+      const ac = new A(),
+        osc = ac.createOscillator(),
+        gain = ac.createGain();
+      osc.type = "sine";
+      osc.frequency.value = 47;
+      gain.gain.value = 0.018;
+      osc.connect(gain);
+      gain.connect(ac.destination);
+      osc.start();
+      return { ac, osc, gain };
+    } catch {
+      return null;
+    }
+  }
+  function notify(text) {
+    ui.toast.textContent = text;
+    ui.toast.classList.add("show");
+    toastTimer = 4.2;
+  }
+  function loop(t) {
+    const dt = Math.min(0.05, (t - last) / 1000 || 0);
+    last = t;
+    if (started && !game.ending) update(dt);
+    render();
+    requestAnimationFrame(loop);
+  }
+  function castRay(angle) {
+    const m = areas[game.area].map,
+      dx = Math.cos(angle),
+      dy = Math.sin(angle);
+    let mx = Math.floor(game.x),
+      my = Math.floor(game.y),
+      sx = dx < 0 ? -1 : 1,
+      sy = dy < 0 ? -1 : 1,
+      ddx = Math.abs(1 / (dx || 1e-8)),
+      ddy = Math.abs(1 / (dy || 1e-8)),
+      vx = dx < 0 ? (game.x - mx) * ddx : (mx + 1 - game.x) * ddx,
+      vy = dy < 0 ? (game.y - my) * ddy : (my + 1 - game.y) * ddy,
+      side = 0,
+      tile = "#";
+    for (let i = 0; i < 80; i++) {
+      if (vx < vy) {
+        vx += ddx;
+        mx += sx;
+        side = 0;
+      } else {
+        vy += ddy;
+        my += sy;
+        side = 1;
+      }
+      tile = m[my]?.[mx] || "#";
+      if (tile !== ".") break;
+    }
+    const d = side === 0 ? vx - ddx : vy - ddy;
+    return {
+      d: Math.max(0.05, d * Math.cos(angle - game.angle)),
+      side,
+      tile,
+      mx,
+      my,
+      hit: (side === 0 ? game.y + d * dy : game.x + d * dx) % 1,
+    };
+  }
+  function render() {
+    const w = W,
+      h = H,
+      hz = h * 0.47,
+      cols = Math.ceil(w / 2),
+      step = w / cols,
+      depth = [];
+    const sky = ctx.createLinearGradient(0, 0, 0, hz);
+    sky.addColorStop(
+      0,
+      game.time > 19 || game.time < 5 ? "#070a0d" : "#39403e",
+    );
+    sky.addColorStop(
+      1,
+      game.time > 19 || game.time < 5 ? "#1a2022" : "#73756b",
+    );
+    ctx.fillStyle = sky;
+    ctx.fillRect(0, 0, w, hz);
+    const floor = ctx.createLinearGradient(0, hz, 0, h);
+    floor.addColorStop(0, "#383a35");
+    floor.addColorStop(0.45, "#212522");
+    floor.addColorStop(1, "#0b0e0d");
+    ctx.fillStyle = floor;
+    ctx.fillRect(0, hz, w, h - hz);
+    for (let i = 0; i < cols; i++) {
+      const x = i * step,
+        ray = game.angle + (i / cols - 0.5) * 1.12,
+        r = castRay(ray),
+        d = r.d;
+      depth[i] = d;
+      const wh = Math.min(h * 2, (h * 0.9) / d),
+        top = hz - wh * 0.5,
+        shade = clamp(1.05 - d / 15, 0.16, 0.9) * (r.side ? 0.78 : 1);
+      if (r.tile === "T") {
+        ctx.fillStyle = `rgb(${Math.floor(13 * shade)},${Math.floor(20 * shade)},${Math.floor(18 * shade)})`;
+        ctx.fillRect(x, top, step + 1, wh);
+        ctx.fillStyle = `rgba(92,105,82,${shade * 0.35})`;
+        ctx.fillRect(x, top + wh * 0.22, step + 1, wh * 0.06);
+      } else {
+        ctx.fillStyle = r.tile === "D" ? "#51443b" : "#55544d";
+        ctx.fillRect(x, top, step + 1, wh);
+        ctx.fillStyle = `rgba(8,10,9,${1 - shade})`;
+        ctx.fillRect(x, top, step + 1, wh);
+        if (Math.floor(r.hit * 10) % 2 === 0 && d < 9) {
+          ctx.fillStyle = `rgba(160,146,118,${shade * 0.11})`;
+          ctx.fillRect(x, top + wh * 0.1, step + 1, Math.max(1, wh * 0.015));
+          if (wh > 80) {
+            ctx.fillStyle = `rgba(190,171,126,${shade * 0.15})`;
+            ctx.fillRect(x, top + wh * 0.31, step + 1, wh * 0.12);
+            ctx.fillStyle = `rgba(11,15,14,${shade * 0.8})`;
+            ctx.fillRect(x, top + wh * 0.33, step + 1, wh * 0.09);
+          }
+        }
+        ctx.fillStyle = `rgba(0,0,0,${clamp(d / 30, 0.05, 0.46)})`;
+        ctx.fillRect(x, top, step + 1, wh);
+      }
+      if (i % 8 === 0) {
+        ctx.strokeStyle = `rgba(151,151,131,${clamp(0.05 / d, 0.003, 0.035)})`;
+        ctx.beginPath();
+        ctx.moveTo(x, hz);
+        ctx.lineTo(w * 0.5 + (x - w * 0.5) * 7, h);
+        ctx.stroke();
+      }
+    }
+    drawWorldSprites(depth, cols, step, hz);
+    drawAtmosphere();
+    drawHud();
+  }
+  function poly(points, color) {
+    ctx.fillStyle = color;
+    ctx.beginPath();
+    ctx.moveTo(points[0][0], points[0][1]);
+    for (let i = 1; i < points.length; i++)
+      ctx.lineTo(points[i][0], points[i][1]);
+    ctx.closePath();
+    ctx.fill();
+  }
+  function drawWorldSprites(depth, cols, step, hz) {
+    const list = areas[game.area].objects
+      .filter((o) => !o.hidden && (o.type !== "stalker" || o.active))
+      .map((o) => ({ o, d: dist(game, o) }))
+      .filter((s) => s.d < 19)
+      .sort((a, b) => b.d - a.d);
+    for (const q of list) {
+      const o = q.o,
+        d = q.d,
+        da = Math.atan2(
+          Math.sin(Math.atan2(o.y - game.y, o.x - game.x) - game.angle),
+          Math.cos(Math.atan2(o.y - game.y, o.x - game.x) - game.angle),
+        );
+      if (Math.abs(da) > 0.78) continue;
+      const x = W / 2 + Math.tan(da) * W * 0.83,
+        s = clamp((H * 0.53) / d, 10, 190),
+        base = H * 0.47 + s * 0.48,
+        ix = clamp(Math.floor(x / (W / cols)), 0, cols - 1);
+      if (depth[ix] < d - 0.2) continue;
+      drawSprite(o, x, base, s, d);
+    }
+  }
+  function drawSprite(o, x, b, s, d) {
+    if (o.type === "npc" || o.type === "stalker") {
+      const ghost = o.type === "stalker" || o.personality === "uneasy",
+        c =
+          o.role === "child"
+            ? "#7b2828"
+            : ghost
+              ? "#555c56"
+              : o.role === "police"
+                ? "#333d3a"
+                : "#777365";
+      if (o.type === "stalker" && Math.sin(game.elapsed * 2) > 0)
+        ctx.globalAlpha = 0.42;
+      poly(
+        [
+          [x - s * 0.12, b - s * 0.52],
+          [x - s * 0.18, b - s * 0.2],
+          [x - s * 0.1, b - s * 0.52],
+          [x + s * 0.1, b - s * 0.52],
+          [x + s * 0.19, b - s * 0.2],
+          [x + s * 0.14, b - s * 0.52],
+        ],
+        c,
+      );
+      poly(
+        [
+          [x - s * 0.12, b - s * 0.52],
+          [x - s * 0.1, b - s * 0.75],
+          [x + s * 0.1, b - s * 0.75],
+          [x + s * 0.13, b - s * 0.52],
+        ],
+        ghost ? "#9b9b87" : "#9a8d7a",
+      );
+      ctx.fillStyle = "#171715";
+      ctx.fillRect(x - s * 0.1, b - s * 0.68, s * 0.035, s * 0.02);
+      ctx.fillRect(x + s * 0.045, b - s * 0.68, s * 0.035, s * 0.02);
+      ctx.globalAlpha = 1;
+    } else if (o.type === "clue") {
+      ctx.fillStyle =
+        o.clue === "notice"
+          ? "#d0c8b0"
+          : o.clue === "voice"
+            ? "#514e48"
+            : "#a59577";
+      ctx.fillRect(x - s * 0.14, b - s * 0.54, s * 0.28, s * 0.34);
+      ctx.fillStyle = "#242824";
+      for (let j = 0; j < 3; j++)
+        ctx.fillRect(
+          x - s * 0.1,
+          b - s * 0.46 + j * s * 0.07,
+          s * 0.2,
+          s * 0.012,
+        );
+    } else if (o.type === "door" || o.type === "back") {
+      ctx.fillStyle = "#302d29";
+      ctx.fillRect(x - s * 0.24, b - s * 0.72, s * 0.48, s * 0.72);
+      ctx.fillStyle = "#6b6558";
+      ctx.fillRect(x - s * 0.19, b - s * 0.66, s * 0.38, s * 0.66);
+      ctx.fillStyle = "#252725";
+      ctx.fillRect(x - s * 0.15, b - s * 0.61, s * 0.3, s * 0.59);
+      ctx.fillStyle = "#b9a67c";
+      ctx.fillRect(x + s * 0.09, b - s * 0.34, s * 0.025, s * 0.025);
+    } else if (o.type === "exit") {
+      ctx.strokeStyle = "#87816c";
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(x - s * 0.35, b);
+      ctx.lineTo(x - s * 0.22, b - s * 0.54);
+      ctx.lineTo(x + s * 0.22, b - s * 0.54);
+      ctx.lineTo(x + s * 0.35, b);
+      ctx.stroke();
+    }
+    if (s > 18 && d < 6 && o.name) {
+      ctx.font = `${clamp(s * 0.12, 10, 15)}px Georgia`;
+      ctx.textAlign = "center";
+      ctx.fillStyle = "rgba(232,224,205,.76)";
+      ctx.fillText(o.name, x, b - s * 0.79);
+    }
+  }
+  function drawAtmosphere() {
+    const night = game.time > 19 || game.time < 5,
+      fog = ctx.createLinearGradient(0, H * 0.32, 0, H);
+    fog.addColorStop(0, "rgba(151,160,151,0)");
+    fog.addColorStop(
+      0.8,
+      night ? "rgba(130,143,137,.09)" : "rgba(197,193,174,.14)",
+    );
+    fog.addColorStop(
+      1,
+      night ? "rgba(146,157,150,.22)" : "rgba(207,200,179,.27)",
+    );
+    ctx.fillStyle = fog;
+    ctx.fillRect(0, 0, W, H);
+    if (game.weather === "RAIN") {
+      ctx.strokeStyle = "rgba(191,203,199,.18)";
+      for (let i = 0; i < 75; i++) {
+        const x = (i * 137 + game.elapsed * 190) % W,
+          y = (i * 71 + game.elapsed * 370) % H;
+        ctx.beginPath();
+        ctx.moveTo(x, y);
+        ctx.lineTo(x - 3, y + 12);
+        ctx.stroke();
+      }
+    }
+    if (game.sanity < 45) {
+      ctx.fillStyle = `rgba(72,10,16,${(45 - game.sanity) / 400})`;
+      ctx.fillRect(0, 0, W, H);
+      if (Math.random() < 0.03) {
+        ctx.fillStyle = "rgba(205,210,194,.08)";
+        ctx.fillRect(rand(0, W), rand(0, H), rand(40, 200), rand(2, 20));
+      }
+    }
+    if (focus) {
+      ctx.strokeStyle = "rgba(196,185,151,.55)";
+      ctx.beginPath();
+      ctx.arc(W / 2, H / 2, 36, 0, 7);
+      ctx.stroke();
+    }
+  }
+  function drawHud() {
+    const nearest = nearestEntity();
+    ui.objective.textContent = game.objective;
+    ui.objectiveSub.textContent = game.objectiveSub;
+    if (
+      started &&
+      nearest &&
+      nearest.d < 2.35 &&
+      !ui.panel.classList.contains("open")
+    ) {
+      ui.prompt.innerHTML = `<kbd>E</kbd> ${nearest.o.name}`;
+      ui.prompt.classList.add("show");
+    } else ui.prompt.classList.remove("show");
+    ui.location.textContent = areas[game.area].label;
+    const hh = Math.floor(game.time) % 24,
+      mm = Math.floor((game.time % 1) * 60);
+    ui.clock.textContent = `${String(hh % 12 || 12).padStart(2, "0")}:${String(mm).padStart(2, "0")} ${hh >= 12 ? "PM" : "AM"}`;
+    ui.weather.textContent = game.weather;
+    ui.health.style.width = game.health + "%";
+    ui.sanity.style.width = game.sanity + "%";
+    ui.stamina.textContent = Math.floor(game.stamina);
+    ui.hunger.textContent = Math.floor(game.hunger);
+    ui.thirst.textContent = Math.floor(game.thirst);
+  }
+  function nearestEntity() {
+    let best = null;
+    for (const o of areas[game.area].objects) {
+      if (o.type === "stalker" && !o.active) continue;
+      const d = dist(game, o);
+      if (d < (best?.d ?? Infinity)) best = { o, d };
+    }
+    return best;
+  }
+  function refreshObjective() {
+    if (game.flags.ledger) {
+      game.objective = "Decide what to do with Mara.";
+      game.objectiveSub = "The names ledger is dated tomorrow.";
+    } else if (game.flags.key) {
+      game.objective = "Find the room beneath the town.";
+      game.objectiveSub = `Evidence gathered: ${game.notes.length}/3 · Follow County Road 9.`;
+    } else if (game.flags.record) {
+      game.objective = "Ask June about the brass key.";
+      game.objectiveSub = "She waits outside Larkspur Diner.";
+    } else if (game.flags.notice) {
+      game.objective = "Find a record at the hospital.";
+      game.objectiveSub = "The emergency release needs a patient ID.";
+    } else {
+      game.objective = "Find out why Mara Bell vanished.";
+      game.objectiveSub = "Talk to the people who remember her.";
+    }
+  }
+  function isBlocked(x, y) {
+    const map = areas[game.area].map;
+    return (map[Math.floor(y)]?.[Math.floor(x)] || "#") !== ".";
+  }
+  function tryMove(dx, dy) {
+    const nx = game.x + dx,
+      ny = game.y + dy;
+    if (!isBlocked(nx, game.y)) game.x = nx;
+    if (!isBlocked(game.x, ny)) game.y = ny;
+  }
+  function update(dt) {
+    game.elapsed += dt;
+    game.time = (game.time + dt * 0.009) % 24;
+    game.hunger = clamp(game.hunger + dt * 0.026, 0, 100);
+    game.thirst = clamp(game.thirst + dt * 0.04, 0, 100);
+    if (game.hunger > 85 || game.thirst > 88)
+      game.health = clamp(game.health - dt * 0.17, 0, 100);
+    const fwd =
+        (keys.w || keys.arrowup ? 1 : 0) - (keys.s || keys.arrowdown ? 1 : 0),
+      side = (keys.d ? 1 : 0) - (keys.a ? 1 : 0),
+      moving = !!(fwd || side),
+      running = (keys.shift || runTouch) && game.stamina > 2 && !hidden;
+    const speed = running ? 3.2 : 1.75;
+    if (moving && !hidden) {
+      const l = Math.hypot(fwd, side) || 1,
+        vx =
+          ((Math.cos(game.angle) * fwd +
+            Math.cos(game.angle + Math.PI / 2) * side) /
+            l) *
+          speed *
+          dt,
+        vy =
+          ((Math.sin(game.angle) * fwd +
+            Math.sin(game.angle + Math.PI / 2) * side) /
+            l) *
+          speed *
+          dt;
+      tryMove(vx, vy);
+    }
+    game.stamina = clamp(
+      game.stamina + (running && moving ? -28 : 18) * dt,
+      0,
+      100,
+    );
+    if (hidden) game.stamina = clamp(game.stamina + 9 * dt, 0, 100);
+    for (const o of areas.town.objects) {
+      if (o.path) {
+        o.step = (o.step || 0) + dt;
+        if (o.step > 7) {
+          o.step = 0;
+          o.pathIndex = ((o.pathIndex || 0) + 1) % o.path.length;
+        }
+        const p = o.path[o.pathIndex || 0],
+          q = o.path[((o.pathIndex || 0) + 1) % o.path.length],
+          t = clamp(o.step / 7, 0, 1);
+        o.x = p.x + (q.x - p.x) * t;
+        o.y = p.y + (q.y - p.y) * t;
+      }
+    }
+    const stalk = areas.town.objects.find((o) => o.type === "stalker");
+    if (stalk && game.area === "town") {
+      if (game.time > 19 || game.time < 5) {
+        stalk.active = true;
+        if (dist(game, stalk) < 7) {
+          game.sanity = clamp(game.sanity - dt * 1.1, 0, 100);
+          if (dist(game, stalk) < 1.15 && !hidden) {
+            game.health = clamp(game.health - dt * 8, 0, 100);
+            if (Math.random() < 0.008) notify("Something brushes past you.");
+          }
+        } else {
+          stalk.x += (game.x - stalk.x) * dt * 0.025;
+          stalk.y += (game.y - stalk.y) * dt * 0.025;
+        }
+      } else {
+        stalk.active = false;
+        stalk.x = 26.2;
+        stalk.y = 15.1;
+      }
+    }
+    game.eventIn -= dt;
+    if (game.eventIn < 0) {
+      game.eventIn = rand(28, 55);
+      const events = [
+        "A door closes somewhere behind you.",
+        "The lights flicker. When they return, the street feels narrower.",
+        "Footsteps follow yours for three steps, then stop.",
+        "A telephone rings once in an empty building.",
+        "You hear Mara say your name from far away.",
+      ];
+      notify(events[Math.floor(Math.random() * events.length)]);
+      game.sanity = clamp(game.sanity - rand(1.2, 3.8), 0, 100);
+    }
+    if (game.sounds) {
+      game.sounds.ac.resume?.();
+      game.sounds.osc.frequency.setTargetAtTime(
+        45 + Math.max(0, 45 - game.sanity) * 0.7,
+        game.sounds.ac.currentTime,
+        0.5,
+      );
+    }
+    if (toastTimer > 0 && (toastTimer -= dt) <= 0)
+      ui.toast.classList.remove("show");
+    if (game.health <= 0)
+      finish(
+        "THE HOUSE KEEPS YOU",
+        "By morning, Ashfall has no record of your arrival. Someone leaves flowers at the locked door. They are always fresh.",
+      );
+  }
+  function interact() {
+    if (!started || ui.panel.classList.contains("open")) return;
+    const near = nearestEntity();
+    if (!near || near.d > 2.5) {
+      notify("Nothing close enough to touch.");
+      return;
+    }
+    const o = near.o;
+    if (o.type === "door") {
+      if (o.to === "school" && !game.flags.notice) {
+        showText(
+          "The school door is locked",
+          "The notice is fresh. Someone has pinned it up from the inside.",
+        );
+        return;
+      }
+      if (o.to === "hospital" && !game.flags.record && game.notes.length < 1) {
+        showText(
+          "The hospital doors won’t open",
+          "The emergency release blinks: PATIENT ID REQUIRED. Find a record in town.",
+        );
+        return;
+      }
+      game.doorReturn = { area: game.area, x: o.return.x, y: o.return.y };
+      game.area = o.to;
+      game.x = areas[o.to].spawn.x;
+      game.y = areas[o.to].spawn.y;
+      game.angle = areas[o.to].spawn.a;
+      game.visited.add(o.to);
+      notify(o.desc);
+      return;
+    }
+    if (o.type === "back") {
+      game.area = game.doorReturn?.area || "town";
+      game.x = game.doorReturn?.x ?? 14.5;
+      game.y = game.doorReturn?.y ?? 15.2;
+      game.angle = Math.PI / 2;
+      game.doorReturn = null;
+      game.visited.add("town");
+      return;
+    }
+    if (o.type === "exit") {
+      if (!game.flags.key || game.notes.length < 3) {
+        const reason = !game.flags.key
+          ? "The road ends at the town line. June has the cellar key. Find her outside the diner."
+          : "The road ends at the town line. Gather at least three clues before deciding what happened to Mara.";
+        showText("The county road", reason, [
+          { label: "Turn back", action: closePanel },
+        ]);
+      } else showChoiceEnding();
+      return;
+    }
+    if (o.type === "clue") {
+      if (!game.flags[o.clue]) {
+        game.flags[o.clue] = true;
+        game.notes.push(o.title);
+        if (
+          o.clue === "photo" ||
+          o.clue === "record" ||
+          o.clue === "report" ||
+          o.clue === "drawing" ||
+          o.clue === "tape" ||
+          o.clue === "ledger"
+        )
+          game.sanity = clamp(game.sanity - 4, 0, 100);
+        refreshObjective();
+      }
+      showText(o.title, o.description, [
+        { label: "Keep looking", action: closePanel },
+      ]);
+      return;
+    }
+    if (o.type === "npc") {
+      talk(o);
+      return;
+    }
+    if (o.type === "stalker") {
+      notify("It is not there when you look directly at it.");
+      game.sanity = clamp(game.sanity - 5, 0, 100);
+    }
+  }
+  function showText(title, text, actions = []) {
+    openPanel(
+      "FIELD NOTE",
+      title,
+      `<p>${text}</p>`,
+      actions.length ? actions : [{ label: "Close", action: closePanel }],
+    );
+  }
+  function openPanel(kicker, title, body, actions = []) {
+    ui.panelKicker.textContent = kicker;
+    ui.panelTitle.textContent = title;
+    ui.panelBody.innerHTML = body;
+    ui.panelActions.replaceChildren();
+    for (const a of actions) {
+      const b = document.createElement("button");
+      b.textContent = a.label;
+      b.onclick = a.action;
+      ui.panelActions.appendChild(b);
+    }
+    ui.panel.classList.add("open");
+    document.exitPointerLock?.();
+  }
+  function closePanel() {
+    ui.panel.classList.remove("open");
+  }
+  function talk(o) {
+    let line = o.line;
+    if (o.role === "diner" && game.flags.notice)
+      line =
+        "That’s Mara, isn’t it? She asked me to keep this for you. Please don’t make me remember why.";
+    if (o.role === "police" && game.notes.length > 1)
+      line =
+        "You have the report. I never gave it to you. You should leave town while you still remember the road.";
+    if (o.role === "child" && game.notes.length > 3)
+      line = "She’s waiting under the chapel. You can’t take both of us home.";
+    openPanel(
+      o.personality === "kind"
+        ? "A LOCAL · LARKSPUR DINER"
+        : "A LOCAL · ASHFALL COUNTY",
+      o.name,
+      `<p>“${line}”</p><p><em>${o.trust > 0 ? "They seem to recognize you." : "Their eyes keep returning to the street behind you."}</em></p>`,
+      [
+        {
+          label: "Ask about Mara",
+          action: () => {
+            o.trust++;
+            closePanel();
+            notify(
+              o.trust > 1
+                ? "They repeat the same story, but one detail has changed."
+                : "They tell you what they remember. You write it down.",
+            );
+            if (o.role === "diner" && game.flags.record && !game.flags.key) {
+              game.flags.key = true;
+              game.inventory.push("Brass cellar key");
+              refreshObjective();
+              notify(
+                "June presses the brass key into your palm. “Don’t let it hear you coming.”",
+              );
+            }
+          },
+        },
+        { label: "Leave", action: closePanel },
+      ],
+    );
+  }
+  function showJournal() {
+    openPanel(
+      "CASE FILE 01 · FIELD NOTES",
+      "Mara Bell",
+      `<p><strong>Current lead</strong><br>${game.objective}</p><p>${game.notes.length ? game.notes.map((n) => "— " + n).join("<br>") : "No evidence collected. The town remembers things differently."}</p><p><em>“Your memories are not evidence.”</em></p>`,
+      [{ label: "Close", action: closePanel }],
+    );
+  }
+  function showInventory() {
+    openPanel(
+      "PERSONAL EFFECTS",
+      "Pockets",
+      `<p>${game.inventory.map((item) => "• " + item).join("<br>")}</p><p>Food and water are scarce. There may be supplies inside the diner or hospital.</p>`,
+      [{ label: "Close", action: closePanel }],
+    );
+  }
+  function toggleMap() {
+    ui.map.classList.toggle("open");
+    if (ui.map.classList.contains("open")) {
+      const places = [
+        ["town", "WILLOW ST."],
+        ["mara", "BELL HOUSE"],
+        ["hospital", "HOSPITAL"],
+        ["school", "SCHOOL"],
+        ["motel", "MOTEL"],
+        ["police", "POLICE"],
+        ["diner", "DINER"],
+        ["chapel", "CHAPEL"],
+      ];
+      ui.mapGrid.innerHTML = "";
+      for (const [id, label] of places) {
+        const d = document.createElement("div");
+        d.textContent = game.visited.has(id) ? label : "—";
+        if (game.visited.has(id)) d.classList.add("visited");
+        if (game.area === id) d.classList.add("current");
+        ui.mapGrid.appendChild(d);
+      }
+    }
+  }
+  function toggleHide() {
+    hidden = !hidden;
+    notify(
+      hidden
+        ? "You hold your breath behind the nearest shadow."
+        : "You step back into the open.",
+    );
+  }
+  function rest() {
+    if (game.area !== "diner") {
+      notify("You need a safer place to rest.");
+      return;
+    }
+    game.health = clamp(game.health + 20, 0, 100);
+    game.stamina = 100;
+    game.sanity = clamp(game.sanity + 8, 0, 100);
+    game.hunger = clamp(game.hunger - 18, 0, 100);
+    game.thirst = clamp(game.thirst - 16, 0, 100);
+    notify("A cup of coffee. For a moment, you know where you are.");
+  }
+  function showChoiceEnding() {
+    openPanel(
+      "THE ROOM BENEATH THE TOWN",
+      "A door in the earth",
+      `<p>The cellar stairs descend through damp soil. At the bottom, Mara waits beside a stopped clock. She looks exactly as she did six days ago.</p><p>“You took your time,” she says. Behind her, a second shadow wears your face.</p>`,
+      [
+        {
+          label: "Take Mara’s hand",
+          action: () =>
+            finish(
+              "SOMEONE COMES HOME",
+              "At dawn, a woman walks out of Ashfall. She says her name is Mara. The family photograph on her mantle shows only one child.",
+            ),
+        },
+        {
+          label: "Close the door",
+          action: () =>
+            finish(
+              "THE TOWN REMEMBERS",
+              "You turn the key. From below, two voices call your name—one furious, one relieved. You cannot tell which is Mara.",
+            ),
+        },
+        {
+          label: "Go back alone",
+          action: () =>
+            finish(
+              "THE ROAD OUT",
+              "You drive until the sun rises. Your phone rings. The caller ID says HOME. You let it ring until the battery dies.",
+            ),
+        },
+      ],
+    );
+  }
+  function finish(title, text) {
+    game.ending = true;
+    document.getElementById("endingTitle").textContent = title;
+    document.getElementById("endingText").textContent = text;
+    ui.ending.classList.add("open");
+    closePanel();
+    document.exitPointerLock?.();
+  }
+  window.addEventListener("load", init);
+  window.addEventListener("resize", resize);
+  resize();
+  window.__THE_TOWN_TEST__ = { game, areas, interact, closePanel };
 })();
