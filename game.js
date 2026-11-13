@@ -51,6 +51,9 @@
     time: 6.23,
     weather: "OVERCAST",
     inventory: ["Mara’s photograph", "Small flashlight"],
+    caplets: 3,
+    hallucination: 0,
+    hallucinationCue: 0,
     notes: [],
     visited: new Set(["town"]),
     flags: {},
@@ -660,6 +663,47 @@
       ctx.fillText(o.name, x, b - s * 0.79);
     }
   }
+  function drawHallucination() {
+    if (game.hallucination < 12) return;
+    const intensity = game.hallucination / 100,
+      pulse = 0.5 + Math.sin(game.elapsed * 2.4) * 0.5;
+    ctx.save();
+    ctx.globalAlpha = 0.16 + intensity * 0.38;
+    ctx.fillStyle = `rgba(92, 8, 13, ${0.08 + pulse * intensity * 0.16})`;
+    ctx.fillRect(0, 0, W, H);
+    ctx.strokeStyle = `rgba(128, 24, 28, ${0.18 + intensity * 0.42})`;
+    ctx.lineWidth = 1 + intensity * 5;
+    for (let i = 0; i < 5; i++) {
+      const x = ((i * 193 + game.elapsed * (18 + i * 7)) % (W + 100)) - 50,
+        y = H * (0.25 + i * 0.13) + Math.sin(game.elapsed + i) * 18;
+      ctx.beginPath();
+      ctx.moveTo(x, y);
+      ctx.bezierCurveTo(x + 24, y - 10, x + 36, y + 20, x + 62, y + 6);
+      ctx.stroke();
+    }
+    if (game.hallucination > 55 && pulse > 0.88) {
+      ctx.globalAlpha = (pulse - 0.88) * intensity * 2.2;
+      ctx.fillStyle = "rgba(224, 211, 194, 0.8)";
+      ctx.font = `${clamp(W * 0.018, 11, 17)}px Georgia`;
+      ctx.textAlign = "center";
+      ctx.fillText(hallucinationMemory(), W / 2, H * 0.39);
+    }
+    ctx.restore();
+  }
+  function hallucinationMemory() {
+    if (game.flags.ledger)
+      return "The names were written before they disappeared.";
+    if (game.flags.report)
+      return "The hospital light turns red behind your eyes.";
+    if (game.flags.tape) return "Your voice comes back from the tape.";
+    if (game.flags.drawing)
+      return "The child's drawing moves when you look away.";
+    if (game.flags.record) return "The empty bed remembers who was in it.";
+    if (game.flags.photo) return "The fairground smiles blur into a red stain.";
+    if (game.flags.notice)
+      return "Mara's face runs like wet ink on the notice.";
+    return "A red shape takes the place of a memory.";
+  }
   function drawAtmosphere() {
     const night = game.time > 19 || game.time < 5,
       fog = ctx.createLinearGradient(0, H * 0.32, 0, H);
@@ -693,6 +737,7 @@
         ctx.fillRect(rand(0, W), rand(0, H), rand(40, 200), rand(2, 20));
       }
     }
+    drawHallucination();
     if (focus) {
       ctx.strokeStyle = "rgba(196,185,151,.55)";
       ctx.beginPath();
@@ -842,6 +887,20 @@
       ];
       notify(events[Math.floor(Math.random() * events.length)]);
       game.sanity = clamp(game.sanity - rand(1.2, 3.8), 0, 100);
+    }
+    if (started && game.sanity < 65) {
+      const stress =
+        (65 - game.sanity) * 0.018 + Math.min(game.notes.length * 0.035, 0.2);
+      game.hallucination = clamp(
+        game.hallucination + dt * (0.12 + stress),
+        0,
+        100,
+      );
+    }
+    game.hallucinationCue -= dt;
+    if (game.hallucination > 18 && game.hallucinationCue <= 0) {
+      notify(hallucinationMemory());
+      game.hallucinationCue = 38;
     }
     if (game.sounds) {
       game.sounds.ac.resume?.();
@@ -1015,12 +1074,32 @@
     );
   }
   function showInventory() {
+    const actions = [];
+    if (game.caplets > 0)
+      actions.push({
+        label: `Take a calming caplet (${game.caplets} left)`,
+        action: useCaplet,
+      });
+    actions.push({ label: "Close", action: closePanel });
     openPanel(
       "PERSONAL EFFECTS",
       "Pockets",
-      `<p>${game.inventory.map((item) => "• " + item).join("<br>")}</p><p>Food and water are scarce. There may be supplies inside the diner or hospital.</p>`,
-      [{ label: "Close", action: closePanel }],
+      `<p>${game.inventory.map((item) => "• " + item).join("<br>")}</p><p>Calming caplets: <strong>${game.caplets}</strong> remaining.</p><p>Food and water are scarce. There may be supplies inside the diner or hospital.</p>`,
+      actions,
     );
+  }
+  function useCaplet() {
+    if (game.caplets <= 0) {
+      notify("The tin is empty.");
+      closePanel();
+      return;
+    }
+    game.caplets--;
+    game.hallucination = 0;
+    game.hallucinationCue = 38;
+    game.sanity = clamp(game.sanity + 12, 0, 100);
+    closePanel();
+    notify("The red memory recedes. You can breathe again.");
   }
   function toggleMap() {
     ui.map.classList.toggle("open");
