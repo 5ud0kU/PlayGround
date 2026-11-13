@@ -134,6 +134,8 @@ kbd { display: inline-grid; min-width: 17px; height: 17px; place-items: center; 
 .endCard p { color: #bcbcb1; font: 15px/1.8 var(--serif); }
 
 .mobileControls { display: none; }
+.mobileControls button { touch-action: none; -webkit-tap-highlight-color: transparent; cursor: pointer; }
+.mobileControls button:active, .mobileControls button.pressed { border-color: rgba(201, 125, 94, .8); background: rgba(112, 62, 49, .62); color: #fff0df; }
 @keyframes arrive { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: translateY(0); } }
 
 @media (max-width: 760px) {
@@ -186,5 +188,47 @@ kbd { display: inline-grid; min-width: 17px; height: 17px; place-items: center; 
   .introCopy { font-size: 12px; }
   #startButton { margin-top: 18px; padding: 12px 15px; }
   .startFoot { margin-top: 13px; }
+}
+@media (max-width: 760px) {
+  #view { touch-action: none; }
+  #game:not(.started) .mobileControls { display: none; }
+  .hotbar { display: none; }
+  .status, .objective { bottom: calc(190px + env(safe-area-inset-bottom)); }
+  .mobileControls { inset: auto 16px max(14px, env(safe-area-inset-bottom)); }
+  .moveGroup, .actionGroup { display: flex; flex-direction: column; align-items: center; gap: 7px; pointer-events: auto; }
+  .actionGroup { align-items: end; }
+  .mobileControls button { min-width: 58px; min-height: 52px; border: 1px solid rgba(227,222,207,.38); border-radius: 12px; background: rgba(17,20,19,.76); color: #e6e0d2; backdrop-filter: blur(7px); box-shadow: 0 5px 16px rgba(0,0,0,.28); font: 10px var(--mono); letter-spacing: .06em; touch-action: none; -webkit-tap-highlight-color: transparent; }
+  .mobileControls button:active, .mobileControls button.pressed { border-color: rgba(201,125,94,.85); background: rgba(112,62,49,.72); color: #fff0df; }
+  .mobileControls .pad { display: grid; grid-template: repeat(2,52px) / repeat(3,52px); gap: 5px; }
+  .mobileControls .pad button { min-width: 0; min-height: 0; border-radius: 14px; font-size: 17px; }
+  .mobileControls .pad button:first-child { grid-column: 2; }
+  .mobileControls .pad button:nth-child(2) { grid-column: 1; grid-row: 2; }
+  .mobileControls .pad button:nth-child(3) { grid-column: 2; grid-row: 2; }
+  .mobileControls .pad button:nth-child(4) { grid-column: 3; grid-row: 2; }
+  .controlHint { color: rgba(229,224,210,.62); font: 8px var(--mono); letter-spacing: .18em; }
+  .lookHint { position: absolute; left: 50%; bottom: 34px; transform: translateX(-50%); color: rgba(229,224,210,.58); font: 8px var(--mono); letter-spacing: .16em; pointer-events: none; white-space: nowrap; }
+  .quickActions { display: grid; grid-template-columns: repeat(3, 45px); gap: 5px; }
+  .quickActions button { min-width: 0; min-height: 37px; padding: 0 2px; border-radius: 9px; font-size: 8px; }
+  #mobileE { width: 100px; height: 50px; border-color: rgba(192,120,93,.7); background: rgba(94,52,42,.72); }
+  #mobileRun { min-width: 67px; min-height: 40px; }
+}
+@media (max-width: 390px) {
+  .status, .objective { bottom: calc(178px + env(safe-area-inset-bottom)); }
+  .mobileControls { left: 10px; right: 10px; }
+  .mobileControls .pad { grid-template: repeat(2,46px) / repeat(3,46px); gap: 4px; }
+  .quickActions { grid-template-columns: repeat(3, 41px); gap: 4px; }
+  .quickActions button { min-height: 34px; font-size: 7px; }
+  #mobileE { width: 92px; height: 46px; }
+  #mobileRun { min-height: 38px; }
+}
+@media (max-height: 600px) and (max-width: 760px) {
+  .status, .objective { bottom: calc(176px + env(safe-area-inset-bottom)); }
+  .mobileControls .pad { grid-template: repeat(2,40px) / repeat(3,40px); }
+  .mobileControls button { min-height: 42px; }
+  .mobileControls .pad button { min-height: 0; }
+  .quickActions button { min-height: 30px; }
+  #mobileE { height: 40px; }
+  #mobileRun { min-height: 34px; }
+  .lookHint { bottom: 26px; }
 }
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { scroll-behavior: auto !important; animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; } }
