@@ -2,13 +2,13 @@
 
 :root {
   color-scheme: dark;
-  --ink: #e8e4d8;
-  --muted: #9c9b91;
-  --faint: #696b64;
-  --blood: #a64e43;
-  --rust: #c0785d;
-  --paper: #d3cbbb;
-  --line: rgba(224, 218, 202, 0.16);
+  --ink: #e7eee8;
+  --muted: #9aa8a2;
+  --faint: #64736e;
+  --blood: #c75c47;
+  --rust: #e89a5c;
+  --paper: #d3dbd4;
+  --line: rgba(196, 218, 206, 0.16);
   --mono: "DM Mono", "SFMono-Regular", Consolas, monospace;
   --sans: "DM Sans", "Segoe UI", sans-serif;
   --serif: "Playfair Display", Georgia, serif;
@@ -23,7 +23,7 @@ body {
   height: 100%;
   margin: 0;
   overflow: hidden;
-  background: #101211;
+  background: #080d0e;
 }
 body {
   color: var(--ink);
@@ -1037,5 +1037,451 @@ kbd {
     animation-duration: 0.01ms !important;
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
+  }
+}
+
+/* Broken Protocol identity: field-terminal typography over the town's signal. */
+.brand {
+  color: #e6ece5;
+  font-weight: 500;
+}
+.brandMark {
+  display: inline-grid;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  margin-right: 7px;
+  border: 1px solid rgba(232, 154, 92, 0.55);
+  color: var(--rust);
+  font-style: normal;
+  letter-spacing: -0.15em;
+  vertical-align: -4px;
+}
+.topHud {
+  border-bottom-color: rgba(165, 195, 183, 0.2);
+}
+.status {
+  border-color: rgba(165, 195, 183, 0.18);
+  background: linear-gradient(125deg, rgba(7, 17, 18, 0.88), rgba(7, 17, 18, 0.44));
+}
+.status .meter i {
+  background: #e58b60;
+  box-shadow: 0 0 10px rgba(229, 139, 96, 0.45);
+}
+.status .meter.nerve i {
+  background: #72c4ad;
+  box-shadow: 0 0 10px rgba(114, 196, 173, 0.42);
+}
+.objective {
+  border-left-color: rgba(232, 154, 92, 0.78);
+}
+
+.startScreen {
+  display: block;
+  overflow: hidden;
+  isolation: isolate;
+  padding: 0;
+  background:
+    radial-gradient(ellipse at 74% 49%, rgba(12, 72, 68, 0.25), transparent 37%),
+    radial-gradient(ellipse at 23% 57%, rgba(117, 51, 35, 0.14), transparent 40%),
+    linear-gradient(105deg, rgba(4, 10, 12, 0.96) 0%, rgba(5, 12, 13, 0.91) 52%, rgba(5, 11, 12, 0.84) 100%);
+}
+.startScreen::before,
+.startScreen::after {
+  position: absolute;
+  z-index: -1;
+  content: "";
+  pointer-events: none;
+}
+.startScreen::before {
+  inset: 0;
+  opacity: 0.26;
+  background: repeating-linear-gradient(0deg, transparent 0 3px, rgba(119, 190, 173, 0.075) 4px, transparent 5px 7px);
+  mask-image: linear-gradient(90deg, transparent, #000 45%, #000);
+}
+.startScreen::after {
+  top: 50%;
+  right: 2%;
+  width: min(58vw, 760px);
+  aspect-ratio: 1;
+  transform: translateY(-50%);
+  border: 1px solid rgba(102, 193, 170, 0.075);
+  border-radius: 50%;
+  box-shadow: 0 0 0 44px rgba(102, 193, 170, 0.025), 0 0 0 110px rgba(102, 193, 170, 0.018), inset 0 0 120px rgba(82, 190, 159, 0.055);
+}
+.screenGrid {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  opacity: 0.18;
+  background-image: linear-gradient(rgba(138, 197, 180, 0.1) 1px, transparent 1px), linear-gradient(90deg, rgba(138, 197, 180, 0.1) 1px, transparent 1px);
+  background-size: 64px 64px;
+  mask-image: linear-gradient(90deg, transparent 5%, #000 70%);
+}
+.intro {
+  position: absolute;
+  top: 50%;
+  left: clamp(42px, 8.5vw, 132px);
+  width: min(610px, 53vw);
+  margin: 0;
+  padding: 0;
+  transform: translateY(-50%);
+  animation: introFade 0.9s ease-out both;
+}
+@keyframes introFade {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+.intro .eyebrow {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0 0 24px;
+  color: #9cbbb0;
+  font-size: 9px;
+  letter-spacing: 0.2em;
+}
+.liveDot,
+.signalHead b i {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #e68e5e;
+  box-shadow: 0 0 12px rgba(230, 142, 94, 0.85);
+  animation: signalBlink 1.6s steps(2, end) infinite;
+}
+@keyframes signalBlink { 50% { opacity: 0.35; } }
+.intro h1 {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.035em;
+  margin: 0;
+  color: #e9eee7;
+  font: 800 clamp(60px, 7.9vw, 104px)/0.88 var(--sans);
+  letter-spacing: -0.085em;
+  text-shadow: 0 0 42px rgba(95, 205, 176, 0.08);
+}
+.titleBroken,
+.titleProtocol {
+  position: relative;
+  display: block;
+}
+.titleBroken::after {
+  position: absolute;
+  top: 0;
+  right: -0.16em;
+  width: 0.105em;
+  height: 0.09em;
+  content: "";
+  background: var(--rust);
+  box-shadow: 0 0.13em 0 rgba(232, 154, 92, 0.55);
+}
+.titleProtocol {
+  color: #76c8b0;
+  text-shadow: 2px 0 rgba(212, 88, 66, 0.44), -2px 0 rgba(98, 197, 180, 0.4);
+}
+.intro > p {
+  margin: 22px 0 0;
+  color: #b7c8bf;
+  font: 10px var(--mono);
+  letter-spacing: 0.22em;
+}
+.intro > p i {
+  margin: 0 7px;
+  color: var(--rust);
+  font-style: normal;
+}
+.introRule {
+  width: 72px;
+  margin: 22px 0 15px;
+  background: linear-gradient(90deg, var(--rust), rgba(232, 154, 92, 0.08));
+}
+.introCopy {
+  max-width: 395px;
+  color: #b0bdb5;
+  font: 14px/1.75 var(--sans);
+}
+#startButton {
+  min-width: 224px;
+  margin-top: 25px;
+  border-color: rgba(105, 198, 171, 0.5);
+  background: rgba(14, 63, 57, 0.34);
+  color: #e7eee8;
+}
+#startButton span {
+  color: #76c8b0;
+}
+#startButton:hover {
+  border-color: #83d8bc;
+  background: rgba(25, 103, 86, 0.42);
+  box-shadow: 0 0 28px rgba(86, 201, 168, 0.12);
+}
+.startFoot {
+  margin-top: 17px;
+  color: #71847b;
+  font: 8px var(--mono);
+  letter-spacing: 0.12em;
+}
+.startFoot span {
+  color: var(--rust);
+}
+.signalPanel {
+  position: absolute;
+  top: 50%;
+  right: clamp(34px, 7.3vw, 108px);
+  width: min(310px, 27vw);
+  padding: 16px 17px 13px;
+  transform: translateY(-43%);
+  border: 1px solid rgba(127, 196, 173, 0.24);
+  background: linear-gradient(145deg, rgba(8, 24, 24, 0.74), rgba(9, 17, 18, 0.3));
+  box-shadow: 0 20px 70px rgba(0, 0, 0, 0.24), inset 0 1px rgba(197, 233, 216, 0.05);
+  color: #91a99f;
+  font-family: var(--mono);
+}
+.signalPanel::before,
+.signalPanel::after {
+  position: absolute;
+  width: 11px;
+  height: 11px;
+  content: "";
+  border-color: var(--rust);
+  opacity: 0.85;
+}
+.signalPanel::before {
+  top: -1px;
+  left: -1px;
+  border-top: 1px solid;
+  border-left: 1px solid;
+}
+.signalPanel::after {
+  right: -1px;
+  bottom: -1px;
+  border-right: 1px solid;
+  border-bottom: 1px solid;
+}
+.signalHead,
+.signalFooter {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 8px;
+  letter-spacing: 0.1em;
+}
+.signalHead b {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: #e69867;
+  font-size: 7px;
+  font-weight: 400;
+}
+.signalHead b i {
+  width: 5px;
+  height: 5px;
+}
+.signalScope {
+  position: relative;
+  display: grid;
+  height: 108px;
+  margin: 16px 0 12px;
+  place-items: center;
+  overflow: hidden;
+  border: 1px solid rgba(119, 192, 170, 0.13);
+  background: repeating-linear-gradient(0deg, rgba(95, 159, 142, 0.07) 0 1px, transparent 1px 18px), repeating-linear-gradient(90deg, rgba(95, 159, 142, 0.07) 0 1px, transparent 1px 24px), rgba(1, 13, 14, 0.56);
+}
+.signalScope::after {
+  position: absolute;
+  inset: 0;
+  content: "";
+  background: linear-gradient(180deg, transparent 45%, rgba(99, 226, 182, 0.1), transparent 56%);
+  animation: scopeSweep 4s linear infinite;
+}
+@keyframes scopeSweep {
+  from { transform: translateY(-110%); }
+  to { transform: translateY(110%); }
+}
+.signalScope svg {
+  z-index: 1;
+  width: 100%;
+  overflow: visible;
+}
+.signalScope path {
+  fill: none;
+  stroke-linecap: square;
+  stroke-linejoin: bevel;
+}
+.waveGhost {
+  stroke: rgba(230, 129, 87, 0.28);
+  stroke-width: 6;
+  transform: translateY(2px);
+}
+.waveLine {
+  stroke: #78d3b4;
+  stroke-width: 1.5;
+  stroke-dasharray: 185 460;
+  animation: waveScan 5s linear infinite;
+  filter: drop-shadow(0 0 4px rgba(111, 226, 185, 0.75));
+}
+@keyframes waveScan {
+  to { stroke-dashoffset: -645; }
+}
+.scopeTag {
+  position: absolute;
+  bottom: 6px;
+  left: 7px;
+  z-index: 2;
+  color: #6f9487;
+  font-size: 7px;
+  letter-spacing: 0.08em;
+}
+.signalReadout {
+  display: grid;
+  gap: 9px;
+  padding: 2px 1px 13px;
+}
+.signalReadout div {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  font-size: 7px;
+  letter-spacing: 0.1em;
+}
+.signalReadout span {
+  color: #668078;
+}
+.signalReadout b {
+  color: #b6c8be;
+  font-size: 7px;
+  font-weight: 400;
+}
+.signalReadout b i {
+  color: var(--rust);
+  font-style: normal;
+}
+.signalFooter {
+  padding-top: 11px;
+  border-top: 1px solid rgba(127, 196, 173, 0.15);
+  color: #678078;
+  font-size: 7px;
+}
+.signalFooter span:last-child {
+  color: #7ac8ae;
+  letter-spacing: 0.2em;
+}
+.signalFooter i {
+  color: var(--rust);
+  font-style: normal;
+}
+.startStamp {
+  position: absolute;
+  right: clamp(34px, 7.3vw, 108px);
+  bottom: 36px;
+  color: rgba(126, 158, 145, 0.46);
+  font: 8px/1.65 var(--mono);
+  letter-spacing: 0.16em;
+  text-align: right;
+}
+.startStamp span {
+  color: rgba(226, 151, 94, 0.55);
+  font-size: 7px;
+}
+
+@media (max-width: 980px) and (min-width: 761px) {
+  .intro {
+    left: 6vw;
+    width: 57vw;
+  }
+  .intro h1 {
+    font-size: clamp(58px, 8vw, 82px);
+  }
+  .signalPanel {
+    right: 4vw;
+    width: 29vw;
+  }
+}
+@media (max-width: 760px) {
+  .brandMark {
+    width: 15px;
+    height: 15px;
+    margin-right: 4px;
+    vertical-align: -3px;
+  }
+  .startScreen {
+    padding: 24px;
+    background:
+      radial-gradient(ellipse at 78% 45%, rgba(12, 72, 68, 0.2), transparent 45%),
+      linear-gradient(110deg, rgba(4, 10, 12, 0.96), rgba(5, 12, 13, 0.87));
+  }
+  .startScreen::after {
+    right: -37%;
+    width: 100vw;
+  }
+  .screenGrid {
+    background-size: 42px 42px;
+    mask-image: linear-gradient(90deg, transparent, #000);
+  }
+  .intro {
+    left: 25px;
+    width: calc(100% - 50px);
+    max-width: 550px;
+    padding: 0;
+  }
+  .intro .eyebrow {
+    margin-bottom: 20px;
+    font-size: 8px;
+    letter-spacing: 0.15em;
+  }
+  .intro h1 {
+    font-size: clamp(52px, 15vw, 88px);
+  }
+  .intro > p {
+    margin-top: 20px;
+    font-size: 8px;
+    letter-spacing: 0.16em;
+  }
+  .introCopy {
+    max-width: 370px;
+    font-size: 13px;
+    line-height: 1.65;
+  }
+  .signalPanel,
+  .startStamp {
+    display: none;
+  }
+  .startFoot {
+    max-width: 310px;
+    font-size: 7px;
+    line-height: 1.7;
+  }
+}
+@media (max-height: 600px) and (min-width: 761px) {
+  .intro h1 {
+    font-size: 72px;
+  }
+  .intro .eyebrow {
+    margin-bottom: 12px;
+  }
+  .intro > p {
+    margin-top: 14px;
+  }
+  .introRule {
+    margin: 14px 0 10px;
+  }
+  .introCopy {
+    font-size: 12px;
+  }
+  #startButton {
+    margin-top: 16px;
+    padding: 12px 15px;
+  }
+  .startFoot {
+    margin-top: 10px;
+  }
+  .signalPanel {
+    transform: translateY(-48%) scale(0.86);
+    transform-origin: center right;
   }
 }
