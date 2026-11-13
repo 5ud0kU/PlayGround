@@ -21,6 +21,21 @@
       <div id="quickbar"><span class="active">1 <small>FLASHLIGHT</small><b id="lamp-state">ON</b></span><span>2 <small>HAND RADIO</small></span><span>3 <small>FIRST AID</small><b id="med-count">1</b></span></div>
     </section>
     <div id="prompt"></div>
+    <div id="mobile-controls" aria-label="Touch controls">
+      <div class="move-pad" aria-label="Movement">
+        <button data-hold="w" class="move-up" aria-label="Move forward">▲</button>
+        <button data-hold="a" class="move-left" aria-label="Move left">◀</button>
+        <button data-hold="s" class="move-down" aria-label="Move backward">▼</button>
+        <button data-hold="d" class="move-right" aria-label="Move right">▶</button>
+      </div>
+      <div class="touch-actions">
+        <button data-action="e" class="touch-interact" aria-label="Interact">INTERACT</button>
+        <button data-hold="shift" aria-label="Hold to run">RUN</button>
+        <button data-action="1" aria-label="Toggle flashlight">LIGHT</button>
+        <button data-action="2" aria-label="Toggle radio">RADIO</button>
+        <button data-action="3" aria-label="Use first aid">AID</button>
+      </div>
+    </div>
     <div id="toast" aria-live="assertive"></div>
     <div id="objective"><small>YOUR LEAD</small><span id="objective-text">Find the last address in your father's notebook.</span></div>
     <button id="journal-button" title="Open journal (J)">JOURNAL <kbd>J</kbd></button>
@@ -33,7 +48,7 @@
       <div class="title-kicker">A TOWN THAT REMEMBERS YOU</div><h1>THE<br /><em>TOWN</em></h1><p class="subtitle">Somewhere between the last train and morning.</p>
       <div class="story">You came back for a funeral. Your father left one address in his notebook.<br />The town has changed. Everyone says it hasn't.</div>
       <button id="begin">ENTER ASHGATE <span>→</span></button>
-      <div class="controls-note">W A S D &nbsp; MOVE <i>·</i> DRAG &nbsp; LOOK <i>·</i> E &nbsp; INTERACT <i>·</i> SHIFT &nbsp; RUN</div>
+      <div class="controls-note"><span class="desktop-controls">W A S D &nbsp; MOVE <i>·</i> DRAG &nbsp; LOOK <i>·</i> E &nbsp; INTERACT <i>·</i> SHIFT &nbsp; RUN</span><span class="mobile-controls-note">LEFT PAD MOVE · DRAG RIGHT SIDE TO LOOK · TAP INTERACT</span></div>
       <div class="sound-note">HEADPHONES RECOMMENDED <span>✦</span></div>
     </section>
     <section id="ending-screen" class="screen hidden"><div class="title-kicker">THE LAST ENTRY</div><h1 id="ending-title">ASHES</h1><p id="ending-copy"></p><div id="ending-stats"></div><button id="again">RETURN TO THE BEGINNING <span>↻</span></button></section>
