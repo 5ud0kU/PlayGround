@@ -28,7 +28,11 @@
   };
   const clamp = (v, a, b) => Math.max(a, Math.min(b, v)),
     rand = (a, b) => a + Math.random() * (b - a),
-    dist = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
+    dist = (a, b) => Math.hypot(a.x - b.x, a.y - b.y),
+    noise2 = (x, y) => {
+      const n = Math.sin(x * 127.1 + y * 311.7) * 43758.5453;
+      return n - Math.floor(n);
+    };
   let W = 960,
     H = 600,
     started = false,
@@ -491,24 +495,25 @@
       hz = h * 0.47,
       cols = Math.ceil(w / 2),
       step = w / cols,
-      depth = [];
+      depth = [],
+      night = game.time > 19 || game.time < 5;
     const sky = ctx.createLinearGradient(0, 0, 0, hz);
-    sky.addColorStop(
-      0,
-      game.time > 19 || game.time < 5 ? "#070a0d" : "#39403e",
-    );
-    sky.addColorStop(
-      1,
-      game.time > 19 || game.time < 5 ? "#1a2022" : "#73756b",
-    );
+    sky.addColorStop(0, night ? "#10191c" : "#626966");
+    sky.addColorStop(0.55, night ? "#293536" : "#99978b");
+    sky.addColorStop(0.91, night ? "#4a514c" : "#b0a994");
+    sky.addColorStop(1, night ? "#697067" : "#bcb49d");
     ctx.fillStyle = sky;
     ctx.fillRect(0, 0, w, hz);
-    const floor = ctx.createLinearGradient(0, hz, 0, h);
-    floor.addColorStop(0, "#383a35");
-    floor.addColorStop(0.45, "#212522");
-    floor.addColorStop(1, "#0b0e0d");
-    ctx.fillStyle = floor;
-    ctx.fillRect(0, hz, w, h - hz);
+
+    // Low, broken cloud bands soften the skyline without obscuring landmarks.
+    const cloud = ctx.createLinearGradient(0, hz * 0.42, 0, hz);
+    cloud.addColorStop(0, "rgba(42,49,47,0)");
+    cloud.addColorStop(0.72, night ? "rgba(12,21,23,.12)" : "rgba(51,57,52,.12)");
+    cloud.addColorStop(1, night ? "rgba(14,22,22,.34)" : "rgba(57,60,52,.25)");
+    ctx.fillStyle = cloud;
+    ctx.fillRect(0, hz * 0.42, w, hz * 0.58);
+    drawGround(hz, night, depth, cols);
+
     for (let i = 0; i < cols; i++) {
       const x = i * step,
         ray = game.angle + (i / cols - 0.5) * 1.12,
@@ -517,41 +522,145 @@
       depth[i] = d;
       const wh = Math.min(h * 2, (h * 0.9) / d),
         top = hz - wh * 0.5,
-        shade = clamp(1.05 - d / 15, 0.16, 0.9) * (r.side ? 0.78 : 1);
+        beam = Math.exp(-Math.pow((i / cols - 0.5) / 0.29, 2)),
+        illumination = night
+          ? 0.3 + beam * 0.68 * clamp(1 - d / 23, 0.18, 1)
+          : 0.72 + beam * 0.25 * clamp(1 - d / 27, 0.2, 1),
+        shade = clamp((1.08 - d / 17) * illumination, 0.08, 0.92) * (r.side ? 0.72 : 1),
+        wallU = ((r.hit % 1) + 1) % 1,
+        cellTone = noise2(r.mx, r.my),
+        fog = clamp((d - 4) / 22, 0, night ? 0.72 : 0.54);
+
       if (r.tile === "T") {
-        ctx.fillStyle = `rgb(${Math.floor(13 * shade)},${Math.floor(20 * shade)},${Math.floor(18 * shade)})`;
+        const bark = 0.78 + cellTone * 0.22;
+        ctx.fillStyle = `rgb(${Math.floor(38 * shade * bark)},${Math.floor(44 * shade * bark)},${Math.floor(39 * shade * bark)})`;
         ctx.fillRect(x, top, step + 1, wh);
-        ctx.fillStyle = `rgba(92,105,82,${shade * 0.35})`;
-        ctx.fillRect(x, top + wh * 0.22, step + 1, wh * 0.06);
+        const groove = Math.sin(wallU * 58 + cellTone * 8) * 0.5 + 0.5;
+        ctx.fillStyle = `rgba(9,14,12,${0.11 + groove * 0.2})`;
+        ctx.fillRect(x, top, step + 1, wh);
+        ctx.fillStyle = `rgba(105,111,86,${shade * (0.12 + (1 - wallU) * 0.07)})`;
+        ctx.fillRect(x, top + wh * 0.18, step + 1, wh * 0.025);
       } else {
-        ctx.fillStyle = r.tile === "D" ? "#51443b" : "#55544d";
+        const door = r.tile === "D",
+          base = door ? [74, 62, 49] : [96, 93, 80],
+          variation = 0.82 + cellTone * 0.28;
+        ctx.fillStyle = `rgb(${Math.floor(base[0] * shade * variation)},${Math.floor(base[1] * shade * variation)},${Math.floor(base[2] * shade * variation)})`;
         ctx.fillRect(x, top, step + 1, wh);
-        ctx.fillStyle = `rgba(8,10,9,${1 - shade})`;
-        ctx.fillRect(x, top, step + 1, wh);
-        if (Math.floor(r.hit * 10) % 2 === 0 && d < 9) {
-          ctx.fillStyle = `rgba(160,146,118,${shade * 0.11})`;
-          ctx.fillRect(x, top + wh * 0.1, step + 1, Math.max(1, wh * 0.015));
-          if (wh > 80) {
-            ctx.fillStyle = `rgba(190,171,126,${shade * 0.15})`;
-            ctx.fillRect(x, top + wh * 0.31, step + 1, wh * 0.12);
-            ctx.fillStyle = `rgba(11,15,14,${shade * 0.8})`;
-            ctx.fillRect(x, top + wh * 0.33, step + 1, wh * 0.09);
+
+        // Irregular stone courses, eroded mortar and damp streaks add scale to the masonry.
+        if (!door && wh > 12) {
+          const phase = ((r.mx * 3 + r.my * 5) % 2) * 0.5;
+          for (let course = 1; course < 8; course++) {
+            const seam = course / 8 + phase * 0.125;
+            const seamY = top + wh * seam;
+            if (seamY > top && seamY < top + wh) {
+              ctx.fillStyle = `rgba(22,25,22,${0.15 + shade * 0.12})`;
+              ctx.fillRect(x, seamY, step + 1, Math.max(1, wh * 0.012));
+              const brick = Math.floor(wallU * 5 + (course % 2) * 0.5);
+              if ((brick + course + r.mx + r.my) % 3 === 0) {
+                ctx.fillStyle = `rgba(169,153,124,${shade * 0.09})`;
+                ctx.fillRect(x, seamY + 1, step + 1, Math.max(1, wh * 0.006));
+              }
+            }
           }
+          const damp = noise2(Math.floor(wallU * 18), r.mx * 31 + r.my);
+          if (damp > 0.62) {
+            ctx.fillStyle = `rgba(20,28,25,${(damp - 0.58) * shade * 0.34})`;
+            ctx.fillRect(x, top + wh * 0.18, step + 1, wh * (0.2 + damp * 0.22));
+          }
+        } else {
+          const plank = Math.floor(wallU * 5);
+          ctx.fillStyle = `rgba(15,13,11,${0.22 + (plank % 2) * 0.09})`;
+          if (wallU % 0.2 < 0.025 || wallU % 0.2 > 0.175)
+            ctx.fillRect(x, top, step + 1, wh);
+          ctx.fillStyle = `rgba(178,143,99,${shade * 0.1})`;
+          ctx.fillRect(x, top + wh * (0.2 + (plank % 3) * 0.19), step + 1, Math.max(1, wh * 0.012));
         }
-        ctx.fillStyle = `rgba(0,0,0,${clamp(d / 30, 0.05, 0.46)})`;
+
+        const vertical = ctx.createLinearGradient(0, top, 0, top + wh);
+        vertical.addColorStop(0, `rgba(8,12,11,${0.22 + (1 - shade) * 0.28})`);
+        vertical.addColorStop(0.16, "rgba(0,0,0,0)");
+        vertical.addColorStop(0.82, "rgba(0,0,0,0.06)");
+        vertical.addColorStop(1, "rgba(5,8,7,0.42)");
+        ctx.fillStyle = vertical;
         ctx.fillRect(x, top, step + 1, wh);
       }
-      if (i % 8 === 0) {
-        ctx.strokeStyle = `rgba(151,151,131,${clamp(0.05 / d, 0.003, 0.035)})`;
-        ctx.beginPath();
-        ctx.moveTo(x, hz);
-        ctx.lineTo(w * 0.5 + (x - w * 0.5) * 7, h);
-        ctx.stroke();
+
+      if (fog > 0) {
+        ctx.fillStyle = night
+          ? `rgba(83,101,99,${fog * 0.55})`
+          : `rgba(169,165,146,${fog * 0.62})`;
+        ctx.fillRect(x, top, step + 1, wh);
+      }
+      if (d < 7 && (i + Math.floor(wallU * 7)) % 37 === 0) {
+        ctx.fillStyle = `rgba(208,190,150,${shade * 0.13})`;
+        ctx.fillRect(x, top + wh * (0.27 + cellTone * 0.3), step + 1, Math.max(1, wh * 0.008));
       }
     }
     drawWorldSprites(depth, cols, step, hz);
     drawAtmosphere();
     drawHud();
+  }
+
+  function drawGround(horizon, night, depthBuffer, cols) {
+    const gradient = ctx.createLinearGradient(0, horizon, 0, H);
+    gradient.addColorStop(0, night ? "#3c4542" : "#77776a");
+    gradient.addColorStop(0.22, night ? "#292f2c" : "#464940");
+    gradient.addColorStop(1, "#0a0e0d");
+    ctx.fillStyle = gradient;
+    ctx.fillRect(0, horizon, W, H - horizon);
+
+    // World-anchored gravel and puddles are projected onto the street plane.
+    // Sparse deterministic marks keep this detail cheap enough for mobile.
+    const forwardX = Math.cos(game.angle),
+      forwardY = Math.sin(game.angle),
+      sideX = -forwardY,
+      sideY = forwardX,
+      maxDepth = 23,
+      maxLateral = maxDepth * 0.72;
+    for (let forward = 1.15; forward < maxDepth; forward += 0.42) {
+      for (let lateral = -maxLateral; lateral < maxLateral; lateral += 0.42) {
+        const wx = game.x + forwardX * forward + sideX * lateral,
+          wy = game.y + forwardY * forward + sideY * lateral,
+          grain = noise2(Math.floor(wx * 5), Math.floor(wy * 5));
+        if (grain < 0.73) continue;
+        const screenX = W * 0.5 + (lateral / forward) * W * 0.83,
+          screenY = horizon + (H * 0.52) / forward,
+          column = clamp(Math.floor((screenX / W) * cols), 0, cols - 1);
+        if (
+          screenX < 0 ||
+          screenX > W ||
+          screenY > H ||
+          depthBuffer[column] < forward - 0.25
+        )
+          continue;
+        const scale = clamp(1.7 / forward, 0.35, 1.8),
+          alpha = clamp((grain - 0.68) * 0.48, 0.025, 0.15) *
+            (1 - clamp((forward - 5) / 25, 0, 0.72));
+        ctx.fillStyle = night
+          ? `rgba(154,169,155,${alpha})`
+          : `rgba(215,204,174,${alpha})`;
+        ctx.fillRect(screenX, screenY, scale * (1 + grain), Math.max(1, scale * 0.45));
+
+        const puddle = noise2(Math.floor(wx * 1.4), Math.floor(wy * 1.4));
+        if (puddle > 0.94) {
+          ctx.fillStyle = night
+            ? "rgba(113,132,126,0.1)"
+            : "rgba(157,157,139,0.095)";
+          ctx.beginPath();
+          ctx.ellipse(
+            screenX,
+            screenY + scale,
+            scale * 4.5,
+            scale * 0.75,
+            0,
+            0,
+            Math.PI * 2,
+          );
+          ctx.fill();
+        }
+      }
+    }
   }
   function poly(points, color) {
     ctx.fillStyle = color;
@@ -613,9 +722,11 @@
     ctx.moveTo(x - s * 0.14, headY + s * 0.08);
     ctx.lineTo(x + s * 0.14, headY + s * 0.08);
     ctx.lineTo(x + s * 0.11, headY - s * 0.04);
-    ctx.lineTo(x - s * 0.11, headY - s * 0.04);
+    ctx.quadraticCurveTo(x, headY - s * 0.12, x - s * 0.11, headY - s * 0.04);
     ctx.closePath();
     ctx.fill();
+    ctx.fillStyle = "rgba(224,220,199,0.12)";
+    ctx.fillRect(x - s * 0.09, headY - s * 0.025, s * 0.16, Math.max(1, s * 0.012));
 
     ctx.fillStyle = skin;
     ctx.beginPath();
@@ -627,15 +738,21 @@
     ctx.fill();
 
     ctx.fillStyle = face;
-    ctx.fillRect(x - s * 0.04, headY + s * 0.01, s * 0.015, s * 0.015);
-    ctx.fillRect(x + s * 0.025, headY + s * 0.01, s * 0.015, s * 0.015);
-    ctx.strokeStyle = "#3a2d29";
-    ctx.lineWidth = Math.max(1, s * 0.01);
+    ctx.fillRect(x - s * 0.055, headY + s * 0.005, s * 0.04, Math.max(1, s * 0.012));
+    ctx.fillRect(x + s * 0.015, headY + s * 0.005, s * 0.04, Math.max(1, s * 0.012));
+    ctx.fillStyle = "rgba(16,18,17,0.28)";
+    ctx.fillRect(x - s * 0.012, headY + s * 0.025, s * 0.024, s * 0.05);
+    ctx.strokeStyle = "rgba(44,34,31,0.8)";
+    ctx.lineWidth = Math.max(1, s * 0.008);
     ctx.beginPath();
-    ctx.moveTo(x - s * 0.02, headY + s * 0.055);
-    ctx.quadraticCurveTo(x, headY + s * 0.09, x + s * 0.02, headY + s * 0.055);
+    ctx.moveTo(x - s * 0.018, headY + s * 0.075);
+    ctx.lineTo(x + s * 0.018, headY + s * 0.075);
     ctx.stroke();
 
+    const coatShade = ctx.createLinearGradient(x - s * 0.2, 0, x + s * 0.2, 0);
+    coatShade.addColorStop(0, "rgba(8,10,9,0.28)");
+    coatShade.addColorStop(0.42, "rgba(230,220,196,0.08)");
+    coatShade.addColorStop(1, "rgba(5,7,7,0.34)");
     ctx.fillStyle = coat;
     ctx.beginPath();
     ctx.moveTo(x - s * 0.19, torsoY + s * 0.02);
@@ -644,19 +761,60 @@
     ctx.lineTo(x - s * 0.15, b - s * 0.18);
     ctx.closePath();
     ctx.fill();
+    ctx.fillStyle = coatShade;
+    ctx.fill();
 
     ctx.fillStyle = torso;
     ctx.fillRect(x - s * 0.09, torsoY, s * 0.18, s * 0.27);
     ctx.fillStyle = coat;
-    ctx.fillRect(x - s * 0.06, torsoY + s * 0.05, s * 0.12, s * 0.16);
+    ctx.beginPath();
+    ctx.moveTo(x - s * 0.06, torsoY + s * 0.04);
+    ctx.lineTo(x - s * 0.015, torsoY + s * 0.085);
+    ctx.lineTo(x - s * 0.035, torsoY + s * 0.22);
+    ctx.lineTo(x - s * 0.065, torsoY + s * 0.16);
+    ctx.closePath();
+    ctx.fill();
+    ctx.beginPath();
+    ctx.moveTo(x + s * 0.06, torsoY + s * 0.04);
+    ctx.lineTo(x + s * 0.015, torsoY + s * 0.085);
+    ctx.lineTo(x + s * 0.035, torsoY + s * 0.22);
+    ctx.lineTo(x + s * 0.065, torsoY + s * 0.16);
+    ctx.closePath();
+    ctx.fill();
+    ctx.strokeStyle = "rgba(21,24,22,0.45)";
+    ctx.lineWidth = Math.max(1, s * 0.006);
+    ctx.beginPath();
+    ctx.moveTo(x, torsoY + s * 0.09);
+    ctx.lineTo(x, b - s * 0.19);
+    ctx.moveTo(x - s * 0.13, torsoY + s * 0.15);
+    ctx.lineTo(x - s * 0.1, b - s * 0.2);
+    ctx.moveTo(x + s * 0.13, torsoY + s * 0.15);
+    ctx.lineTo(x + s * 0.1, b - s * 0.2);
+    ctx.stroke();
+    ctx.fillStyle = "rgba(203,190,157,0.42)";
+    for (let button = 0; button < 3; button++)
+      ctx.fillRect(x - s * 0.006, torsoY + s * (0.13 + button * 0.065), Math.max(1, s * 0.012), Math.max(1, s * 0.012));
 
-    ctx.strokeStyle = skin;
-    ctx.lineWidth = Math.max(1.8, s * 0.02);
+    ctx.strokeStyle = coat;
+    ctx.lineWidth = Math.max(2, s * 0.065);
+    ctx.lineCap = "round";
     ctx.beginPath();
     ctx.moveTo(x - s * 0.12, torsoY + s * 0.04);
     ctx.lineTo(x - s * 0.2, b - s * 0.08);
     ctx.moveTo(x + s * 0.12, torsoY + s * 0.04);
     ctx.lineTo(x + s * 0.2, b - s * 0.08);
+    ctx.stroke();
+    ctx.strokeStyle = "rgba(218,190,154,0.82)";
+    ctx.lineWidth = Math.max(1.5, s * 0.018);
+    ctx.beginPath();
+    ctx.moveTo(x - s * 0.2, b - s * 0.08);
+    ctx.lineTo(x - s * 0.205, b - s * 0.035);
+    ctx.moveTo(x + s * 0.2, b - s * 0.08);
+    ctx.lineTo(x + s * 0.205, b - s * 0.035);
+    ctx.stroke();
+    ctx.strokeStyle = limb;
+    ctx.lineWidth = Math.max(2, s * 0.055);
+    ctx.beginPath();
     ctx.moveTo(x - s * 0.06, b - s * 0.18);
     ctx.lineTo(x - s * 0.08, waistY);
     ctx.moveTo(x + s * 0.06, b - s * 0.18);
