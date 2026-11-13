@@ -9,6 +9,7 @@
 </head>
 <body>
   <main id="game">
+    <canvas id="scene" aria-hidden="true"></canvas>
     <canvas id="view" aria-label="First-person view of Gloamwood"></canvas>
     <div class="vignette"></div><div class="grain"></div>
     <header class="topbar">
@@ -31,6 +32,7 @@
     <div id="helpScreen" class="modal hidden"><div class="modal-card"><button class="close-btn modal-close">×</button><span class="case-label">FIELD GUIDE</span><h2>Stay observant.</h2><p>Walk the town, examine anything that catches your eye, and listen closely. Evidence is not a conclusion.</p><div class="key-grid"><span><kbd>W A S D</kbd> Move</span><span><kbd>MOUSE</kbd> Look</span><span><kbd>E</kbd> Examine / speak</span><span><kbd>SHIFT</kbd> Run</span><span><kbd>F</kbd> Toggle flashlight</span><span><kbd>ESC</kbd> Close interface</span></div><p class="muted">The world advances while you investigate. Your choices are remembered.</p><button class="primary-btn modal-ok">UNDERSTOOD</button></div></div>
     <div id="ending" class="screen-cover hidden"><div class="title-wrap"><div class="title-eyebrow">GLOAMWOOD COUNTY · CASE CLOSED</div><h1 id="endingTitle">THE TESTAMENT</h1><div class="subtitle" id="endingSub">THE TOWN REMEMBERS</div><div class="title-rule">✣</div><p id="endingText"></p><button id="restartBtn" class="primary-btn">BEGIN AGAIN <span>↻</span></button></div></div>
   </main>
+  <script src="renderer.js"></script>
   <script src="game.js"></script>
 </body>
 </html>
