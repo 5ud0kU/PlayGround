@@ -15,10 +15,19 @@ function isBuilding(site){return site.kind!=='cemetery'&&site.kind!=='forest'}
 function roomAt(x,y){return sites.find(s=>isBuilding(s)&&x>s.x-2&&x<s.x+2&&y>s.y-2&&y<s.y+2)||null}
 function addRoomDecor(site,items){for(const [dx,dy,name,style='wood',horror=false] of items)objects.push({x:site.x+dx,y:site.y+dy,type:style==='blood'?'blood':horror?'horror':'furniture',name,site,room:site,style,horror,hidden:true})}
 function buildTown(){
- for(let y=0;y<MH;y++)for(let x=0;x<MW;x++){if(x===0||y===0||x===MW-1||y===MH-1)setTile(x,y,1);else if((x%8<=1)||(y%8<=1))setTile(x,y,0);else setTile(x,y,0)}
- // Streets, alleys and the creek at the edge of town.
- for(let x=1;x<MW-1;x++){setTile(x,3,6);setTile(x,4,6);setTile(x,11,6);setTile(x,12,6);setTile(x,19,6);setTile(x,20,6);setTile(x,27,6);setTile(x,28,6)}
- for(let y=1;y<MH-1;y++){setTile(3,y,6);setTile(4,y,6);setTile(11,y,6);setTile(12,y,6);setTile(19,y,6);setTile(20,y,6);setTile(27,y,6);setTile(28,y,6)}
+  // Ashgate is a walkable low-poly landscape: grass lots, broad asphalt lanes,
+  // pale sidewalks and a dense, continuous perimeter of ruined town walls.
+  for(let y=0;y<MH;y++)for(let x=0;x<MW;x++)setTile(x,y,x===0||y===0||x===MW-1||y===MH-1?1:5);
+  // The old grid survives as a road network, with a wider crossroad at the town square.
+  for(let x=1;x<MW-1;x++)for(const y of [3,4,11,12,19,20,27,28,35,36])setTile(x,y,6);
+  for(let y=1;y<MH-1;y++)for(const x of [3,4,11,12,19,20,27,28,35,36])setTile(x,y,6);
+  for(let y=17;y<=22;y++)for(let x=17;x<=22;x++)setTile(x,y,6);
+  // Sidewalks and small forecourts frame each building without interrupting routes.
+  for(const s of sites){for(let x=s.x-3;x<=s.x+3;x++){if(tile(x,s.y-3)===5)setTile(x,s.y-3,7);if(tile(x,s.y+3)===5)setTile(x,s.y+3,7)}for(let y=s.y-3;y<=s.y+3;y++){if(tile(s.x-3,y)===5)setTile(s.x-3,y,7);if(tile(s.x+3,y)===5)setTile(s.x+3,y,7)}}
+  // The town square opens into a small paved civic plaza; a raised-looking island
+  // is kept walkable so the old cross-town route stays intact.
+  for(let y=17;y<=22;y++)for(let x=17;x<=22;x++)setTile(x,y,7);
+  for(const [x,y] of [[18,18],[21,18],[18,21],[21,21]])setTile(x,y,6);
  for(const s of sites){
   const x0=s.x-2,y0=s.y-2,x1=s.x+2,y1=s.y+2;
   for(let y=y0;y<=y1;y++)for(let x=x0;x<=x1;x++){const edge=x===x0||x===x1||y===y0||y===y1;setTile(x,y,isBuilding(s)&&edge?s.type:0);labels[idx(x,y)]=s.name}
