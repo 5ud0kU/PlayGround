@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#101416" />
+  <link rel="icon" href="data:," />
+  <title>HOLLOW COUNTY — The Quiet Hours</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=DM+Sans:wght@400;500;600;700&family=Playfair+Display:wght@600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <div id="game"></div>
+  <div id="vignette"></div><div id="grain"></div><div id="damage-flash"></div>
+  <main id="title-screen" class="screen">
+    <div class="title-wrap">
+      <div class="eyebrow"><span class="signal"></span> AN INTERACTIVE PSYCHOLOGICAL HORROR</div>
+      <h1>HOLLOW<br><i>COUNTY</i></h1>
+      <p class="subtitle">THE QUIET HOURS</p>
+      <p class="intro">The town has been expecting you.<br>It just can’t agree on why.</p>
+      <button id="start-button"><span>ENTER THE COUNTY</span><b>↗</b></button>
+      <div class="title-foot"><span>OCTOBER 23, 1998</span><span>POP. 4,218 &nbsp;·&nbsp; 3 MILES TO THE COUNTY LINE</span></div>
+    </div>
+    <div class="title-note">A place remembers what its people forget.</div>
+  </main>
+  <section id="hud" class="hidden" aria-live="polite">
+    <header class="topbar"><div class="brand">HOLLOW <span>COUNTY</span></div><div id="district-label">NORTH RESIDENTIAL</div><div id="clock">06:42 PM <span>THU, OCT 23</span></div></header>
+    <div class="crosshair"><i></i><i></i></div>
+    <div id="objective"><small>YOUR LEAD</small><span id="objective-text">Find the last address in Mara's letter.</span></div>
+    <div id="prompt" class="hidden"><kbd>E</kbd><span>INTERACT</span></div>
+    <div class="bottom-left"><div class="condition"><span class="meter-label">HEALTH</span><div class="meter"><i id="health-fill"></i></div><b id="health-value">100</b></div><div class="condition"><span class="meter-label">NERVE</span><div class="meter nerve"><i id="nerve-fill"></i></div><b id="nerve-value">84</b></div><div class="status-row"><span id="status-icon">◒</span><span id="status-text">DRY / WALKING</span></div></div>
+    <div class="bottom-right"><div class="equipped"><span id="equipped-icon">◉</span><div><small>IN HAND</small><b id="equipped-name">FLASHLIGHT</b></div><kbd>F</kbd></div><div class="quick-items"><span id="ammo-count">BATTERY 72%</span><span>J JOURNAL</span><span>I PACK</span></div></div>
+    <div id="event-toast"></div>
+    <div id="whisper"></div>
+  </section>
+  <section id="panel" class="overlay hidden"><div class="panel-card"><button class="close-panel" id="close-panel">×</button><div class="panel-kicker" id="panel-kicker">FIELD NOTES</div><h2 id="panel-title">What the town left behind</h2><div id="panel-content"></div><div class="panel-foot">ESC TO CLOSE</div></div></section>
+  <section id="death-screen" class="screen hidden"><div class="death-card"><div class="eyebrow">THE COUNTY KEEPS ITS OWN</div><h2 id="death-title">You were not alone.</h2><p id="death-copy">Somewhere, a telephone rings and rings.</p><button id="restart-button">TRY AGAIN <b>↗</b></button></div></section>
+  <div id="loading" class="loading"><span></span> TUNING THE RADIO</div>
+  <script type="module" src="game.js"></script>
+</body>
+</html>
