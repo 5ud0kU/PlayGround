@@ -4,3 +4,77 @@
 @media(max-width:1050px){.game-shell{padding:0 15px 15px}.game-layout{grid-template-columns:minmax(0,1fr) 290px;gap:12px}.case-head{padding:16px 14px 12px}.case-summary,.sidebar-section{padding-left:14px;padding-right:14px}.sidebar-bottom{padding:11px 14px}.vitals{gap:10px}.vital{grid-template-columns:auto 46px auto;gap:5px}.meter{width:45px}.player-readout{min-width:170px}.world-controls{gap:8px}.world-controls span{font-size:9px}}
 .mobile-controls{display:none}
 @media(max-width:760px){body{overflow:auto}.game-shell{height:100dvh;min-height:630px;padding:0 10px 8px}.topbar{height:67px}.brand{gap:9px}.sigil{height:30px;width:30px;font-size:17px}.brand .eyebrow{font-size:8px;letter-spacing:.8px}.brand h1{font-size:12px;letter-spacing:.4px}.top-meta{gap:9px}.weather{display:none}.day-stamp{padding-left:9px}.icon-button{width:29px;height:29px}.game-layout{display:block;padding-top:9px;min-height:0}.world-column{height:calc(100% - 1px)}.scene-wrap{min-height:330px;touch-action:manipulation}.scene-wrap canvas{touch-action:none}.mobile-controls{display:flex;position:absolute;z-index:5;left:12px;right:12px;bottom:84px;align-items:flex-end;justify-content:space-between;pointer-events:none}.touch-pad{width:132px;height:132px;position:relative;pointer-events:auto;touch-action:none}.touch-dir,.touch-action{background:#171c19df;border:1px solid #80765f;color:#e3d4b8;box-shadow:0 3px 12px #0008;touch-action:none;-webkit-tap-highlight-color:transparent}.touch-dir{position:absolute;width:43px;height:43px;border-radius:12px;font-size:17px}.touch-dir:active,.touch-dir.pressed,.touch-action:active{background:#66563c;border-color:#c3a36b}.touch-up{top:0;left:44px}.touch-left{top:44px;left:0}.touch-down{top:44px;left:44px}.touch-right{top:44px;right:0}.touch-center{position:absolute;bottom:0;left:45px;color:#a49a85;font:8px 'DM Mono',monospace;letter-spacing:1px}.touch-actions{display:flex;flex-direction:column;gap:8px;align-items:flex-end;pointer-events:auto}.touch-action{min-width:94px;min-height:44px;padding:0 12px;border-radius:22px;font:9px 'DM Mono',monospace;letter-spacing:.7px}.footbar{height:66px;padding:0 9px}.player-readout{min-width:0}.player-readout strong{font-size:8px}.player-readout small{font-size:7px}.portrait{width:29px;height:29px}.vitals{gap:7px}.vital{display:flex;flex-direction:column;gap:3px;align-items:flex-start}.vital span{font-size:7px}.vital b{display:none}.meter{width:40px;height:3px}.foot-actions{display:none}.world-controls{gap:7px}.world-controls span{font-size:8px}.world-controls i{font-size:7px}.scene-bottom{padding:14px 12px}.objective strong{font-size:12px}.objective small{font-size:8px}.scene-heading{left:12px;top:13px;font-size:8px}.scene-coordinates{right:12px;top:13px;font-size:8px}.case-sidebar{display:none}.mobile-nav{position:absolute;display:flex;left:10px;right:10px;bottom:8px;justify-content:center;gap:7px;pointer-events:none}.mobile-nav button{pointer-events:auto;background:#202420e8;border:1px solid #555344;color:#cfc5b0;padding:8px 13px;font:9px 'DM Mono',monospace;letter-spacing:1px}.game-shell{padding-bottom:43px}.modal{max-height:88vh}.modal-top{padding:16px 17px 12px}.modal-body{padding:15px 17px 20px}.modal-top h2{font-size:22px}.tab-row{margin:0 17px}.tab-button{padding:10px 9px;font-size:8px}.evidence-list{grid-template-columns:1fr}.board{grid-template-columns:1fr 1fr}.mobile-nav{bottom:8px}}
+
+/* Mobile readability and viewport-fit refinements */
+@media(max-width:760px){
+  body{overflow:hidden}
+  .game-shell{height:100dvh;min-height:0;padding-bottom:calc(43px + env(safe-area-inset-bottom,0px))}
+  .topbar{flex-shrink:0}
+  .brand .eyebrow{font-size:9px;letter-spacing:.7px;color:#b1b1a6}
+  .brand h1{font-size:clamp(12px,3.2vw,15px)}
+  .day-stamp{font-size:10px;color:#b4b5ad}
+  .day-stamp b{font-size:16px}
+  .scene-wrap{min-height:0}
+  .scene-heading{font-size:10px;color:#e0ddcf}
+  .scene-coordinates{font-size:9px;color:#c0c2b9}
+  .objective small{font-size:9px;color:#c0bba9}
+  .objective strong{font-size:13px;line-height:1.25;color:#f0e9d8}
+  .world-controls span{font-size:9px}
+  .world-controls i{font-size:8px}
+  .player-readout strong{font-size:9px}
+  .player-readout small{font-size:8px;color:#b2b4aa}
+  .vital span{font-size:8px;color:#c0c2b9}
+  .mobile-nav{bottom:calc(6px + env(safe-area-inset-bottom,0px))}
+  .mobile-nav button{font-size:10px;padding:8px 14px}
+  .touch-action{font-size:10px}
+  .touch-center{font-size:9px}
+}
+@media(max-width:760px) and (orientation:portrait){
+  .topbar{height:67px}
+  .game-layout{padding-top:8px}
+  .footbar{height:66px}
+  .scene-wrap{min-height:250px}
+  .mobile-controls{bottom:82px}
+}
+@media(max-width:760px) and (orientation:landscape){
+  .game-shell{padding-left:10px;padding-right:10px;padding-bottom:calc(36px + env(safe-area-inset-bottom,0px))}
+  .topbar{height:48px}
+  .sigil{width:26px;height:26px;font-size:15px}
+  .brand .eyebrow{font-size:8px}
+  .brand h1{font-size:12px;margin-top:1px}
+  .game-layout{padding-top:5px}
+  .world-column{height:100%}
+  .scene-wrap{min-height:0}
+  .scene-bottom{padding:10px 12px}
+  .objective{gap:7px}
+  .objective-mark{font-size:14px}
+  .objective small{font-size:8px}
+  .objective strong{font-size:11px}
+  .world-controls{display:none}
+  .footbar{height:47px;padding:0 8px}
+  .player-readout{gap:6px}
+  .portrait{width:28px;height:28px}
+  .player-readout strong{font-size:8px}
+  .player-readout small{font-size:7px}
+  .vitals{gap:8px}
+  .vital{gap:3px}
+  .vital span{font-size:7px}
+  .meter{width:34px}
+  .mobile-controls{bottom:53px;left:8px;right:8px}
+  .touch-pad{width:102px;height:102px;transform:scale(.82);transform-origin:bottom left}
+  .touch-dir{width:37px;height:37px}
+  .touch-up{left:38px}
+  .touch-left,.touch-down{top:38px}
+  .touch-down{left:38px}
+  .touch-action{min-width:82px;min-height:38px;font-size:9px;padding:0 9px}
+  .touch-actions{gap:5px}
+  .mobile-nav button{padding:6px 12px;font-size:9px}
+}
+@media(max-width:760px) and (orientation:portrait) and (max-height:600px){
+  .topbar{height:54px}
+  .game-shell{padding-bottom:calc(40px + env(safe-area-inset-bottom,0px))}
+  .scene-wrap{min-height:220px}
+  .footbar{height:54px}
+  .mobile-controls{bottom:68px}
+  .touch-pad{transform:scale(.86);transform-origin:bottom left}
+}
