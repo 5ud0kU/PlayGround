@@ -25,6 +25,19 @@
           <div class="scene-coordinates" id="coordLabel">41° 08' N / 72° 21' W</div>
           <div class="scene-bottom"><div class="objective"><span class="objective-mark">✦</span><div><small>CURRENT LEAD</small><strong id="objectiveText">Return to the first scene</strong></div></div><div class="world-controls"><span>WASD <i>MOVE</i></span><span>E <i>INTERACT</i></span><span>Q <i>CASE FILE</i></span></div></div>
           <div id="interactPrompt" class="interact-prompt hidden"><span> E </span><b id="promptText">EXAMINE</b></div>
+          <div class="mobile-controls" aria-label="Touch controls">
+            <div class="touch-pad" aria-label="Move">
+              <button type="button" class="touch-dir touch-up" data-move="w" aria-label="Move up">▲</button>
+              <button type="button" class="touch-dir touch-left" data-move="a" aria-label="Move left">◀</button>
+              <button type="button" class="touch-dir touch-down" data-move="s" aria-label="Move down">▼</button>
+              <button type="button" class="touch-dir touch-right" data-move="d" aria-label="Move right">▶</button>
+              <span class="touch-center" aria-hidden="true">MOVE</span>
+            </div>
+            <div class="touch-actions">
+              <button type="button" class="touch-action" id="touchInteract">INTERACT</button>
+              <button type="button" class="touch-action" id="touchCase">CASE FILE</button>
+            </div>
+          </div>
           <div class="rain-layer" id="rainLayer"></div>
         </div>
         <div class="footbar"><div class="player-readout"><span class="portrait">M</span><div><strong>DETECTIVE ELIAS MERCER</strong><small>MAJOR CRIMES · BADGE 0471</small></div></div><div class="vitals"><div class="vital"><span>HEALTH</span><div class="meter"><i id="healthMeter"></i></div><b id="healthValue">94</b></div><div class="vital"><span>COMPOSURE</span><div class="meter sanity"><i id="stressMeter"></i></div><b id="stressValue">72</b></div><div class="vital"><span>FATIGUE</span><div class="meter fatigue"><i id="fatigueMeter"></i></div><b id="fatigueValue">18</b></div></div><div class="foot-actions"><button class="small-button" id="restBtn">☾ <span>REST</span></button><button class="small-button" id="notebookBtn">▤ <span>NOTES</span></button></div></div>
