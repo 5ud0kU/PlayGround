@@ -66,7 +66,57 @@
   function drawTacticalMap(){const w=mapCanvas.clientWidth,h=mapCanvas.clientHeight;if(!w||!h)return;mapCtx.clearRect(0,0,w,h);mapCtx.save();const scale=Math.min(w/W,h/H);mapCtx.translate((w-W*scale)/2,(h-H*scale)/2);mapCtx.scale(scale,scale);drawTownMap(mapCtx);mapCtx.restore()}
   function toggleMap(force){mapOpen=typeof force==='boolean'?force:!mapOpen;$('sceneWrap').classList.toggle('map-open',mapOpen);$('mapToggle').setAttribute('aria-pressed',String(mapOpen));$('mapToggle').querySelector('span').textContent=mapOpen?'CLOSE MAP':'MAP';$('mapToggle').setAttribute('aria-label',mapOpen?'Close tactical map':'Open tactical map');fitCanvas();if(mapOpen)drawTacticalMap()}
   function chooseMapRoute(e){if(!mapOpen||!moveEnabled)return;const r=mapCanvas.getBoundingClientRect(),scale=Math.min(r.width/W,r.height/H),ox=(r.width-W*scale)/2,oy=(r.height-H*scale)/2,x=(e.clientX-r.left-ox)/scale,y=(e.clientY-r.top-oy)/scale;if(x<0||x>W||y<0||y>H)return;const place=places.find(p=>Math.hypot(p.x-x,p.y-y)<95);if(place){gotoPlace(place.id);toggleMap(false)}else{routeTarget={x,y};updateRouteHUD();toast('ROUTE SET · WAYPOINT');toggleMap(false)}}
-  function drawTownMap(c){c.fillStyle='#28332e';c.fillRect(0,0,W,H);for(let i=0;i<70;i++){const x=seed(i+701)*W,y=seed(i+803)*H;c.fillStyle=['#354036','#303b34','#343c36','#29352f'][i%4];c.beginPath();c.ellipse(x,y,25+seed(i)*65,16+seed(i+21)*44,seed(i+31)*3,0,Math.PI*2);c.fill()}c.fillStyle='#333936';[[0,120,1600,75],[0,430,1600,86],[0,735,1600,82],[220,0,70,1100],[540,0,66,1100],[850,0,76,1100],[1220,0,74,1100]].forEach(r=>c.fillRect(...r));for(let row=0;row<5;row++)for(let col=0;col<7;col++){const x=60+col*215+(row%2)*30,y=35+row*210;if(x>W-150||y>H-115||places.some(p=>Math.abs(p.x-x)<112&&Math.abs(p.y-y)<100))continue;c.fillStyle='#4b4d43';c.fillRect(x,y,112,81)}places.forEach(p=>{c.fillStyle=p.color;c.fillRect(p.x-39,p.y-29,78,58);c.fillStyle='#d3c7ae';c.font='11px monospace';c.textAlign='center';c.fillText(p.name,p.x,p.y+42)});c.save();c.translate(S.player.x,S.player.y);c.rotate(yaw);c.fillStyle='#e2c58a';c.beginPath();c.moveTo(0,-16);c.lineTo(10,11);c.lineTo(0,6);c.lineTo(-10,11);c.closePath();c.fill();c.restore();if(routeTarget){c.strokeStyle='#d6b77c';c.setLineDash([12,9]);c.beginPath();c.moveTo(S.player.x,S.player.y);c.lineTo(routeTarget.x,routeTarget.y);c.stroke();c.setLineDash([])}}
+  function drawTownMap(c){
+    const ink='#090d13',paper='#e9dfc8',orange='#ff6b35',teal='#46c3bd';
+    const poly=(points,fill,stroke=null,width=1)=>{c.beginPath();points.forEach(([x,y],i)=>i?c.lineTo(x,y):c.moveTo(x,y));c.closePath();c.fillStyle=fill;c.fill();if(stroke){c.strokeStyle=stroke;c.lineWidth=width;c.stroke()}};
+    const route=(points,width,color,dash=[])=>{c.beginPath();points.forEach(([x,y],i)=>i?c.lineTo(x,y):c.moveTo(x,y));c.lineCap='round';c.lineJoin='round';c.setLineDash(dash);c.strokeStyle=ink;c.lineWidth=width+7;c.stroke();c.strokeStyle=color;c.lineWidth=width;c.stroke();c.setLineDash([])};
+    const text=(value,x,y,size,color=paper,align='left',weight='500')=>{c.font=`${weight} ${size}px "DM Mono",monospace`;c.textAlign=align;c.textBaseline='middle';c.fillStyle=color;c.fillText(value,x,y)};
+    c.fillStyle='#17212b';c.fillRect(0,0,W,H);
+    // The town is drawn as four irregular wards rather than a repeated square grid.
+    poly([[35,145],[310,120],[470,205],[600,190],[775,245],[930,204],[1110,220],[1260,170],[1535,205],[1550,625],[1440,690],[1495,1015],[1160,1060],[950,1015],[750,1070],[530,1015],[335,1060],[105,1000],[55,760],[95,560],[35,360]],'#28363a','#111821',8);
+    poly([[55,170],[360,140],[510,280],[470,505],[310,650],[85,620]],'#30484a','#10171e',5);
+    poly([[470,165],[930,170],[1030,355],[920,590],[680,620],[475,500],[520,300]],'#463d35','#111821',5);
+    poly([[915,185],[1510,210],[1520,520],[1320,610],[1070,510],[1010,350]],'#373b3a','#111821',5);
+    poly([[95,625],[320,635],[520,520],[690,610],[675,875],[520,1040],[115,990],[60,780]],'#35443b','#111821',5);
+    poly([[690,610],[910,580],[1080,505],[1320,610],[1490,540],[1520,1015],[1160,1050],[960,1015],[700,900]],'#3d443d','#111821',5);
+    // Ashgrove marsh and a thin inlet mark the edge of town.
+    c.beginPath();c.moveTo(42,205);c.bezierCurveTo(180,250,124,360,232,438);c.bezierCurveTo(318,500,211,562,310,637);c.strokeStyle='#10171e';c.lineWidth=66;c.stroke();c.beginPath();c.moveTo(42,205);c.bezierCurveTo(180,250,124,360,232,438);c.bezierCurveTo(318,500,211,562,310,637);c.strokeStyle='#39666a';c.lineWidth=54;c.stroke();
+    c.save();c.globalAlpha=.42;c.strokeStyle='#8cae9a';c.lineWidth=2;c.setLineDash([4,12]);for(let i=0;i<13;i++){const y=231+i*29;c.beginPath();c.moveTo(54,y);c.lineTo(180+(i%3)*16,y+18);c.stroke()}c.setLineDash([]);c.restore();
+    // Wards are named like hand-inked atlas plates.
+    const ward=(name,sub,x,y,accent)=>{c.save();c.globalAlpha=.58;c.fillStyle=ink;c.fillRect(x-9,y-20,230,47);c.globalAlpha=1;c.fillStyle=accent;c.fillRect(x-9,y-20,4,47);text(name,x,y-7,13,paper,'left','700');text(sub,x,y+11,8,'#aeb4ac');c.restore()};
+    ward('OLD HARBOR','WHARF & MARKET',91,173,teal);ward('CATHEDRAL HILL','PARISH QUARTER',547,208,orange);ward('CIVIC ROW','COURTHOUSE DISTRICT',1100,230,teal);ward('ASHGROVE','COMMON & CEMETERY',105,916,'#a6d65b');ward('EAST WARD','RESIDENTIAL / MEDICAL',1170,965,orange);
+    // Parcel lines, small yards and roof marks give each quarter a distinct grain.
+    c.save();c.globalAlpha=.28;c.strokeStyle='#b9b49f';c.lineWidth=1;
+    for(let i=0;i<12;i++){const x=365+i*38;c.beginPath();c.moveTo(x,245+(i%3)*7);c.lineTo(x+18,322+(i%4)*8);c.stroke();c.beginPath();c.moveTo(x+8,394);c.lineTo(x-15,470+(i%3)*9);c.stroke()}
+    for(let i=0;i<12;i++){const x=985+i*39;c.beginPath();c.moveTo(x,260);c.lineTo(x+16,325+(i%4)*12);c.stroke();c.beginPath();c.moveTo(x+4,390);c.lineTo(x-12,463+(i%3)*11);c.stroke()}
+    for(let i=0;i<17;i++){const x=105+i*29;c.beginPath();c.moveTo(x,688+(i%3)*10);c.lineTo(x+26,720+(i%4)*12);c.stroke();c.beginPath();c.moveTo(x+3,820);c.lineTo(x-12,890+(i%3)*11);c.stroke()}
+    for(let i=0;i<15;i++){const x=735+i*48;c.beginPath();c.moveTo(x,662+(i%4)*8);c.lineTo(x+25,720+(i%3)*12);c.stroke();c.beginPath();c.moveTo(x+8,830);c.lineTo(x-7,930+(i%3)*9);c.stroke()}
+    c.restore();
+    // A broad, connected avenue system replaces the old rigid street grid.
+    const avenues=[[[155,304],[344,318],[480,365],[610,369],[748,422],[922,420],[1095,456],[1260,482],[1460,455]],[[145,554],[335,533],[514,552],[672,535],[842,562],[1015,576],[1206,555],[1435,596]],[[392,226],[427,365],[482,485],[542,623],[540,774],[589,913],[690,1030]],[[765,205],[748,333],[782,438],[846,562],[915,679],[902,820],[980,1006]],[[1197,228],[1177,349],[1210,457],[1278,566],[1240,705],[1320,835],[1387,1000]],[[223,718],[390,739],[554,760],[705,748],[854,781],[1008,767],[1173,787],[1375,838]]];
+    avenues.forEach((p,i)=>{route(p,i<2?25:19,'#77796c');route(p,2,'#d0b886',[4,15])});
+    // Short neighborhood streets stitch the avenues into walkable blocks.
+    const sideStreets=[[[286,277],[300,389],[347,490]],[[584,261],[582,355],[610,465]],[[891,261],[875,348],[922,420]],[[1368,291],[1324,386],[1360,476]],[[300,662],[294,813],[345,936]],[[755,653],[764,746],[804,878]],[[1086,644],[1098,747],[1158,889]],[[1450,654],[1400,751],[1455,908]],[[472,537],[426,639],[390,739]],[[1007,576],[985,676],[1008,767]]];
+    sideStreets.forEach(p=>route(p,10,'#65685f'));
+    // Landmark footprints and inked location plates.
+    const mapNames={scene:"ST. ORAN'S BELL TOWER",diner:'THE LANTERN DINER',church:'ST. ORAN PARISH',precinct:'BELLWETHER PRECINCT',morgue:'COUNTY MEDICAL EXAMINER',cemetery:'ASHGROVE CEMETERY',archive:'OLD COUNTY RECORDS',apartment:'VANE STREET FLATS',forest:'BLACKWATER TREE LINE',bar:'THE MERCY ROOM',hospital:'BELLWETHER GENERAL'};
+    places.forEach((p,i)=>{
+      const big=['scene','church','precinct','morgue','hospital'].includes(p.id),bw=big?52:42,bh=big?37:31;
+      c.save();c.translate(p.x,p.y);c.rotate((i%3-1)*.055);c.fillStyle=ink;c.fillRect(-bw/2+5,-bh/2+6,bw,bh);c.fillStyle=p.color;c.fillRect(-bw/2,-bh/2,bw,bh);c.strokeStyle='#d4c5a5';c.lineWidth=2;c.strokeRect(-bw/2,-bh/2,bw,bh);c.fillStyle='#111821';c.fillRect(-bw*.27,-bh*.25,Math.max(5,bw*.2),bh*.48);c.fillRect(bw*.08,-bh*.25,Math.max(5,bw*.2),bh*.48);c.restore();
+      const visited=!!S.visited[p.id],marker=p.id==='scene'?orange:(visited?teal:'#f0dfb8');
+      c.fillStyle=ink;c.beginPath();c.arc(p.x,p.y-bh/2-5,13,0,Math.PI*2);c.fill();c.fillStyle=marker;c.beginPath();c.arc(p.x,p.y-bh/2-5,9,0,Math.PI*2);c.fill();text(p.icon,p.x,p.y-bh/2-5,11,ink,'center','700');
+      const label=mapNames[p.id]||p.name,w=Math.max(150,Math.min(260,label.length*8.2+28)),lx=p.x-w/2,ly=p.y+bh/2+8;c.fillStyle=ink;c.fillRect(lx,ly,w,38);c.fillStyle=marker;c.fillRect(lx,ly,4,38);text(label,lx+12,ly+12,13,paper,'left','700');text(p.sub,lx+12,ly+29,9,'#aeb4ac');
+      if(p.id==='scene'){c.save();c.strokeStyle=orange;c.lineWidth=3;c.setLineDash([7,5]);c.strokeRect(p.x-45,p.y-35,90,70);c.setLineDash([]);c.restore()}
+    });
+    // Player heading and a bold, readable route overlay.
+    if(routeTarget){c.save();c.strokeStyle=ink;c.lineWidth=9;c.setLineDash([3,18]);c.beginPath();c.moveTo(S.player.x,S.player.y);c.lineTo(routeTarget.x,routeTarget.y);c.stroke();c.strokeStyle=orange;c.lineWidth=4;c.setLineDash([3,18]);c.stroke();c.setLineDash([]);c.restore();c.fillStyle=orange;c.beginPath();c.arc(routeTarget.x,routeTarget.y,11,0,Math.PI*2);c.fill();c.strokeStyle=ink;c.lineWidth=4;c.stroke()}
+    c.save();c.translate(S.player.x,S.player.y);c.rotate(yaw);c.fillStyle=ink;c.beginPath();c.arc(0,0,17,0,Math.PI*2);c.fill();c.fillStyle=teal;c.beginPath();c.moveTo(0,-14);c.lineTo(10,11);c.lineTo(0,6);c.lineTo(-10,11);c.closePath();c.fill();c.strokeStyle=paper;c.lineWidth=2;c.stroke();c.restore();
+    // Atlas title, compass and key are screen-space map furniture.
+    c.fillStyle=ink;c.fillRect(47,43,342,80);c.fillStyle=orange;c.fillRect(47,43,7,80);text('BELLWETHER COUNTY',69,65,17,paper,'left','700');text('TACTICAL STREET ATLAS  /  NIGHT FILE',69,89,9,teal,'left','500');text('41° 08′ N   ·   72° 21′ W',69,108,8,'#aeb4ac');
+    c.fillStyle=ink;c.beginPath();c.arc(1503,89,35,0,Math.PI*2);c.fill();c.strokeStyle='#d1c5ac';c.lineWidth=1;c.stroke();text('N',1503,52,10,paper,'center','700');c.fillStyle=orange;c.beginPath();c.moveTo(1503,65);c.lineTo(1511,91);c.lineTo(1503,85);c.lineTo(1495,91);c.closePath();c.fill();
+    c.fillStyle=ink;c.fillRect(1190,1018,345,44);c.fillStyle=orange;c.fillRect(1190,1018,5,44);c.fillStyle=teal;c.beginPath();c.arc(1214,1040,6,0,Math.PI*2);c.fill();text('YOU ARE HERE',1227,1040,8,paper);c.fillStyle=orange;c.beginPath();c.arc(1340,1040,6,0,Math.PI*2);c.fill();text('CRIME SCENE',1353,1040,8,paper);c.strokeStyle='#e8dfcb';c.lineWidth=3;c.beginPath();c.moveTo(1460,1032);c.lineTo(1496,1032);c.stroke();text('1 MI',1478,1047,7,paper,'center');
+    c.strokeStyle='#e6dcc5';c.lineWidth=3;c.strokeRect(21,21,W-42,H-42);
+  }
   function drawTown(){ctx.fillStyle='#28332e';ctx.fillRect(0,0,W,H); // district ground
     for(let i=0;i<70;i++){let x=seed(i+701)*W,y=seed(i+803)*H;ctx.fillStyle=['#354036','#303b34','#343c36','#29352f'][i%4];ctx.beginPath();ctx.ellipse(x,y,25+seed(i)*65,16+seed(i+21)*44,seed(i+31)*3,0,Math.PI*2);ctx.fill()}
     // road network
