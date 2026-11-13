@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#101211" />
+  <title>The Town: The Sinner's Testament</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=DM+Sans:wght@400;500;600;700&family=Playfair+Display:wght@500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <main class="game-shell">
+    <header class="topbar">
+      <div class="brand"><div class="sigil">✳</div><div><div class="eyebrow">A CASE FILE FROM BELLWETHER COUNTY</div><h1>THE TOWN <span>/</span> THE SINNER'S TESTAMENT</h1></div></div>
+      <div class="top-meta"><div class="weather"><span class="weather-icon">☂</span><span id="weatherText">COLD RAIN</span></div><div class="day-stamp"><span id="dayText">DAY 01</span><b id="clockText">21:14</b></div><button class="icon-button" id="soundBtn" title="Toggle ambience">♫</button><button class="icon-button" id="saveBtn" title="Save game">▣</button></div>
+    </header>
+    <section class="game-layout">
+      <section class="world-column">
+        <div class="scene-wrap">
+          <canvas id="world" aria-label="Bellwether town map"></canvas>
+          <div class="scene-vignette"></div>
+          <div class="scene-heading"><div class="live-dot"></div><span id="districtLabel">OLD HARBOR · NIGHT</span></div>
+          <div class="scene-coordinates" id="coordLabel">41° 08' N / 72° 21' W</div>
+          <div class="scene-bottom"><div class="objective"><span class="objective-mark">✦</span><div><small>CURRENT LEAD</small><strong id="objectiveText">Return to the first scene</strong></div></div><div class="world-controls"><span>WASD <i>MOVE</i></span><span>E <i>INTERACT</i></span><span>Q <i>CASE FILE</i></span></div></div>
+          <div id="interactPrompt" class="interact-prompt hidden"><span> E </span><b id="promptText">EXAMINE</b></div>
+          <div class="rain-layer" id="rainLayer"></div>
+        </div>
+        <div class="footbar"><div class="player-readout"><span class="portrait">M</span><div><strong>DETECTIVE ELIAS MERCER</strong><small>MAJOR CRIMES · BADGE 0471</small></div></div><div class="vitals"><div class="vital"><span>HEALTH</span><div class="meter"><i id="healthMeter"></i></div><b id="healthValue">94</b></div><div class="vital"><span>COMPOSURE</span><div class="meter sanity"><i id="stressMeter"></i></div><b id="stressValue">72</b></div><div class="vital"><span>FATIGUE</span><div class="meter fatigue"><i id="fatigueMeter"></i></div><b id="fatigueValue">18</b></div></div><div class="foot-actions"><button class="small-button" id="restBtn">☾ <span>REST</span></button><button class="small-button" id="notebookBtn">▤ <span>NOTES</span></button></div></div>
+      </section>
+      <aside class="case-sidebar">
+        <div class="case-head"><div><div class="eyebrow">ACTIVE INVESTIGATION <span class="case-id">CASE 01—B</span></div><h2>The Hollow Choir</h2></div><button class="dots" id="menuBtn">•••</button></div>
+        <div class="case-summary"><p>Three nights. Two missing. One body arranged beneath the old bell tower.</p><div class="case-stats"><div><strong id="evidenceCount">0</strong><span> EVIDENCE</span></div><div><strong id="leadCount">3</strong><span> OPEN LEADS</span></div><div><strong id="dayCount">01</strong><span> DAYS ELAPSED</span></div></div></div>
+        <div class="sidebar-section leads-section"><div class="section-title">ACTIVE LEADS <span class="section-count">03</span></div><button class="lead-card active" data-goto="scene"><span class="lead-icon crime">✳</span><span><b>Bell tower scene</b><small>St. Oran's · evidence outstanding</small></span><span class="lead-arrow">↗</span></button><button class="lead-card" data-goto="diner"><span class="lead-icon witness">◉</span><span><b>A witness who left</b><small>Last seen at The Lantern</small></span><span class="lead-arrow">↗</span></button><button class="lead-card" data-goto="church"><span class="lead-icon symbol">⌘</span><span><b>The ninth verse</b><small>Untranslated · church records</small></span><span class="lead-arrow">↗</span></button></div>
+        <div class="sidebar-section people-section"><div class="section-title">PERSONS OF INTEREST <span class="section-count">03</span></div><button class="person-row" data-person="silas"><span class="person-avatar avatar-one">SC</span><span class="person-info"><b>Silas Crowe</b><small>Church archivist · cooperative</small></span><span class="suspicion"><i style="--level:20%"></i></span></button><button class="person-row" data-person="ruth"><span class="person-avatar avatar-two">RB</span><span class="person-info"><b>Ruth Bell</b><small>Night nurse · evasive</small></span><span class="suspicion"><i style="--level:12%"></i></span></button><button class="person-row" data-person="unknown"><span class="person-avatar avatar-unknown">?</span><span class="person-info"><b>Unknown subject</b><small>Identity withheld</small></span><span class="suspicion"><i style="--level:33%"></i></span></button></div>
+        <div class="sidebar-section pressure-section"><div class="section-title">TOWN PULSE <span class="pulse-live">LIVE</span></div><div class="pulse-card"><span class="pulse-glyph">◌</span><p id="townPulse">Rain has kept the streets quiet. A church bell sounded once at 9:13.</p><small id="pulseSource">BELLWETHER DISPATCH · 4 MIN AGO</small></div></div>
+        <div class="sidebar-bottom"><span>THE TOWN REMEMBERS.</span><button id="caseFileBtn">OPEN CASE FILE <b>Q</b> <span>↗</span></button></div>
+      </aside>
+    </section>
+    <nav class="mobile-nav"><button data-panel="case">CASE</button><button data-panel="map">TOWN MAP</button><button data-panel="notes">NOTES</button></nav>
+  </main>
+  <div id="toast" class="toast"></div>
+  <div id="modalRoot"></div>
+  <script src="game.js"></script>
+</body>
+</html>
