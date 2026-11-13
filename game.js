@@ -3,7 +3,7 @@
 const canvas=document.getElementById('view'),ctx=canvas.getContext('2d',{alpha:false}),W=640,H=360,MW=40,MH=40;
 canvas.width=W;canvas.height=H;
 const $=s=>document.querySelector(s),clamp=(n,a,b)=>Math.max(a,Math.min(b,n)),dist=(a,b)=>Math.hypot(a.x-b.x,a.y-b.y),rnd=(a,b)=>a+Math.random()*(b-a),pick=a=>a[Math.floor(Math.random()*a.length)];
-const map=new Uint8Array(MW*MH),labels=new Array(MW*MH).fill(''),doors=[],objects=[],people=[],clues=[],rumors=[],threats=[];
+const map=new Uint8Array(MW*MH),labels=new Array(MW*MH).fill(''),doors=[],objects=[],people=[],walkers=[],clues=[],rumors=[],threats=[];
 const idx=(x,y)=>Math.floor(y)*MW+Math.floor(x),tile=(x,y)=>x<0||y<0||x>=MW||y>=MH?1:map[idx(x,y)],setTile=(x,y,v)=>{if(x>=0&&y>=0&&x<MW&&y<MH)map[idx(x,y)]=v};
 const sites=[
  {x:7,y:7,name:'Mara Venn’s House',kind:'house',type:1,open:true},{x:15,y:7,name:'Bellweather Grocery',kind:'shop',type:2,open:true},{x:23,y:7,name:'Ashgate Elementary',kind:'school',type:3},{x:31,y:7,name:'St. Oran Hospital',kind:'hospital',type:4,key:'ward key'},
@@ -46,7 +46,7 @@ function buildTown(){
  addClue(14.3,30.5,'The sealed tape','An unlabelled microcassette, warm to the touch.','A voice on the tape says your name, then your father says: “If you hear this, don’t let Mara open the door.”','tape');
  addClue(23.4,22.7,'Grave 0','A fresh patch of earth with a blank headstone.','The earth is warm. The stone reflects a name that disappears when you turn around.','grave');
  addClue(30.7,30.8,'Relay log','A radio log marked with today’s date.','The signal is coming from beneath Ashgate. The operator’s final words: “There is no beneath. There is only the other side.”','relay');
- spawnPeople();return start;
+ spawnPeople();spawnWalkers();return start;
 }
 function addClue(x,y,title,teaser,text,id){const c={x,y,title,teaser,text,id,found:false,type:'clue'};clues.push(c);objects.push(c);return c}
 function spawnPeople(){
@@ -61,7 +61,20 @@ function spawnPeople(){
  ];
  defs.forEach((d,i)=>people.push({name:d[0],x:d[1],y:d[2],role:d[3],line:d[4],secret:d[5],temper:d[6],memory:0,fear:0,met:false,phase:rnd(0,6.2),home:{x:d[1],y:d[2]},routine:i%3}));
 }
-const start=buildTown();
+function spawnWalkers(){
+  const defs=[['Elsie Ward',3.5,8.5,'The bus stop regular.','The 6:10 still comes through, even though the rails are gone.','She checks an empty timetable and nods as if it answered.','warm'],['Tomas Reed',11.5,16.5,'A postman with a bag full of undelivered letters.','Every house gets the same letter on Thursdays.','The envelopes are addressed to people who have not been born yet.','wary'],['Ruth Calder',27.5,23.5,'A woman carrying a paper grocery bag.','The market is open if you knock three times.','Her groceries rustle though the bag is empty.','gentle'],['Mr. Vale',19.5,32.5,'A watchman walking the same block.','I take the long way home so I don’t arrive too early.','He has no shadow beneath the streetlamps.','guarded']];
+  for(const d of defs)walkers.push({name:d[0],x:d[1],y:d[2],role:d[3],line:d[4],secret:d[5],temper:d[6],memory:0,fear:0,met:false,ambient:true,route:[],phase:rnd(0,6.2),speed:rnd(.22,.34)});
+  for(const w of walkers)chooseWalkerRoute(w);
+ }
+ function chooseWalkerRoute(w){
+  const sx=Math.floor(w.x),sy=Math.floor(w.y),start=idx(sx,sy);if(tile(sx,sy)!==6)return;
+  const roads=[];for(let i=0;i<map.length;i++)if(map[i]===6)roads.push(i);if(!roads.length)return;
+  let goal=pick(roads);for(let n=0;n<8&&Math.hypot(goal%MW-sx,Math.floor(goal/MW)-sy)<7;n++)goal=pick(roads);
+  const prev=new Int32Array(map.length);prev.fill(-1);const queue=[start];prev[start]=start;
+  for(let head=0;head<queue.length&&prev[goal]===-1;head++){const at=queue[head],x=at%MW,y=Math.floor(at/MW);for(const [dx,dy] of [[1,0],[-1,0],[0,1],[0,-1]]){const nx=x+dx,ny=y+dy,ni=idx(nx,ny);if(tile(nx,ny)===6&&prev[ni]===-1){prev[ni]=at;queue.push(ni)}}}
+  if(prev[goal]===-1)return;const path=[];for(let at=goal;at!==start;at=prev[at])path.push({x:at%MW+.5,y:Math.floor(at/MW)+.5});w.route=path.reverse();
+ }
+ const start=buildTown();
 const state={x:start.x,y:start.y,angle:-Math.PI/2,pitch:0,health:92,mind:78,stamina:100,hunger:14,thirst:9,fatigue:8,ammo:2,med:1,flash:true,keys:[],found:0,decisions:[],time:6.67,weather:'OVERCAST',weatherTimer:75,day:1,alert:0,steps:0,ending:false,started:false,paused:false,near:null,radio:false,crouch:false,lastEvent:0,visitCount:0,seed:Math.random()};
 const keysDown=new Set(),depthBuffer=new Float32Array(W),offscreen=document.createElement('canvas');offscreen.width=W;offscreen.height=H;const oc=offscreen.getContext('2d');
 const textures={1:['#494440','#56514b','#363435'],2:['#49423d','#665950','#393432'],3:['#4c4a46','#5b5954','#3b3a38'],4:['#434744','#585b55','#343735'],5:['#37423a','#505c4a','#2e352e'],8:['#49352f','#674b41','#352b28'],6:['#292b2d','#37393a','#252628']};
@@ -89,7 +102,7 @@ function render(){
  }
  // Empty street silhouettes, lit windows and the smear where the road seems to dip.
  drawStreetDetails();
- const sprites=[];for(const p of people)sprites.push({...p,sprite:'person'});for(const o of objects)if(!o.hidden||tile(state.x,state.y)!==0)sprites.push({...o,sprite:o.type==='clue'?'clue':o.type});
+ const sprites=[];for(const p of people)sprites.push({...p,sprite:'person'});for(const p of walkers)sprites.push({...p,sprite:'person'});for(const o of objects)if(!o.hidden||tile(state.x,state.y)!==0)sprites.push({...o,sprite:o.type==='clue'?'clue':o.type});
  for(const e of threats)sprites.push({...e,sprite:'threat'});
  sprites.sort((a,b)=>{const da=(b.x-state.x)*Math.cos(state.angle)+(b.y-state.y)*Math.sin(state.angle),db=(a.x-state.x)*Math.cos(state.angle)+(a.y-state.y)*Math.sin(state.angle);return da-db});
  for(const e of sprites)drawSprite(e);
@@ -134,13 +147,13 @@ function updateHUD(){
 }
 function districtAt(){let s=sites.reduce((a,b)=>dist(state,b)<dist(state,a)?b:a,sites[0]);return s.name.toUpperCase()+' · ASHGATE'}
 function say(msg,duration=3200){toastNode.textContent=msg;toastNode.classList.add('show');clearTimeout(toastTimer);toastTimer=setTimeout(()=>toastNode.classList.remove('show'),duration)}
-function nearest(){let best=null,bd=2.15;for(const p of people){const d=dist(state,p);if(d<bd){const da=Math.atan2(p.y-state.y,p.x-state.x),diff=Math.abs(Math.atan2(Math.sin(da-state.angle),Math.cos(da-state.angle)));if(diff<.95){best=p;bd=d}}}for(const c of clues){if(c.found)continue;const d=dist(state,c);if(d<bd){best=c;bd=d}}for(const d of doors){const z=dist(state,d);if(z<bd){best=d;bd=z}}return best}
+function nearest(){let best=null,bd=2.15;for(const p of people){const d=dist(state,p);if(d<bd){const da=Math.atan2(p.y-state.y,p.x-state.x),diff=Math.abs(Math.atan2(Math.sin(da-state.angle),Math.cos(da-state.angle)));if(diff<.95){best=p;bd=d}}}for(const p of walkers){const d=dist(state,p);if(d<bd){const da=Math.atan2(p.y-state.y,p.x-state.x),diff=Math.abs(Math.atan2(Math.sin(da-state.angle),Math.cos(da-state.angle)));if(diff<.95){best=p;bd=d}}}for(const c of clues){if(c.found)continue;const d=dist(state,c);if(d<bd){best=c;bd=d}}for(const d of doors){const z=dist(state,d);if(z<bd){best=d;bd=z}}return best}
 function refreshPrompt(){state.near=nearest();const p=$('#prompt');if(!state.near){p.textContent='';return}let label=state.near.site?state.near.site.name:state.near.name||state.near.title;if(state.near.type==='clue')label=state.near.title;if(state.near.door)label=state.near.site.name; p.innerHTML=`<kbd>E</kbd> &nbsp; ${label.toUpperCase()}`}
 function interact(){const n=state.near||nearest();if(!n){say('Only the rain answers.');return}if(n.type==='clue'){if(n.found)return;openCard(n);return}if(n.door){const d=n,site=d.site;if(!d.open){const key=site.key;if(key&&!state.keys.includes(key)){if(key==='ward key'&&state.found>=4){state.keys.push(key);say('A key has turned up in your coat pocket. No memory of putting it there.')}else{openCard({title:site.name,kind:'LOCKED',teaser:'The door will not give.',text:key==='ward key'?'A hospital key, or perhaps a reason to enter. The thought of the ward makes your teeth ache.':key==='storm grate'?'The grate is chained. Something beneath it taps, once, then twice.':'An old brass lock. The key must be nearby.','id':'locked'});return}}else if(key&&!state.keys.includes(key)){say('The lock is still closed.');return}}
    d.open=!d.open;setTile(Math.floor(d.x),Math.floor(d.y),d.open?0:8);if(d.open){say(`${site.name.toUpperCase()} · THE AIR INSIDE IS COLDER.`);if(site.kind==='bunker'&&state.found>=6){state.near={type:'ending',site};openCard({title:'THE RELAY ROOM',kind:'NO SIGNAL',teaser:'The receiver is already warm.',text:'Below the static, a voice counts down from seven. It sounds like your own. The receiver waits for an answer.','id':'ending'});}else if(site.kind==='bunker')say('The bunker is sealed from the inside. Find more of the town’s records.')}else say('The latch falls into place.');return}
   if(n.sprite==='sign'||n.type==='furniture')return;
   if(n.sprite==='threat'){if(state.ammo>0){state.ammo--;state.alert=0;threats.splice(threats.indexOf(n),1);say('The shot echoes down the block. The shape folds into the fog.');sound('shot')}else{state.health-=12;state.mind-=5;state.alert=2;say('Something cold catches your shoulder. RUN.')}return}
-  if(n.name&&people.includes(n)){talk(n);return}
+  if(n.name&&(people.includes(n)||walkers.includes(n))){talk(n);return}
 }
 function openCard(c){state.near=c;$('#card-type').textContent=c.kind||'EVIDENCE';$('#card-title').textContent=c.title;$('#card-copy').textContent=c.teaser||c.text;$('#card-action').textContent=c.type==='clue'?'ADD TO JOURNAL':'EXAMINE';$('#interact-card').classList.remove('hidden')}
 $('#card-action').addEventListener('click',()=>{const c=state.near;if(!c)return;if(c.id==='ending'){showEnding();return}if(c.type==='clue'){c.found=true;state.found++;state.mind=clamp(state.mind+2,0,100);rumors.push({title:c.title,text:c.text,day:state.day});$('#interact-card').classList.add('hidden');say(`EVIDENCE RECORDED · ${c.title.toUpperCase()}`);$('#objective-text').textContent=state.found<3?'Ask Mara what came back from the lake.':state.found<6?'Find the signal beneath Ashgate.':'The relay is waiting. Decide what to tell it.';if(c.id==='notebook')state.decisions.push('read-notebook');if(c.id==='relay')state.keys.push('ward key');renderJournal();return}if(c.id==='ending'){showEnding();return}$('#interact-card').classList.add('hidden')});
@@ -157,7 +170,7 @@ function choice(p,text){$('#dialogue').classList.add('hidden');state.decisions.p
 }
 function renderJournal(tab='clues'){
  const content=$('#journal-content');if(tab==='clues'){content.innerHTML=rumors.length?rumors.map(r=>`<article class="journal-entry"><small>RECOVERED · DAY ${r.day}</small><h3>${r.title}</h3><p>${r.text}</p></article>`).join(''):'<p class="muted">The notebook is empty. The town is not.</p>';$('#clue-count').textContent=state.found}
- else if(tab==='people'){content.innerHTML=people.map(p=>`<article class="journal-entry"><small>${p.met?'ENCOUNTERED':'UNCONFIRMED'} · ${p.temper.toUpperCase()}</small><h3>${p.name}</h3><p>${p.met?p.secret:'No reliable description. Residents avoid the subject.'}</p></article>`).join('')}
+ else if(tab==='people'){content.innerHTML=[...people,...walkers].map(p=>`<article class="journal-entry"><small>${p.met?'ENCOUNTERED':'UNCONFIRMED'} · ${p.temper.toUpperCase()}</small><h3>${p.name}</h3><p>${p.met?p.secret:'No reliable description. Residents avoid the subject.'}</p></article>`).join('')}
  else{content.innerHTML=`<article class="journal-entry"><small>PHYSICAL</small><h3>Health ${Math.round(state.health)}% · Hunger ${Math.round(state.hunger)}% · Thirst ${Math.round(state.thirst)}%</h3><p>Fatigue ${Math.round(state.fatigue)}%. You can run, but not forever.</p></article><article class="journal-entry"><small>PSYCHOLOGICAL</small><h3>Composure ${Math.round(state.mind)}%</h3><p>${state.mind<25?'You hear the town speaking in your own voice.':state.mind<50?'The edges of familiar places will not hold still.':'You are doing your best to keep the details straight.'}</p></article><article class="journal-entry"><small>POCKETS</small><h3>${state.keys.length?state.keys.join(' · '):'No keys'} · ${state.ammo} rounds</h3><p>${state.med} medical supplies. The radio has no station.</p></article>`}
 }
 $$('.tab').forEach(t=>t.addEventListener('click',()=>{$$('.tab').forEach(x=>x.classList.toggle('selected',x===t));renderJournal(t.dataset.tab)}));
@@ -183,14 +196,22 @@ function update(dt){
  const move=(forward?1:0)+(strafe?1:0),norm=move?1/Math.sqrt((forward?1:0)+(strafe?1:0)):1,dx=(Math.cos(state.angle)*forward-Math.sin(state.angle)*strafe)*speed*dt*norm*speedFactor,dy=(Math.sin(state.angle)*forward+Math.cos(state.angle)*strafe)*speed*dt*norm*speedFactor;movePlayer(dx,dy);
  if(forward||strafe){state.steps+=dt*(running?1.8:1);if(state.steps-lastStep>.58){lastStep=state.steps;if(Math.random()<.035)sound();}}
  if(state.alert>0)state.alert=Math.max(0,state.alert-dt*.09);
- movePeople(dt,night);moveThreats(dt,night);
+ movePeople(dt,night);moveWalkers(dt,night);moveThreats(dt,night);
  if(state.radio&&Math.random()<dt*.12)sound('radio');
  if(state.health<=0||state.fatigue>=100)die();
 }
 let speedFactor=1;
 function movePlayer(dx,dy){const r=.22;const nx=state.x+dx,ny=state.y+dy;if(!collides(nx,state.y,r))state.x=nx;if(!collides(state.x,ny,r))state.y=ny}
 function movePeople(dt,night){for(const p of people){const d=dist(state,p);if(d<4.2&&night){p.fear+=dt*.15;if(Math.random()<dt*.018){p.x=clamp(p.x+rnd(-1,1),2,MW-2);p.y=clamp(p.y+rnd(-1,1),2,MH-2)}}else if(d>5){p.phase+=dt*(p.routine===0?.12:.05);const tx=p.home.x+Math.sin(p.phase)*.7,ty=p.home.y+Math.cos(p.phase*.73)*.55;if(Math.random()<dt*.3&&!collides(tx,ty,.2)){p.x+=(tx-p.x)*dt*.12;p.y+=(ty-p.y)*dt*.12}}}}
-function moveThreats(dt,night){
+function moveWalkers(dt,night){
+  for(const w of walkers){
+   w.pause=Math.max(0,(w.pause||0)-dt);if(dist(state,w)<1.35){w.pause=Math.max(w.pause,.7);continue}
+   if(!w.route.length){if(Math.random()<dt*.55)chooseWalkerRoute(w);continue}
+   if(w.pause>0)continue;const target=w.route[0],dx=target.x-w.x,dy=target.y-w.y,d=Math.hypot(dx,dy),step=w.speed*(night?.58:1)*(state.weather==='STORM'?.72:1)*dt;
+   if(d<=step+.025){w.x=target.x;w.y=target.y;w.route.shift();if(!w.route.length)w.pause=rnd(.8,2.4)}else{w.x+=dx/d*step;w.y+=dy/d*step}
+  }
+ }
+ function moveThreats(dt,night){
  if(night&&threats.length===0&&Math.random()<dt*.014){const a=state.angle+pick([-1,1])*rnd(.65,1.3),x=state.x+Math.cos(a)*rnd(5,8),y=state.y+Math.sin(a)*rnd(5,8);if(!collides(x,y,.2))threats.push({x,y,name:'The Listener',sprite:'threat',mode:'stalk',speed:rnd(.4,.65),cooldown:0})}
  for(let i=threats.length-1;i>=0;i--){const e=threats[i],d=dist(state,e);if(d<.62){e.cooldown-=dt;if(e.cooldown<=0){state.health-=rnd(5,11);state.mind=clamp(state.mind-4,0,100);state.alert=2;e.cooldown=1.8;say('A hand closes around your sleeve. It is colder than the rain.');sound('threat')}}else if(d<5||state.alert>0){const vx=(state.x-e.x)/d,vy=(state.y-e.y)/d,step=e.speed*dt*(state.crouch?.65:1);if(!collides(e.x+vx*step,e.y,.2))e.x+=vx*step;if(!collides(e.x,e.y+vy*step,.2))e.y+=vy*step}else if(d>11)threats.splice(i,1)}
 }
@@ -202,6 +223,6 @@ let mouseDown=false,lastMouseX=0,lastMouseY=0;canvas.addEventListener('pointerdo
 // Drag-look fallback where pointer lock is unavailable; touch pads keep controls usable on phones.
 let lastTouchX=null,lastTouchY=null,touchId=null;canvas.addEventListener('touchstart',e=>{for(const t of e.changedTouches){if(state.started&&t.clientX>=innerWidth*.42){touchId=t.identifier;lastTouchX=t.clientX;lastTouchY=t.clientY;break}}},{passive:true});canvas.addEventListener('touchmove',e=>{if(lastTouchX===null)return;for(const t of e.changedTouches){if(t.identifier===touchId){state.angle+=(t.clientX-lastTouchX)*.007;state.pitch=clamp(state.pitch-(t.clientY-lastTouchY)/innerHeight*1.25,-.28,.28);lastTouchX=t.clientX;lastTouchY=t.clientY;e.preventDefault();break}}},{passive:false});const endLook=e=>{for(const t of e.changedTouches)if(t.identifier===touchId){lastTouchX=null;lastTouchY=null;touchId=null;break}};canvas.addEventListener('touchend',endLook);canvas.addEventListener('touchcancel',endLook);
 function die(){if(state.ending)return;state.ending=true;state.paused=true;setTimeout(()=>showEnding(true),900)}
-function showEnding(died=false){state.ending=true;$('#interact-card').classList.add('hidden');$('#dialogue').classList.add('hidden');$('#journal').classList.add('hidden');$('#map-panel').classList.add('hidden');$('#ending-screen').classList.remove('hidden');let title,copy;if(died){title='THE QUIET';copy='Ashgate closes its doors. By morning, no one remembers there was ever a visitor.'}else if(state.found>=8&&state.decisions.includes('Mara Venn:Ask about the lake')&&state.mind>35){title='THE RETURN';copy='You tell the voice your name. Somewhere above, a bell rings once. The town exhales. For the first time, a door opens from the inside.'}else if(state.decisions.some(d=>d.includes('Deputy Ellis:Ask for a key'))){title='THE RECORD';copy='You leave the relay dark. The deputy files a report. It lists four missing residents. You ask him to check the fifth name. He says there was never a fifth.'}else{title='ASHES';copy='You answer the voice with silence. By morning, the street looks ordinary again. Your father’s notebook is gone. So is the address.'}$('#ending-title').textContent=title;$('#ending-copy').textContent=copy;$('#ending-stats').textContent=`${state.found} clues recovered · ${people.filter(p=>p.met).length} residents met · Day ${state.day}`;document.exitPointerLock?.()}
+function showEnding(died=false){state.ending=true;$('#interact-card').classList.add('hidden');$('#dialogue').classList.add('hidden');$('#journal').classList.add('hidden');$('#map-panel').classList.add('hidden');$('#ending-screen').classList.remove('hidden');let title,copy;if(died){title='THE QUIET';copy='Ashgate closes its doors. By morning, no one remembers there was ever a visitor.'}else if(state.found>=8&&state.decisions.includes('Mara Venn:Ask about the lake')&&state.mind>35){title='THE RETURN';copy='You tell the voice your name. Somewhere above, a bell rings once. The town exhales. For the first time, a door opens from the inside.'}else if(state.decisions.some(d=>d.includes('Deputy Ellis:Ask for a key'))){title='THE RECORD';copy='You leave the relay dark. The deputy files a report. It lists four missing residents. You ask him to check the fifth name. He says there was never a fifth.'}else{title='ASHES';copy='You answer the voice with silence. By morning, the street looks ordinary again. Your father’s notebook is gone. So is the address.'}$('#ending-title').textContent=title;$('#ending-copy').textContent=copy;$('#ending-stats').textContent=`${state.found} clues recovered · ${[...people,...walkers].filter(p=>p.met).length} residents met · Day ${state.day}`;document.exitPointerLock?.()}
 function collides(x,y,r){for(const [a,b] of [[x-r,y-r],[x+r,y-r],[x-r,y+r],[x+r,y+r]])if(tile(a,b)!==0&&tile(a,b)!==6&&tile(a,b)!==5)return true;return false}
 })();
