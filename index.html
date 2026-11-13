@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#101114" />
+  <link rel="icon" href="favicon.svg" type="image/svg+xml" />
+  <title>THE TOWN — A Psychological Horror Experience</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <main id="game-shell">
+    <canvas id="view" aria-label="First-person view of the town"></canvas>
+    <div id="grain"></div><div id="vignette"></div>
+    <div id="topline"><span id="district">ASHGATE · OLD TOWN</span><span id="clock">06:40 AM</span><span id="weather">OVERCAST</span></div>
+    <div id="crosshair"><i></i><b></b></div>
+    <section id="hud" aria-live="polite">
+      <div class="vitals"><span>HEALTH</span><div class="meter"><i id="health-fill"></i></div><span id="health-num">92</span></div>
+      <div class="vitals"><span>COMPOSURE</span><div class="meter mind"><i id="mind-fill"></i></div><span id="mind-num">78</span></div>
+      <div class="vitals"><span>STAMINA</span><div class="meter stamina"><i id="stamina-fill"></i></div><span id="stamina-num">100</span></div>
+      <div id="quickbar"><span class="active">1 <small>FLASHLIGHT</small><b id="lamp-state">ON</b></span><span>2 <small>HAND RADIO</small></span><span>3 <small>FIRST AID</small><b id="med-count">1</b></span></div>
+    </section>
+    <div id="prompt"></div>
+    <div id="toast" aria-live="assertive"></div>
+    <div id="objective"><small>YOUR LEAD</small><span id="objective-text">Find the last address in your father's notebook.</span></div>
+    <button id="journal-button" title="Open journal (J)">JOURNAL <kbd>J</kbd></button>
+    <button id="map-button" title="Open town map (M)">TOWN MAP <kbd>M</kbd></button>
+    <aside id="interact-card" class="hidden"><div class="card-rule"></div><span id="card-type">EVIDENCE</span><h2 id="card-title"></h2><p id="card-copy"></p><button id="card-action">EXAMINE <kbd>E</kbd></button></aside>
+    <section id="journal" class="panel hidden"><button class="close" data-close>×</button><small>CASE FILE 07 — ASHGATE</small><h1>Field Notes</h1><nav><button class="tab selected" data-tab="clues">CLUES <b id="clue-count">0</b></button><button class="tab" data-tab="people">RESIDENTS</button><button class="tab" data-tab="status">CONDITION</button></nav><div id="journal-content"></div></section>
+    <section id="map-panel" class="panel hidden"><button class="close" data-close>×</button><small>YOU ARE SOMEWHERE IN</small><h1>Ashgate</h1><canvas id="minimap" width="480" height="480"></canvas><p class="muted">The map is incomplete. Some places do not stay where you left them.</p></section>
+    <section id="dialogue" class="dialogue hidden"><div class="speaker" id="speaker">RESIDENT</div><p id="dialogue-text"></p><div id="choices"></div></section>
+    <section id="start-screen" class="screen">
+      <div class="title-kicker">A TOWN THAT REMEMBERS YOU</div><h1>THE<br /><em>TOWN</em></h1><p class="subtitle">Somewhere between the last train and morning.</p>
+      <div class="story">You came back for a funeral. Your father left one address in his notebook.<br />The town has changed. Everyone says it hasn't.</div>
+      <button id="begin">ENTER ASHGATE <span>→</span></button>
+      <div class="controls-note">W A S D &nbsp; MOVE <i>·</i> DRAG &nbsp; LOOK <i>·</i> E &nbsp; INTERACT <i>·</i> SHIFT &nbsp; RUN</div>
+      <div class="sound-note">HEADPHONES RECOMMENDED <span>✦</span></div>
+    </section>
+    <section id="ending-screen" class="screen hidden"><div class="title-kicker">THE LAST ENTRY</div><h1 id="ending-title">ASHES</h1><p id="ending-copy"></p><div id="ending-stats"></div><button id="again">RETURN TO THE BEGINNING <span>↻</span></button></section>
+    <div id="fade"></div>
+  </main>
+  <script src="game.js"></script>
+</body>
+</html>
