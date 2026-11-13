@@ -595,81 +595,85 @@
       limb = "#1f2120",
     } = options;
 
-    const headY = b - s * 0.83,
+    const headY = b - s * 0.84,
       torsoY = b - s * 0.22,
-      armY = b - s * 0.1,
-      legY = b + s * 0.02;
+      waistY = b - s * 0.02,
+      kneeY = b + s * 0.16,
+      bootY = b + s * 0.3;
 
     if (ghost && Math.sin(game.elapsed * 2.4 + x) > 0) ctx.globalAlpha = 0.52;
 
-    ctx.fillStyle = "rgba(12,12,13,0.38)";
+    ctx.fillStyle = "rgba(10,10,10,0.35)";
     ctx.beginPath();
-    ctx.ellipse(x, b + s * 0.11, s * 0.18, s * 0.065, 0, 0, Math.PI * 2);
+    ctx.ellipse(x, b + s * 0.14, s * 0.17, s * 0.07, 0, 0, Math.PI * 2);
     ctx.fill();
 
     ctx.fillStyle = hair;
     ctx.beginPath();
-    ctx.ellipse(x, headY, s * 0.12, s * 0.11, 0, 0, Math.PI * 2);
+    ctx.moveTo(x - s * 0.14, headY + s * 0.08);
+    ctx.lineTo(x + s * 0.14, headY + s * 0.08);
+    ctx.lineTo(x + s * 0.11, headY - s * 0.04);
+    ctx.lineTo(x - s * 0.11, headY - s * 0.04);
+    ctx.closePath();
     ctx.fill();
 
     ctx.fillStyle = skin;
     ctx.beginPath();
-    ctx.ellipse(x, headY + s * 0.02, s * 0.09, s * 0.11, 0, 0, Math.PI * 2);
+    ctx.moveTo(x - s * 0.11, headY + s * 0.08);
+    ctx.lineTo(x + s * 0.11, headY + s * 0.08);
+    ctx.lineTo(x + s * 0.09, headY - s * 0.08);
+    ctx.lineTo(x - s * 0.09, headY - s * 0.08);
+    ctx.closePath();
     ctx.fill();
 
     ctx.fillStyle = face;
-    ctx.fillRect(x - s * 0.042, headY + s * 0.005, s * 0.015, s * 0.015);
-    ctx.fillRect(x + s * 0.027, headY + s * 0.005, s * 0.015, s * 0.015);
-    ctx.strokeStyle = "#3f332b";
+    ctx.fillRect(x - s * 0.04, headY + s * 0.01, s * 0.015, s * 0.015);
+    ctx.fillRect(x + s * 0.025, headY + s * 0.01, s * 0.015, s * 0.015);
+    ctx.strokeStyle = "#3a2d29";
     ctx.lineWidth = Math.max(1, s * 0.01);
     ctx.beginPath();
-    ctx.moveTo(x - s * 0.017, headY + s * 0.06);
-    ctx.quadraticCurveTo(x, headY + s * 0.085, x + s * 0.017, headY + s * 0.06);
+    ctx.moveTo(x - s * 0.02, headY + s * 0.055);
+    ctx.quadraticCurveTo(x, headY + s * 0.09, x + s * 0.02, headY + s * 0.055);
     ctx.stroke();
 
     ctx.fillStyle = coat;
     ctx.beginPath();
-    ctx.moveTo(x - s * 0.16, torsoY);
-    ctx.lineTo(x + s * 0.16, torsoY);
-    ctx.lineTo(x + s * 0.2, b - s * 0.18);
-    ctx.lineTo(x - s * 0.2, b - s * 0.18);
+    ctx.moveTo(x - s * 0.19, torsoY + s * 0.02);
+    ctx.lineTo(x + s * 0.19, torsoY + s * 0.02);
+    ctx.lineTo(x + s * 0.15, b - s * 0.18);
+    ctx.lineTo(x - s * 0.15, b - s * 0.18);
     ctx.closePath();
     ctx.fill();
 
     ctx.fillStyle = torso;
-    ctx.fillRect(x - s * 0.085, torsoY, s * 0.17, s * 0.25);
+    ctx.fillRect(x - s * 0.09, torsoY, s * 0.18, s * 0.27);
     ctx.fillStyle = coat;
-    ctx.fillRect(x - s * 0.055, torsoY + s * 0.04, s * 0.11, s * 0.2);
+    ctx.fillRect(x - s * 0.06, torsoY + s * 0.05, s * 0.12, s * 0.16);
 
     ctx.strokeStyle = skin;
     ctx.lineWidth = Math.max(1.8, s * 0.02);
     ctx.beginPath();
-    ctx.moveTo(x - s * 0.1, torsoY + s * 0.03);
-    ctx.lineTo(x - s * 0.18, armY);
-    ctx.moveTo(x + s * 0.1, torsoY + s * 0.03);
-    ctx.lineTo(x + s * 0.18, armY);
+    ctx.moveTo(x - s * 0.12, torsoY + s * 0.04);
+    ctx.lineTo(x - s * 0.2, b - s * 0.08);
+    ctx.moveTo(x + s * 0.12, torsoY + s * 0.04);
+    ctx.lineTo(x + s * 0.2, b - s * 0.08);
     ctx.moveTo(x - s * 0.06, b - s * 0.18);
-    ctx.lineTo(x - s * 0.08, legY + s * 0.05);
+    ctx.lineTo(x - s * 0.08, waistY);
     ctx.moveTo(x + s * 0.06, b - s * 0.18);
-    ctx.lineTo(x + s * 0.08, legY + s * 0.05);
-    ctx.stroke();
-
-    ctx.strokeStyle = limb;
-    ctx.lineWidth = Math.max(1.6, s * 0.022);
-    ctx.beginPath();
-    ctx.moveTo(x - s * 0.07, legY);
-    ctx.lineTo(x - s * 0.08, b + s * 0.2);
-    ctx.moveTo(x + s * 0.07, legY);
-    ctx.lineTo(x + s * 0.08, b + s * 0.2);
+    ctx.lineTo(x + s * 0.08, waistY);
     ctx.stroke();
 
     ctx.fillStyle = limb;
-    ctx.fillRect(x - s * 0.055, b + s * 0.2, s * 0.04, s * 0.19);
-    ctx.fillRect(x + s * 0.015, b + s * 0.2, s * 0.04, s * 0.19);
+    ctx.fillRect(x - s * 0.085, waistY, s * 0.05, s * 0.14);
+    ctx.fillRect(x + s * 0.035, waistY, s * 0.05, s * 0.14);
+    ctx.fillRect(x - s * 0.085, kneeY, s * 0.05, s * 0.12);
+    ctx.fillRect(x + s * 0.035, kneeY, s * 0.05, s * 0.12);
+    ctx.fillRect(x - s * 0.095, bootY, s * 0.07, s * 0.09);
+    ctx.fillRect(x + s * 0.025, bootY, s * 0.07, s * 0.09);
 
-    ctx.fillStyle = face;
-    ctx.fillRect(x - s * 0.05, headY - s * 0.03, s * 0.015, s * 0.015);
-    ctx.fillRect(x + s * 0.035, headY - s * 0.03, s * 0.015, s * 0.015);
+    ctx.fillStyle = coat;
+    ctx.fillRect(x - s * 0.17, torsoY + s * 0.02, s * 0.05, s * 0.1);
+    ctx.fillRect(x + s * 0.12, torsoY + s * 0.02, s * 0.05, s * 0.1);
 
     ctx.globalAlpha = 1;
   }
