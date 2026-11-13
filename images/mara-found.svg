@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 420" role="img" aria-labelledby="title desc">
+  <title id="title">The bell tower crime scene</title>
+  <desc id="desc">A rain-soaked, non-graphic reconstruction of the bell tower scene. A covered figure lies beneath the tower while investigators work behind a cordon.</desc>
+  <defs>
+    <linearGradient id="sky" x2="0" y2="1"><stop stop-color="#182321"/><stop offset="1" stop-color="#343a35"/></linearGradient>
+    <linearGradient id="ground" x2="0" y2="1"><stop stop-color="#41463e"/><stop offset="1" stop-color="#1c2522"/></linearGradient>
+    <linearGradient id="sheet" x2="0" y2="1"><stop stop-color="#b9b3a3"/><stop offset="1" stop-color="#777a70"/></linearGradient>
+    <pattern id="rain" width="42" height="42" patternUnits="userSpaceOnUse" patternTransform="rotate(17)"><path d="M4 0v15M24 23v13" stroke="#b4c3bf" stroke-opacity=".2" stroke-width="2"/></pattern>
+  </defs>
+  <rect width="960" height="420" fill="url(#sky)"/><path d="M0 226 184 174l144 37 176-81 167 72 130-32 159 56v194H0Z" fill="#27312d"/>
+  <path d="M305 237V104h350v133Z" fill="#4a4b41" stroke="#8a8877" stroke-width="4"/><path d="m280 112 200-91 200 91Z" fill="#363d38" stroke="#8a8877" stroke-width="4"/>
+  <path d="M430 105V56h100v49M458 56V28h44v28" fill="#2a332f" stroke="#8a8877" stroke-width="4"/><circle cx="480" cy="79" r="10" fill="#c0a475" opacity=".8"/>
+  <path d="M0 236h960v184H0Z" fill="url(#ground)"/><path d="M0 284q180-39 347 1t342-2q130-35 271 0" fill="none" stroke="#86918a" stroke-opacity=".25" stroke-width="5"/>
+  <path d="M210 265v-45m-10 5 10-17 10 17m520 40v-45m-10 5 10-17 10 17" stroke="#b54f45" stroke-width="4"/><path d="M210 228h520" stroke="#b54f45" stroke-width="3" stroke-dasharray="12 10"/>
+  <ellipse cx="477" cy="302" rx="115" ry="17" fill="#101715" opacity=".75"/><path d="M382 285q17-22 53-18l29 8 39-7q31-3 50 16l-13 22H397Z" fill="url(#sheet)" stroke="#d0cbbb" stroke-width="2"/><path d="M414 283q55 12 111-2" fill="none" stroke="#60665e" stroke-width="3"/>
+  <path d="M455 333q24-18 50 0m-25-24v34m-18-27 36 18m0-18-36 18" fill="none" stroke="#bd9a63" stroke-opacity=".85" stroke-width="3"/>
+  <g fill="#d5c7a8"><circle cx="286" cy="244" r="5"/><circle cx="675" cy="244" r="5"/></g><g fill="#bd9a63" opacity=".8"><path d="M280 242q6-23 12 0Z"/><path d="M669 242q6-23 12 0Z"/></g>
+  <rect width="960" height="420" fill="url(#rain)"/><rect x="18" y="18" width="924" height="384" fill="none" stroke="#c2b18e" stroke-opacity=".38"/>
+  <text x="36" y="50" fill="#d6c6a6" font-family="monospace" font-size="15" letter-spacing="3">BELLWETHER COUNTY · SCENE RECONSTRUCTION</text><text x="36" y="380" fill="#d6c6a6" font-family="monospace" font-size="13" letter-spacing="2">ST. ORAN’S · 20:46 · RAIN / CORDON ACTIVE</text>
+</svg>

@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 420" role="img" aria-labelledby="title desc">
+  <title id="title">Scene documentation photograph</title>
+  <desc id="desc">A stylized evidence photograph of chalk and ash markings, a brass choir token, and an unlit votive beneath the bell tower.</desc>
+  <defs>
+    <linearGradient id="paper" x2="0" y2="1"><stop stop-color="#434940"/><stop offset="1" stop-color="#202824"/></linearGradient>
+    <radialGradient id="lamp"><stop stop-color="#c09b5f" stop-opacity=".32"/><stop offset="1" stop-color="#c09b5f" stop-opacity="0"/></radialGradient>
+    <pattern id="grain" width="17" height="17" patternUnits="userSpaceOnUse"><circle cx="3" cy="6" r=".8" fill="#d5c6a5" opacity=".15"/><circle cx="13" cy="12" r=".6" fill="#d5c6a5" opacity=".12"/></pattern>
+  </defs>
+  <rect width="960" height="420" fill="#151b18"/><rect x="30" y="30" width="900" height="360" rx="2" fill="url(#paper)" stroke="#9b8968" stroke-width="2"/>
+  <ellipse cx="482" cy="222" rx="295" ry="185" fill="url(#lamp)"/><path d="M94 287 850 138M130 348 813 204" stroke="#9ba097" stroke-opacity=".14" stroke-width="3"/>
+  <path d="M445 135a82 82 0 1 1-3 0m3 0v30m-2 0a52 52 0 1 1 0 104m0-52 61-1" fill="none" stroke="#d5d0bd" stroke-width="7" stroke-linecap="round" opacity=".8"/>
+  <path d="M412 290q32-23 64 0t64 0" fill="none" stroke="#a8a596" stroke-width="3" stroke-dasharray="7 7"/>
+  <circle cx="650" cy="276" r="31" fill="#927a4e" stroke="#d0b77f" stroke-width="4"/><circle cx="650" cy="276" r="21" fill="none" stroke="#514632" stroke-width="3"/><path d="M650 258v36m-18-18h36m-31-13 26 26m0-26-26 26" stroke="#d0b77f" stroke-width="2" opacity=".8"/>
+  <path d="M280 286h48l-4 36h-40Z" fill="#b7ac94"/><path d="M288 282q16-33 32 0" fill="none" stroke="#d6a86a" stroke-width="3"/><path d="M297 263q7-20 14 0" fill="#e2b66f" opacity=".75"/>
+  <g stroke="#d0b77f" stroke-width="2" fill="none"><path d="M190 125h70m-70 0v44m580-44h-70m70 0v44M190 321h70m-70 0v-44m580 44h-70m70 0v-44"/></g>
+  <rect x="31" y="31" width="898" height="358" fill="url(#grain)"/><rect x="48" y="46" width="205" height="34" fill="#101614" opacity=".9"/><text x="60" y="68" fill="#d9c8a4" font-family="monospace" font-size="13" letter-spacing="2">EXHIBIT 01 · MID-RANGE</text><text x="55" y="369" fill="#d9c8a4" font-family="monospace" font-size="13" letter-spacing="2">ASH MARK · TOKEN · VOTIVE · SCALE RETAINED</text><text x="783" y="369" fill="#b8b2a1" font-family="monospace" font-size="12">21:26 / MERCER</text>
+</svg>
