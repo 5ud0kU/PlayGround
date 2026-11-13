@@ -6,7 +6,7 @@
 <meta name="theme-color" content="#101211">
 <title>THE TOWN — A Psychological Horror Experience</title>
 <link rel="icon" href="data:,">
-<link rel="stylesheet" href="style.css?v=2">
+<link rel="stylesheet" href="style.css?v=3">
 </head>
 <body>
 <main id="game">
@@ -21,7 +21,11 @@
   <div class="controls"><kbd>WASD</kbd> WALK <kbd>SHIFT</kbd> RUN <kbd>E</kbd> INTERACT <kbd>Q</kbd> HIDE <kbd>R</kbd> REST</div>
   <aside class="panel" id="panel"><button class="close" id="panelClose">×</button><div class="panelKicker" id="panelKicker">FIELD NOTES</div><h2 id="panelTitle"></h2><div class="panelBody" id="panelBody"></div><div class="panelActions" id="panelActions"></div></aside>
   <div class="mapPanel" id="mapPanel"><div class="panelKicker">ASHFALL COUNTY · NOT TO SCALE</div><h2>Town map</h2><div class="mapGrid" id="mapGrid"></div><p>Places you have visited are marked in ink. Some roads aren't where you left them.</p></div>
-  <div class="mobileControls" id="mobile"><div class="pad"><button data-key="w">▲</button><button data-key="a">◀</button><button data-key="s">▼</button><button data-key="d">▶</button></div><button id="mobileE">LOOK / USE</button><button id="mobileRun">RUN</button></div>
+  <div class="mobileControls" id="mobile" aria-label="Touch controls">
+    <div class="moveGroup"><div class="pad" aria-label="Move"><button data-key="w" aria-label="Move forward">▲</button><button data-key="a" aria-label="Move left">◀</button><button data-key="s" aria-label="Move backward">▼</button><button data-key="d" aria-label="Move right">▶</button></div><span class="controlHint">MOVE</span></div>
+    <div class="lookHint">DRAG TO LOOK</div>
+    <div class="actionGroup"><div class="quickActions"><button data-action="j" aria-label="Journal">NOTES</button><button data-action="i" aria-label="Pockets">BAG</button><button data-action="m" aria-label="Town map">MAP</button><button data-action="q" aria-label="Hide">HIDE</button><button data-action="f" aria-label="Focus">FOCUS</button><button data-action="r" aria-label="Rest">REST</button></div><button id="mobileE">INTERACT</button><button id="mobileRun">RUN</button></div>
+  </div>
   <div class="startScreen" id="startScreen"><div class="intro"><div class="eyebrow">A PSYCHOLOGICAL HORROR EXPERIENCE</div><h1>THE<br><em>TOWN</em></h1><p>ASHFALL COUNTY HAS BEEN EXPECTING YOU.</p><div class="introRule"></div><div class="introCopy">Your sister Mara disappeared six days ago. The people here remember her differently. The road out is still there—at least, it was this morning.</div><button id="startButton">BEGIN THE SEARCH <span>↗</span></button><div class="startFoot">A quiet town. A missing person. An unreliable account.</div></div></div>
   <div class="ending" id="ending"><div class="endCard"><div class="eyebrow">ASHFALL COUNTY · INCIDENT CLOSED</div><h2 id="endingTitle"></h2><p id="endingText"></p><button id="restart">RETURN TO THE BEGINNING ↗</button></div></div>
 </main>
