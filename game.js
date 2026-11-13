@@ -11,6 +11,9 @@ const sites=[
  {x:7,y:23,name:'Cedar Street Flats',kind:'apartments',type:2},{x:15,y:23,name:'Red Fern Diner',kind:'diner',type:1,open:true},{x:23,y:23,name:'Riverside Cemetery',kind:'cemetery',type:3},{x:31,y:23,name:'North Pump Station',kind:'tunnel',type:4,key:'brass key'},
  {x:7,y:31,name:'County Archive',kind:'archive',type:3},{x:15,y:31,name:'Old Mill Clinic',kind:'clinic',type:4},{x:23,y:31,name:'Pine Hollow Road',kind:'forest',type:5},{x:31,y:31,name:'Relay Bunker',kind:'bunker',type:4,key:'ward key'}
 ];
+function isBuilding(site){return site.kind!=='cemetery'&&site.kind!=='forest'}
+function roomAt(x,y){return sites.find(s=>isBuilding(s)&&x>s.x-2&&x<s.x+2&&y>s.y-2&&y<s.y+2)||null}
+function addRoomDecor(site,items){for(const [dx,dy,name,style='wood',horror=false] of items)objects.push({x:site.x+dx,y:site.y+dy,type:style==='blood'?'blood':horror?'horror':'furniture',name,site,room:site,style,horror,hidden:true})}
 function buildTown(){
  for(let y=0;y<MH;y++)for(let x=0;x<MW;x++){if(x===0||y===0||x===MW-1||y===MH-1)setTile(x,y,1);else if((x%8<=1)||(y%8<=1))setTile(x,y,0);else setTile(x,y,0)}
  // Streets, alleys and the creek at the edge of town.
@@ -18,17 +21,30 @@ function buildTown(){
  for(let y=1;y<MH-1;y++){setTile(3,y,6);setTile(4,y,6);setTile(11,y,6);setTile(12,y,6);setTile(19,y,6);setTile(20,y,6);setTile(27,y,6);setTile(28,y,6)}
  for(const s of sites){
   const x0=s.x-2,y0=s.y-2,x1=s.x+2,y1=s.y+2;
-  for(let y=y0;y<=y1;y++)for(let x=x0;x<=x1;x++){const edge=x===x0||x===x1||y===y0||y===y1;setTile(x,y,edge?s.type:0);labels[idx(x,y)]=s.name}
-  // One front door, facing the southern street; access changes the actual collision map.
-  const dx=s.x,dy=y1;setTile(dx,dy,s.open?0:8);s.door={x:dx+.5,y:dy+.5,site:s,open:!!s.open,door:true};doors.push(s.door);
-  // Interiors: one narrow partition, a curtained back room and a hint of lived-in clutter.
-  if(s.kind!=='cemetery'&&s.kind!=='forest'){
+  for(let y=y0;y<=y1;y++)for(let x=x0;x<=x1;x++){const edge=x===x0||x===x1||y===y0||y===y1;setTile(x,y,isBuilding(s)&&edge?s.type:0);labels[idx(x,y)]=s.name}
+  if(isBuilding(s)){
+   // Each site has a real threshold in the south wall; opening it changes collision and sightlines.
+   const dx=s.x,dy=y1;setTile(dx,dy,s.open?0:8);s.door={x:dx+.5,y:dy+.5,site:s,open:!!s.open,door:true};doors.push(s.door);
    const wallX=s.x+(s.x%2?1:-1);for(let y=y0+2;y<y1;y++)if(y!==s.y)setTile(wallX,y,s.type);
    setTile(wallX,s.y,0);
-   for(let i=0;i<3;i++)objects.push({x:s.x+rnd(-1.35,1.35),y:s.y+rnd(-1.25,1.1),type:'furniture',name:pick(['desk','chair','shelf','cabinet']),site:s,hidden:true});
   }
   objects.push({x:s.x,y:y0-.6,type:'sign',name:s.name,site:s});
  }
+ // Distinct, deliberately sparse room layouts leave the doorway and central route clear.
+ addRoomDecor(sites[0],[[-1.2,-1.05,'iron bed','wood'],[.25,-1.15,'tall wardrobe','wood'],[-1.2,.7,'child chair','wood'],[.65,.85,'cracked mirror','glass',true],[.35,.2,'dark stain','blood',true]]);
+ addRoomDecor(sites[1],[[-1.15,-1.1,'can shelves','metal'],[-1.15,.5,'can shelves','metal'],[.9,-1.05,'checkout counter','wood'],[.85,.65,'counting ledger','paper']]);
+ addRoomDecor(sites[2],[[-1.15,-1.1,'school desk','wood'],[.9,-1.1,'school desk','wood'],[-1.1,.65,'chalkboard','slate'],[.85,.7,'small chair','wood'],[.2,-.1,'empty child coat','cloth',true]]);
+ addRoomDecor(sites[3],[[-1.15,-1.05,'ward bed','metal'],[.9,-1.1,'medicine cabinet','metal'],[-1.1,.65,'privacy screen','cloth'],[.85,.7,'covered form','cloth',true],[.25,.25,'dark stain','blood',true]]);
+ addRoomDecor(sites[4],[[-1.15,-1.05,'deputy desk','wood'],[.9,-1.1,'file cabinet','metal'],[-1.15,.7,'evidence board','paper'],[.8,.65,'visitor chair','wood'],[.15,.15,'dark handprint','blood',true]]);
+ addRoomDecor(sites[5],[[-1.15,-1.1,'altar','stone'],[.9,-1.05,'candle stand','metal'],[-1.1,.7,'pew','wood'],[.9,.7,'pew','wood'],[.15,.05,'wet hymnbook','paper',true]]);
+ addRoomDecor(sites[6],[[-1.15,-1.05,'hotel bed','wood'],[.9,-1.1,'wardrobe','wood'],[-1.15,.7,'nightstand','wood'],[.85,.7,'black mirror','glass',true]]);
+ addRoomDecor(sites[7],[[-1.15,-1.05,'workbench','metal'],[.9,-1.1,'tool cabinet','metal'],[-1.1,.7,'hanging coat','cloth'],[.8,.7,'hooked silhouette','metal',true],[.1,.1,'dark stain','blood',true]]);
+ addRoomDecor(sites[8],[[-1.15,-1.05,'narrow bed','wood'],[.9,-1.1,'dresser','wood'],[-1.1,.7,'kitchen chair','wood'],[.85,.7,'covered form','cloth',true]]);
+ addRoomDecor(sites[9],[[-1.15,-1.05,'diner booth','wood'],[.9,-1.1,'service counter','wood'],[-1.1,.7,'round table','metal'],[.85,.7,'empty chair','wood'],[.1,.1,'dark stain','blood',true]]);
+ addRoomDecor(sites[11],[[-1.15,-1.05,'pump console','metal'],[.9,-1.1,'valve bank','metal'],[-1.1,.7,'pipe manifold','metal'],[.85,.7,'flood mark','blood',true]]);
+ addRoomDecor(sites[12],[[-1.15,-1.05,'archive shelves','wood'],[.9,-1.1,'archive shelves','wood'],[-1.1,.7,'reading desk','wood'],[.85,.7,'paper stacks','paper']]);
+ addRoomDecor(sites[13],[[-1.15,-1.05,'clinic cot','metal'],[.9,-1.1,'medical cabinet','metal'],[-1.1,.7,'privacy screen','cloth'],[.85,.7,'instrument tray','metal'],[.1,.1,'dark stain','blood',true]]);
+ addRoomDecor(sites[15],[[-1.15,-1.05,'bunker cot','metal'],[.9,-1.1,'radio console','metal'],[-1.1,.7,'sealed locker','metal'],[.85,.7,'covered form','cloth',true]]);
  // A looping service alley into the municipal storm drains.
  for(let y=4;y<36;y++)if(y%8!==0){setTile(37,y,0);if(y%8===4)setTile(36,y,6)}
  setTile(37,34,8);doors.push({x:37.5,y:34.5,site:{name:'Storm Drain',kind:'tunnel',key:'storm grate'},open:false,door:true});
@@ -48,7 +64,7 @@ function buildTown(){
  addClue(30.7,30.8,'Relay log','A radio log marked with today’s date.','The signal is coming from beneath Ashgate. The operator’s final words: “There is no beneath. There is only the other side.”','relay');
  spawnPeople();return start;
 }
-function addClue(x,y,title,teaser,text,id){const c={x,y,title,teaser,text,id,found:false,type:'clue'};clues.push(c);objects.push(c);return c}
+function addClue(x,y,title,teaser,text,id){const c={x,y,title,teaser,text,id,found:false,type:'clue',room:roomAt(x,y)};clues.push(c);objects.push(c);return c}
 function spawnPeople(){
  const defs=[
   ['Mara Venn',7.4,7.1,'The neighbor who kept your house key.','Irene was supposed to leave with the last train.','Her porch light is on. She does not own a lamp.','gentle'],
@@ -92,7 +108,7 @@ function render(){
  }
  // Empty street silhouettes, lit windows and the smear where the road seems to dip.
  drawStreetDetails();
- const sprites=[];for(const p of people)sprites.push({...p,sprite:'person'});for(const c of critters)sprites.push({...c});for(const o of objects)if(!o.hidden||tile(state.x,state.y)!==0)sprites.push({...o,sprite:o.type==='clue'?'clue':o.type});
+ const sprites=[],activeRoom=roomAt(state.x,state.y);for(const p of people)sprites.push({...p,sprite:'person'});for(const c of critters)sprites.push({...c});for(const o of objects){const visible=o.type==='sign'||(!o.room&&!roomAt(o.x,o.y))||o.room===activeRoom;if(visible)sprites.push({...o,sprite:o.type==='clue'?'clue':o.type})}
  for(const e of threats)sprites.push({...e,sprite:'threat'});
  sprites.sort((a,b)=>{const da=(b.x-state.x)*Math.cos(state.angle)+(b.y-state.y)*Math.sin(state.angle),db=(a.x-state.x)*Math.cos(state.angle)+(a.y-state.y)*Math.sin(state.angle);return da-db});
  for(const e of sprites)drawSprite(e);
@@ -128,11 +144,30 @@ function drawSprite(e){
   const pulse=.7+Math.sin(frame*.06+e.x)*.2;oc.fillStyle=`rgba(189,137,103,${.12*pulse})`;oc.beginPath();oc.arc(px,top+height*.6,width*.9,0,7);oc.fill();oc.fillStyle='#b88b69';oc.fillRect(px-width*.16,top+height*.28,width*.32,height*.34);oc.fillStyle='#efe2c6';oc.fillRect(px-width*.1,top+height*.33,width*.2,1);oc.fillRect(px-width*.1,top+height*.39,width*.18,1)
  }else if(e.sprite==='sign'){
   if(forward<4){oc.fillStyle='#3d3d37';oc.fillRect(px-width*.45,top+height*.22,width*.9,height*.5);oc.strokeStyle='#8c826d';oc.strokeRect(px-width*.45,top+height*.22,width*.9,height*.5)}
- }else if(e.sprite==='furniture'){
-  oc.fillStyle=e.name==='chair'?'#49443b':'#3c3b37';oc.fillRect(px-width*.36,top+height*.35,width*.72,height*.5);oc.fillStyle='#282928';oc.fillRect(px-width*.32,top+height*.77,width*.1,height*.2);oc.fillRect(px+width*.22,top+height*.77,width*.1,height*.2)
+ }else if(e.sprite==='furniture'||e.sprite==='horror'||e.sprite==='blood'){
+  drawRoomObject(e,px,top,width,height)
  }else if(e.sprite==='threat'){}
 }
-function updateHUD(){
+function drawRoomObject(e,px,top,width,height){
+  const floor=top+height*.94,name=(e.name||'').toLowerCase(),style=e.style||'wood';
+  const dark=style==='metal'?'#272c2c':style==='cloth'?'#302e2b':style==='stone'?'#292927':'#292824',mid=style==='metal'?'#454a49':style==='cloth'?'#514c47':style==='stone'?'#4b4945':'#494238',light=style==='metal'?'#646966':style==='cloth'?'#686057':style==='stone'?'#625f58':'#625746';
+  oc.fillStyle='rgba(0,0,0,.4)';oc.beginPath();oc.ellipse(px,floor,width*.48,Math.max(1,height*.075),0,0,Math.PI*2);oc.fill();
+  if(e.sprite==='blood'){oc.fillStyle='rgba(69,20,19,.82)';oc.beginPath();oc.ellipse(px,floor-height*.05,width*.42,height*.1,-.12,0,Math.PI*2);oc.fill();oc.fillStyle='rgba(137,44,35,.58)';oc.beginPath();oc.ellipse(px-width*.08,floor-height*.08,width*.19,height*.03,-.2,0,Math.PI*2);oc.fill();return}
+  if(e.sprite==='horror'){
+   if(/coat|hooked|silhouette/.test(name)){oc.strokeStyle=dark;oc.lineWidth=Math.max(2,width*.12);oc.beginPath();oc.moveTo(px,floor-height*.06);oc.lineTo(px,floor-height*.62);oc.moveTo(px-width*.26,floor-height*.48);oc.lineTo(px,floor-height*.61);oc.lineTo(px+width*.26,floor-height*.48);oc.stroke();oc.fillStyle=mid;oc.beginPath();oc.moveTo(px-width*.22,floor-height*.52);oc.lineTo(px-width*.13,floor-height*.69);oc.lineTo(px+width*.13,floor-height*.69);oc.lineTo(px+width*.22,floor-height*.52);oc.closePath();oc.fill()}
+   else{oc.fillStyle='#4b4842';oc.beginPath();oc.moveTo(px-width*.45,floor-height*.12);oc.lineTo(px-width*.35,floor-height*.42);oc.lineTo(px-width*.13,floor-height*.55);oc.lineTo(px+width*.13,floor-height*.52);oc.lineTo(px+width*.39,floor-height*.37);oc.lineTo(px+width*.47,floor-height*.12);oc.closePath();oc.fill();oc.fillStyle='#292a28';oc.fillRect(px-width*.18,floor-height*.48,width*.34,height*.05)}return;
+  }
+  const chair=/chair|stool/.test(name),bed=/bed|cot|booth|pew/.test(name),shelf=/shelf|cabinet|wardrobe|dresser|locker/.test(name),table=/desk|table|counter|workbench|altar|console|tray|stand|valve|manifold/.test(name),panel=/mirror|screen|board/.test(name),paper=/ledger|form|stacks|hymnbook/.test(name);
+  const w=width*.76,x=px-w*.5,y=floor-height*(chair?.45:bed?.45:shelf?.78:table?.57:panel?.76:paper?.3:.58),h=height*(chair?.43:bed?.43:shelf?.78:table?.55:panel?.75:paper?.24:.56);
+  if(bed){oc.fillStyle=dark;oc.fillRect(x,y+h*.25,w,h*.7);oc.fillStyle=mid;oc.fillRect(x+width*.04,y+h*.32,w-width*.08,h*.55);oc.fillStyle=light;oc.fillRect(x+width*.06,y+h*.28,width*.38,h*.18)}
+  else if(chair){oc.fillStyle=mid;oc.fillRect(px-width*.25,y+height*.12,width*.5,height*.15);oc.fillRect(px-width*.23,y-height*.03,width*.46,height*.2);oc.fillStyle=dark;oc.fillRect(px-width*.2,y+height*.25,width*.08,height*.2);oc.fillRect(px+width*.12,y+height*.25,width*.08,height*.2)}
+  else if(shelf){oc.fillStyle=dark;oc.fillRect(x,y,w,h);oc.fillStyle=mid;oc.fillRect(x+width*.035,y+height*.025,w-width*.09,h-height*.04);for(let k=1;k<4;k++){const sy=y+h*k/4;oc.fillStyle=light;oc.fillRect(x+width*.05,sy,w-width*.13,Math.max(1,height*.025));for(let q=0;q<3;q++){oc.fillStyle=q%2?'#343632':'#77705f';oc.fillRect(x+width*(.08+q*.2),sy-height*.1,width*.11,height*.09)}}}
+  else if(table){oc.fillStyle=mid;oc.beginPath();oc.moveTo(x,y+height*.1);oc.lineTo(x+width*.16,y);oc.lineTo(x+w,y+height*.03);oc.lineTo(x+w-width*.12,y+height*.14);oc.lineTo(x+width*.12,y+height*.19);oc.closePath();oc.fill();oc.fillStyle=dark;oc.fillRect(x+width*.12,y+height*.16,width*.1,h*.68);oc.fillRect(x+w-width*.2,y+height*.15,width*.1,h*.68)}
+  else if(panel){oc.fillStyle=dark;oc.fillRect(x,y,w,h);oc.fillStyle=style==='glass'?'#414c4c':mid;oc.fillRect(x+width*.055,y+height*.035,w-width*.11,h-height*.07);oc.strokeStyle=light;oc.strokeRect(x+width*.075,y+height*.055,w-width*.15,h-height*.11);if(/cracked|black/.test(name)){oc.strokeStyle=dark;oc.beginPath();oc.moveTo(px,y+height*.08);oc.lineTo(px-width*.05,y+height*.31);oc.lineTo(px+width*.07,y+height*.42);oc.lineTo(px+width*.02,y+h);oc.stroke()}}
+  else if(paper){oc.fillStyle=mid;oc.beginPath();oc.moveTo(x,y+height*.08);oc.lineTo(x+width*.12,y);oc.lineTo(x+w,y+height*.02);oc.lineTo(x+w-width*.08,y+height*.13);oc.closePath();oc.fill();oc.strokeStyle='rgba(220,207,177,.42)';oc.beginPath();oc.moveTo(x+width*.13,y+height*.05);oc.lineTo(x+w-width*.13,y+height*.05);oc.stroke()}
+  else{oc.fillStyle=dark;oc.fillRect(x,y,w,h);oc.fillStyle=mid;oc.fillRect(x+width*.035,y+height*.025,w-width*.09,h-height*.06);oc.fillStyle=light;oc.fillRect(x+width*.07,y+height*.07,w-width*.16,Math.max(1,height*.035))}
+ }
+ function updateHUD(){
  $('#health-fill').style.width=`${state.health}%`;$('#mind-fill').style.width=`${state.mind}%`;$('#stamina-fill').style.width=`${state.stamina}%`;
  $('#health-num').textContent=Math.round(state.health);$('#mind-num').textContent=Math.round(state.mind);$('#stamina-num').textContent=Math.round(state.stamina);$('#med-count').textContent=state.med;$('#lamp-state').textContent=state.flash?'ON':'OFF';
  const h=Math.floor(state.time),m=Math.floor((state.time-h)*60);$('#clock').textContent=`${String(h%12||12).padStart(2,'0')}:${String(m).padStart(2,'0')} ${h>=12?'PM':'AM'}`;
