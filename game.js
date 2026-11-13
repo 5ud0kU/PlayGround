@@ -62,7 +62,7 @@ function spawnPeople(){
  defs.forEach((d,i)=>people.push({name:d[0],x:d[1],y:d[2],role:d[3],line:d[4],secret:d[5],temper:d[6],memory:0,fear:0,met:false,phase:rnd(0,6.2),home:{x:d[1],y:d[2]},routine:i%3}));
 }
 const start=buildTown();
-const state={x:start.x,y:start.y,angle:-Math.PI/2,pitch:0,health:92,mind:78,stamina:100,hunger:14,thirst:9,fatigue:8,ammo:2,med:1,flash:true,keys:[],found:0,decisions:[],time:6.67,weather:'OVERCAST',weatherTimer:75,day:1,alert:0,steps:0,ending:false,started:false,paused:false,near:null,radio:false,crouch:false,lastEvent:0,visitCount:0,seed:Math.random()};
+const state={x:start.x,y:start.y,angle:-Math.PI/2,pitch:0,health:92,mind:78,stamina:100,hunger:14,thirst:9,fatigue:8,ammo:2,med:1,flash:true,keys:[],found:0,decisions:[],time:6.67,weather:'OVERCAST',weatherTimer:75,day:1,alert:0,steps:0,ending:false,started:false,paused:false,near:null,radio:false,crouch:false,lastEvent:0,visitCount:0,seed:Math.random(),ambientTimer:28,lightning:0,lightningTimer:16,wind:rnd(-.3,.3)};
 const keysDown=new Set(),depthBuffer=new Float32Array(W),offscreen=document.createElement('canvas');offscreen.width=W;offscreen.height=H;const oc=offscreen.getContext('2d');
 const textures={1:['#494440','#56514b','#363435'],2:['#49423d','#665950','#393432'],3:['#4c4a46','#5b5954','#3b3a38'],4:['#434744','#585b55','#343735'],5:['#37423a','#505c4a','#2e352e'],8:['#49352f','#674b41','#352b28'],6:['#292b2d','#37393a','#252628']};
 function resize(){const d=Math.min(1.6,devicePixelRatio||1);canvas.style.imageRendering='pixelated';}window.addEventListener('resize',resize);resize();
