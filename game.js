@@ -584,6 +584,96 @@
       drawSprite(o, x, base, s, d);
     }
   }
+  function drawCharacterFigure(x, b, s, options = {}) {
+    const {
+      skin = "#d9b89a",
+      hair = "#1e1d1a",
+      coat = "#7f7669",
+      torso = "#777365",
+      ghost = false,
+      face = "#1d1b1b",
+      limb = "#1f2120",
+    } = options;
+
+    const headY = b - s * 0.83,
+      torsoY = b - s * 0.22,
+      armY = b - s * 0.1,
+      legY = b + s * 0.02;
+
+    if (ghost && Math.sin(game.elapsed * 2.4 + x) > 0) ctx.globalAlpha = 0.52;
+
+    ctx.fillStyle = "rgba(12,12,13,0.38)";
+    ctx.beginPath();
+    ctx.ellipse(x, b + s * 0.11, s * 0.18, s * 0.065, 0, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.fillStyle = hair;
+    ctx.beginPath();
+    ctx.ellipse(x, headY, s * 0.12, s * 0.11, 0, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.fillStyle = skin;
+    ctx.beginPath();
+    ctx.ellipse(x, headY + s * 0.02, s * 0.09, s * 0.11, 0, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.fillStyle = face;
+    ctx.fillRect(x - s * 0.042, headY + s * 0.005, s * 0.015, s * 0.015);
+    ctx.fillRect(x + s * 0.027, headY + s * 0.005, s * 0.015, s * 0.015);
+    ctx.strokeStyle = "#3f332b";
+    ctx.lineWidth = Math.max(1, s * 0.01);
+    ctx.beginPath();
+    ctx.moveTo(x - s * 0.017, headY + s * 0.06);
+    ctx.quadraticCurveTo(x, headY + s * 0.085, x + s * 0.017, headY + s * 0.06);
+    ctx.stroke();
+
+    ctx.fillStyle = coat;
+    ctx.beginPath();
+    ctx.moveTo(x - s * 0.16, torsoY);
+    ctx.lineTo(x + s * 0.16, torsoY);
+    ctx.lineTo(x + s * 0.2, b - s * 0.18);
+    ctx.lineTo(x - s * 0.2, b - s * 0.18);
+    ctx.closePath();
+    ctx.fill();
+
+    ctx.fillStyle = torso;
+    ctx.fillRect(x - s * 0.085, torsoY, s * 0.17, s * 0.25);
+    ctx.fillStyle = coat;
+    ctx.fillRect(x - s * 0.055, torsoY + s * 0.04, s * 0.11, s * 0.2);
+
+    ctx.strokeStyle = skin;
+    ctx.lineWidth = Math.max(1.8, s * 0.02);
+    ctx.beginPath();
+    ctx.moveTo(x - s * 0.1, torsoY + s * 0.03);
+    ctx.lineTo(x - s * 0.18, armY);
+    ctx.moveTo(x + s * 0.1, torsoY + s * 0.03);
+    ctx.lineTo(x + s * 0.18, armY);
+    ctx.moveTo(x - s * 0.06, b - s * 0.18);
+    ctx.lineTo(x - s * 0.08, legY + s * 0.05);
+    ctx.moveTo(x + s * 0.06, b - s * 0.18);
+    ctx.lineTo(x + s * 0.08, legY + s * 0.05);
+    ctx.stroke();
+
+    ctx.strokeStyle = limb;
+    ctx.lineWidth = Math.max(1.6, s * 0.022);
+    ctx.beginPath();
+    ctx.moveTo(x - s * 0.07, legY);
+    ctx.lineTo(x - s * 0.08, b + s * 0.2);
+    ctx.moveTo(x + s * 0.07, legY);
+    ctx.lineTo(x + s * 0.08, b + s * 0.2);
+    ctx.stroke();
+
+    ctx.fillStyle = limb;
+    ctx.fillRect(x - s * 0.055, b + s * 0.2, s * 0.04, s * 0.19);
+    ctx.fillRect(x + s * 0.015, b + s * 0.2, s * 0.04, s * 0.19);
+
+    ctx.fillStyle = face;
+    ctx.fillRect(x - s * 0.05, headY - s * 0.03, s * 0.015, s * 0.015);
+    ctx.fillRect(x + s * 0.035, headY - s * 0.03, s * 0.015, s * 0.015);
+
+    ctx.globalAlpha = 1;
+  }
+
   function drawSprite(o, x, b, s, d) {
     if (o.type === "npc" || o.type === "stalker") {
       const ghost = o.type === "stalker" || o.personality === "uneasy",
@@ -598,90 +688,13 @@
         skin = ghost ? "#d7d0bf" : "#d9b89a",
         hair = ghost ? "#a7a497" : o.role === "child" ? "#2e1b17" : "#1e1d1a",
         coat = ghost ? "#a7a28c" : o.role === "police" ? "#2d3836" : "#7f7669";
-      if (o.type === "stalker" && Math.sin(game.elapsed * 2) > 0)
-        ctx.globalAlpha = 0.42;
-
-      const bodyY = b - s * 0.22;
-      ctx.fillStyle = "rgba(12, 12, 13, 0.35)";
-      ctx.beginPath();
-      ctx.ellipse(x, b + s * 0.1, s * 0.18, s * 0.06, 0, 0, Math.PI * 2);
-      ctx.fill();
-
-      ctx.fillStyle = hair;
-      ctx.beginPath();
-      ctx.ellipse(x, b - s * 0.85, s * 0.115, s * 0.11, 0, 0, Math.PI * 2);
-      ctx.fill();
-
-      ctx.fillStyle = skin;
-      ctx.beginPath();
-      ctx.ellipse(x, b - s * 0.84, s * 0.09, s * 0.11, 0, 0, Math.PI * 2);
-      ctx.fill();
-
-      ctx.fillStyle = "#1a1c1a";
-      ctx.fillRect(x - s * 0.025, b - s * 0.8, s * 0.05, s * 0.015);
-      ctx.fillRect(x - s * 0.05, b - s * 0.78, s * 0.015, s * 0.02);
-      ctx.fillRect(x + s * 0.035, b - s * 0.78, s * 0.015, s * 0.02);
-      ctx.fillStyle = skin;
-      ctx.fillRect(x - s * 0.02, b - s * 0.77, s * 0.04, s * 0.02);
-
-      ctx.fillStyle = coat;
-      ctx.beginPath();
-      ctx.moveTo(x - s * 0.13, bodyY);
-      ctx.lineTo(x + s * 0.13, bodyY);
-      ctx.lineTo(x + s * 0.18, b - s * 0.18);
-      ctx.lineTo(x - s * 0.18, b - s * 0.18);
-      ctx.closePath();
-      ctx.fill();
-
-      ctx.fillStyle = torsoColor;
-      ctx.fillRect(x - s * 0.08, bodyY, s * 0.16, s * 0.26);
-      ctx.fillStyle = coat;
-      ctx.fillRect(x - s * 0.05, bodyY + s * 0.04, s * 0.1, s * 0.18);
-
-      ctx.strokeStyle = skin;
-      ctx.lineWidth = Math.max(1.5, s * 0.02);
-      ctx.beginPath();
-      ctx.moveTo(x - s * 0.11, bodyY + s * 0.02);
-      ctx.lineTo(x - s * 0.18, b - s * 0.1);
-      ctx.moveTo(x + s * 0.11, bodyY + s * 0.02);
-      ctx.lineTo(x + s * 0.18, b - s * 0.1);
-      ctx.moveTo(x - s * 0.06, b - s * 0.18);
-      ctx.lineTo(x - s * 0.05, b + s * 0.02);
-      ctx.moveTo(x + s * 0.06, b - s * 0.18);
-      ctx.lineTo(x + s * 0.05, b + s * 0.02);
-      ctx.stroke();
-
-      ctx.strokeStyle = "#1f2120";
-      ctx.lineWidth = Math.max(1.5, s * 0.025);
-      ctx.beginPath();
-      ctx.moveTo(x - s * 0.06, b + s * 0.02);
-      ctx.lineTo(x - s * 0.08, b + s * 0.22);
-      ctx.moveTo(x + s * 0.06, b + s * 0.02);
-      ctx.lineTo(x + s * 0.08, b + s * 0.22);
-      ctx.stroke();
-
-      ctx.fillStyle = "#151612";
-      ctx.fillRect(x - s * 0.05, b + s * 0.22, s * 0.04, s * 0.2);
-      ctx.fillRect(x + s * 0.01, b + s * 0.22, s * 0.04, s * 0.2);
-
-      if (ghost && Math.sin(game.elapsed * 3.5 + o.x) > 0) {
-        ctx.strokeStyle = "rgba(220, 214, 204, 0.5)";
-        ctx.beginPath();
-        ctx.arc(x, b - s * 0.84, s * 0.09, 0.2, Math.PI - 0.2);
-        ctx.stroke();
-      } else {
-        ctx.fillStyle = "#1d1b1b";
-        ctx.fillRect(x - s * 0.045, b - s * 0.86, s * 0.015, s * 0.015);
-        ctx.fillRect(x + s * 0.03, b - s * 0.86, s * 0.015, s * 0.015);
-        ctx.strokeStyle = "#3f332b";
-        ctx.lineWidth = Math.max(1, s * 0.01);
-        ctx.beginPath();
-        ctx.moveTo(x - s * 0.015, b - s * 0.8);
-        ctx.quadraticCurveTo(x, b - s * 0.76, x + s * 0.015, b - s * 0.8);
-        ctx.stroke();
-      }
-
-      ctx.globalAlpha = 1;
+      drawCharacterFigure(x, b, s, {
+        skin,
+        hair,
+        coat,
+        torso: torsoColor,
+        ghost,
+      });
     } else if (o.type === "clue") {
       ctx.fillStyle =
         o.clue === "notice"
