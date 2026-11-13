@@ -3,7 +3,7 @@
 const canvas=document.getElementById('view'),ctx=canvas.getContext('2d',{alpha:false}),W=640,H=360,MW=40,MH=40;
 canvas.width=W;canvas.height=H;
 const $=s=>document.querySelector(s),clamp=(n,a,b)=>Math.max(a,Math.min(b,n)),dist=(a,b)=>Math.hypot(a.x-b.x,a.y-b.y),rnd=(a,b)=>a+Math.random()*(b-a),pick=a=>a[Math.floor(Math.random()*a.length)];
-const map=new Uint8Array(MW*MH),labels=new Array(MW*MH).fill(''),doors=[],objects=[],people=[],clues=[],rumors=[],threats=[];
+const map=new Uint8Array(MW*MH),labels=new Array(MW*MH).fill(''),doors=[],objects=[],people=[],clues=[],rumors=[],threats=[],critters=[];
 const idx=(x,y)=>Math.floor(y)*MW+Math.floor(x),tile=(x,y)=>x<0||y<0||x>=MW||y>=MH?1:map[idx(x,y)],setTile=(x,y,v)=>{if(x>=0&&y>=0&&x<MW&&y<MH)map[idx(x,y)]=v};
 const sites=[
  {x:7,y:7,name:'Mara Venn’s House',kind:'house',type:1,open:true},{x:15,y:7,name:'Bellweather Grocery',kind:'shop',type:2,open:true},{x:23,y:7,name:'Ashgate Elementary',kind:'school',type:3},{x:31,y:7,name:'St. Oran Hospital',kind:'hospital',type:4,key:'ward key'},
@@ -59,8 +59,11 @@ function spawnPeople(){
   ['Cal Rowan',14.6,23.5,'Diner cook. His coffee has a skin of dust.','There is always a place set for one more.','He says you should eat before you go. He does not look at the empty chair.','warm'],
   ['The Drifter',22.4,30.4,'Someone standing where the forest road ends.','I remember the first version of you.','The face is almost familiar. It moves only when you look away.','unknown']
  ];
- defs.forEach((d,i)=>people.push({name:d[0],x:d[1],y:d[2],role:d[3],line:d[4],secret:d[5],temper:d[6],memory:0,fear:0,met:false,phase:rnd(0,6.2),home:{x:d[1],y:d[2]},routine:i%3}));
+ defs.forEach((d,i)=>people.push({name:d[0],x:d[1],y:d[2],role:d[3],line:d[4],secret:d[5],temper:d[6],memory:0,fear:0,met:false,phase:rnd(0,6.2),home:{x:d[1],y:d[2]},routine:i%3,activity:'waiting',activityTimer:rnd(1,5),look:0,gesture:0}));
 }
+// Ashgate has a few stubborn residents that never learned to leave: a street cat and crows.
+critters.push({x:4.7,y:9.1,name:'Stray cat',sprite:'cat',phase:rnd(0,6),home:{x:4.7,y:9.1},speed:.18});
+for(let i=0;i<4;i++)critters.push({x:3.2+i*.55,y:6.4+Math.sin(i)*.35,name:'Crow',sprite:'bird',phase:i*1.7,home:{x:3.2+i*.55,y:6.4+Math.sin(i)*.35},speed:.28});
 const start=buildTown();
 const state={x:start.x,y:start.y,angle:-Math.PI/2,pitch:0,health:92,mind:78,stamina:100,hunger:14,thirst:9,fatigue:8,ammo:2,med:1,flash:true,keys:[],found:0,decisions:[],time:6.67,weather:'OVERCAST',weatherTimer:75,day:1,alert:0,steps:0,ending:false,started:false,paused:false,near:null,radio:false,crouch:false,lastEvent:0,visitCount:0,seed:Math.random()};
 const keysDown=new Set(),depthBuffer=new Float32Array(W),offscreen=document.createElement('canvas');offscreen.width=W;offscreen.height=H;const oc=offscreen.getContext('2d');
@@ -89,7 +92,7 @@ function render(){
  }
  // Empty street silhouettes, lit windows and the smear where the road seems to dip.
  drawStreetDetails();
- const sprites=[];for(const p of people)sprites.push({...p,sprite:'person'});for(const o of objects)if(!o.hidden||tile(state.x,state.y)!==0)sprites.push({...o,sprite:o.type==='clue'?'clue':o.type});
+ const sprites=[];for(const p of people)sprites.push({...p,sprite:'person'});for(const c of critters)sprites.push({...c});for(const o of objects)if(!o.hidden||tile(state.x,state.y)!==0)sprites.push({...o,sprite:o.type==='clue'?'clue':o.type});
  for(const e of threats)sprites.push({...e,sprite:'threat'});
  sprites.sort((a,b)=>{const da=(b.x-state.x)*Math.cos(state.angle)+(b.y-state.y)*Math.sin(state.angle),db=(a.x-state.x)*Math.cos(state.angle)+(a.y-state.y)*Math.sin(state.angle);return da-db});
  for(const e of sprites)drawSprite(e);
@@ -108,16 +111,20 @@ function drawStreetDetails(){
 }
 function drawSprite(e){
  const dx=e.x-state.x,dy=e.y-state.y,ca=Math.cos(state.angle),sa=Math.sin(state.angle),forward=dx*ca+dy*sa,side=-dx*sa+dy*ca;if(forward<.15)return;
- const px=W/2+side/forward*(W*.72),scale=H*.72/forward,height=(e.sprite==='person'||e.sprite==='threat')?scale*1.45:scale*.48,width=(e.sprite==='person'||e.sprite==='threat')?height*.43:height*.8,top=H*(.49+state.pitch)-height*.48;
+ const px=W/2+side/forward*(W*.72),scale=H*.72/forward,height=(e.sprite==='person'||e.sprite==='threat')?scale*1.45:(e.sprite==='cat'?scale*.34:e.sprite==='bird'?scale*.23:scale*.48),width=(e.sprite==='person'||e.sprite==='threat')?height*.43:e.sprite==='cat'?height*1.4:e.sprite==='bird'?height*1.6:height*.8,top=H*(.49+state.pitch)-height*.48;
  if(px<-width||px>W+width)return;const col=clamp(Math.round(px),0,W-1);if(depthBuffer[col]<forward-.12)return;
  if(e.sprite==='person'||e.sprite==='threat'){
   const fear=e.fear||0,disturb=e.sprite==='threat'||state.alert>1;oc.fillStyle='rgba(0,0,0,.4)';oc.beginPath();oc.ellipse(px,H*(.49+state.pitch)+height*.48,width*.58,Math.max(2,height*.06),0,0,Math.PI*2);oc.fill();
   // Coat, uneven shoulders and a face mostly obscured by the darkness.
   oc.fillStyle=e.sprite==='threat'?'#252527':(e.temper==='warm'?'#514c44':e.temper==='wary'?'#474943':'#3e4242');oc.beginPath();oc.moveTo(px-width*.42,top+height*.38);oc.lineTo(px-width*.32,top+height*.26);oc.lineTo(px-width*.16,top+height*.22);oc.lineTo(px+width*.2,top+height*.22);oc.lineTo(px+width*.38,top+height*.4);oc.lineTo(px+width*.31,top+height*.92);oc.lineTo(px-width*.33,top+height*.92);oc.closePath();oc.fill();
-  oc.fillStyle='#272525';oc.fillRect(px-width*.13,top+height*.08,width*.27,height*.23);oc.fillStyle=disturb?'#4b3837':'#6d6255';oc.beginPath();oc.ellipse(px,top+height*.23,width*.23,height*.16,0,0,Math.PI*2);oc.fill();
+  const walk=Math.sin(frame*.13+(e.phase||0))*height*.035,gesture=Math.sin(frame*.045+(e.phase||0))*(e.gesture||0);oc.strokeStyle='#282a29';oc.lineWidth=Math.max(1,width*.12);oc.beginPath();oc.moveTo(px-width*.15,top+height*.83);oc.lineTo(px-width*.17+walk,top+height*.98);oc.moveTo(px+width*.15,top+height*.83);oc.lineTo(px+width*.17-walk,top+height*.98);oc.moveTo(px-width*.3,top+height*.42);oc.lineTo(px-width*.43,top+height*.62+gesture);oc.moveTo(px+width*.3,top+height*.42);oc.lineTo(px+width*.43,top+height*.62-gesture);oc.stroke();oc.fillStyle='#272525';oc.fillRect(px-width*.13,top+height*.08,width*.27,height*.23);oc.fillStyle=disturb?'#4b3837':'#6d6255';oc.beginPath();oc.ellipse(px,top+height*.23,width*.23,height*.16,0,0,Math.PI*2);oc.fill();
   if(disturb){oc.fillStyle='#a64c43';oc.fillRect(px-width*.12,top+height*.23,Math.max(2,width*.08),Math.max(1,height*.012));oc.fillRect(px+width*.05,top+height*.23,Math.max(2,width*.08),Math.max(1,height*.012));oc.strokeStyle='rgba(139,61,51,.7)';oc.beginPath();oc.moveTo(px,top+height*.28);oc.lineTo(px+width*.06,top+height*.52);oc.stroke()}
   if(e.sprite==='person'&&forward<3.5&&height>48){oc.fillStyle='#ded1bb';oc.font=`${Math.max(8,Math.min(11,scale*.11))}px DM Mono`;oc.textAlign='center';oc.fillText(e.name.split(' ')[0].toUpperCase(),px,top-5)}
- }else if(e.sprite==='clue'){
+ }else if(e.sprite==='cat'){
+   const bob=Math.sin(frame*.09+e.phase)*height*.035;oc.fillStyle='rgba(0,0,0,.35)';oc.beginPath();oc.ellipse(px,H*(.49+state.pitch)+height*.42,width*.62,Math.max(1,height*.08),0,0,Math.PI*2);oc.fill();oc.fillStyle='#353632';oc.beginPath();oc.ellipse(px,top+height*.56+bob,width*.38,height*.25,0,0,Math.PI*2);oc.fill();oc.beginPath();oc.moveTo(px+width*.2,top+height*.56);oc.quadraticCurveTo(px+width*.62,top+height*.32,px+width*.54,top+height*.18);oc.strokeStyle='#353632';oc.lineWidth=Math.max(1,width*.09);oc.stroke();oc.fillStyle='#252725';oc.beginPath();oc.moveTo(px-width*.12,top+height*.43);oc.lineTo(px-width*.2,top+height*.18);oc.lineTo(px,top+height*.36);oc.moveTo(px+width*.12,top+height*.43);oc.lineTo(px+width*.2,top+height*.18);oc.lineTo(px,top+height*.36);oc.fill();
+  }else if(e.sprite==='bird'){
+   const flap=Math.sin(frame*.22+e.phase)*height*.35;oc.fillStyle='#292d2d';oc.beginPath();oc.ellipse(px,top+height*.56,width*.2,height*.13,0,0,Math.PI*2);oc.fill();oc.strokeStyle='#292d2d';oc.lineWidth=Math.max(1,width*.12);oc.beginPath();oc.moveTo(px-width*.1,top+height*.56);oc.quadraticCurveTo(px-width*.45,top+height*.2+flap,px-width*.55,top+height*.5);oc.moveTo(px+width*.1,top+height*.56);oc.quadraticCurveTo(px+width*.45,top+height*.2-flap,px+width*.55,top+height*.5);oc.stroke();
+  }else if(e.sprite==='clue'){
   const pulse=.7+Math.sin(frame*.06+e.x)*.2;oc.fillStyle=`rgba(189,137,103,${.12*pulse})`;oc.beginPath();oc.arc(px,top+height*.6,width*.9,0,7);oc.fill();oc.fillStyle='#b88b69';oc.fillRect(px-width*.16,top+height*.28,width*.32,height*.34);oc.fillStyle='#efe2c6';oc.fillRect(px-width*.1,top+height*.33,width*.2,1);oc.fillRect(px-width*.1,top+height*.39,width*.18,1)
  }else if(e.sprite==='sign'){
   if(forward<4){oc.fillStyle='#3d3d37';oc.fillRect(px-width*.45,top+height*.22,width*.9,height*.5);oc.strokeStyle='#8c826d';oc.strokeRect(px-width*.45,top+height*.22,width*.9,height*.5)}
@@ -144,16 +151,17 @@ function interact(){const n=state.near||nearest();if(!n){say('Only the rain answ
 }
 function openCard(c){state.near=c;$('#card-type').textContent=c.kind||'EVIDENCE';$('#card-title').textContent=c.title;$('#card-copy').textContent=c.teaser||c.text;$('#card-action').textContent=c.type==='clue'?'ADD TO JOURNAL':'EXAMINE';$('#interact-card').classList.remove('hidden')}
 $('#card-action').addEventListener('click',()=>{const c=state.near;if(!c)return;if(c.id==='ending'){showEnding();return}if(c.type==='clue'){c.found=true;state.found++;state.mind=clamp(state.mind+2,0,100);rumors.push({title:c.title,text:c.text,day:state.day});$('#interact-card').classList.add('hidden');say(`EVIDENCE RECORDED · ${c.title.toUpperCase()}`);$('#objective-text').textContent=state.found<3?'Ask Mara what came back from the lake.':state.found<6?'Find the signal beneath Ashgate.':'The relay is waiting. Decide what to tell it.';if(c.id==='notebook')state.decisions.push('read-notebook');if(c.id==='relay')state.keys.push('ward key');renderJournal();return}if(c.id==='ending'){showEnding();return}$('#interact-card').classList.add('hidden')});
-function talk(p){p.met=true;p.memory++;state.alert=Math.max(0,state.alert-.2);const altered=state.mind<35||state.day>2;$('#speaker').textContent=p.name.toUpperCase();$('#dialogue-text').textContent=p.memory===1?p.line:(altered?p.secret:`${p.name.split(' ')[0]} looks at you for a long moment. “You already asked me that.”`);const box=$('#choices');box.innerHTML='';const options=p.name==='Mara Venn'?['Ask about the lake','Ask about your father','Leave']:p.name==='Deputy Ellis'?['Ask about the missing report','Ask for a key','Leave']:p.name==='Nurse Ada'?['Ask who is in Ward 3B','Ask for a key','Leave']:['Ask what they remember','Offer a ration','Leave'];options.forEach((text,i)=>{const b=document.createElement('button');b.className='choice';b.innerHTML=`<b>0${i+1}</b>${text}`;b.onclick=()=>choice(p,text);box.appendChild(b)});$('#dialogue').classList.remove('hidden')}
+function talk(p){p.met=true;p.memory++;state.alert=Math.max(0,state.alert-.2);const altered=state.mind<35||state.day>2;$('#speaker').textContent=p.name.toUpperCase();$('#dialogue-text').textContent=p.memory===1?`${p.line}\n\n${p.name} is ${p.activity}.`:(altered?p.secret:`${p.name.split(' ')[0]} looks at you for a long moment. “You already asked me that.”`);const box=$('#choices');box.innerHTML='';const options=p.name==='Mara Venn'?['Ask about the lake','Ask about your father','Leave']:p.name==='Deputy Ellis'?['Ask about the missing report','Ask for a key','Leave']:p.name==='Nurse Ada'?['Ask who is in Ward 3B','Ask for a key','Leave']:['Ask what they remember','Offer a ration','Leave'];options.splice(options.length-1,0,'Ask about today');options.forEach((text,i)=>{const b=document.createElement('button');b.className='choice';b.innerHTML=`<b>0${i+1}</b>${text}`;b.onclick=()=>choice(p,text);box.appendChild(b)});$('#dialogue').classList.remove('hidden')}
 function choice(p,text){$('#dialogue').classList.add('hidden');state.decisions.push(`${p.name}:${text}`);p.memory++;
- if(text==='Leave'){say(`${p.name.toUpperCase()} DOES NOT LOOK AWAY.`);return}
- if(text==='Offer a ration'){if(state.hunger<40){say('You are too hungry to part with food.');return}state.hunger-=15;state.mind=clamp(state.mind+4,0,100);say(`${p.name} takes the food. They remember the gesture.`);p.fear=Math.max(0,p.fear-1);return}
- if(p.name==='Mara Venn'){if(text==='Ask about the lake'){if(state.found>=1){say('“It came back without getting wet.” Mara presses a key into your hand.');if(!state.keys.includes('brass key'))state.keys.push('brass key');state.decisions.push('mara-trusted')}else say('“Which lake?” She glances at the notebook in your hand. “You haven’t found it yet.”')}else say(p.secret)}
- else if(p.name==='Deputy Ellis'&&text==='Ask for a key'){state.keys.push('brass key');say('Ellis lets the brass key slide across the desk. “I never saw you.”');p.fear++;}
- else if(p.name==='Nurse Ada'&&text==='Ask for a key'){state.keys.push('ward key');say('Ada puts a key in your palm. “You already know which room.”');}
- else if(text==='Ask about the missing report'){say(p.secret);state.found=Math.max(state.found,1);renderJournal()}
- else if(text==='Ask who is in Ward 3B'){state.mind=clamp(state.mind-5,0,100);say('“Nobody,” Ada says. A call bell rings behind the locked door.')}
- else {say(p.secret);if(p.name==='The Drifter'){state.mind=clamp(state.mind-12,0,100);if(state.found>=6)state.decisions.push('heard-drifter')}}
+  if(text==='Leave'){say(`${p.name.toUpperCase()} DOES NOT LOOK AWAY.`);return}
+  if(text==='Ask about today'){say(`${p.name} is ${p.activity}. “Same as yesterday,” they say, without looking up.`);return}
+  if(text==='Offer a ration'){if(state.hunger<40){say('You are too hungry to part with food.');return}state.hunger-=15;state.mind=clamp(state.mind+4,0,100);say(`${p.name} takes the food. They remember the gesture.`);p.fear=Math.max(0,p.fear-1);return}
+  if(p.name==='Mara Venn'){if(text==='Ask about the lake'){if(state.found>=1){say('“It came back without getting wet.” Mara presses a key into your hand.');if(!state.keys.includes('brass key'))state.keys.push('brass key');state.decisions.push('mara-trusted')}else say('“Which lake?” She glances at the notebook in your hand. “You haven’t found it yet.”')}else say(p.secret)}
+  else if(p.name==='Deputy Ellis'&&text==='Ask for a key'){state.keys.push('brass key');say('Ellis lets the brass key slide across the desk. “I never saw you.”');p.fear++;}
+  else if(p.name==='Nurse Ada'&&text==='Ask for a key'){state.keys.push('ward key');say('Ada puts a key in your palm. “You already know which room.”');}
+  else if(text==='Ask about the missing report'){say(p.secret);state.found=Math.max(state.found,1);renderJournal()}
+  else if(text==='Ask who is in Ward 3B'){state.mind=clamp(state.mind-5,0,100);say('“Nobody,” Ada says. A call bell rings behind the locked door.')}
+  else {say(p.secret);if(p.name==='The Drifter'){state.mind=clamp(state.mind-12,0,100);if(state.found>=6)state.decisions.push('heard-drifter')}}
 }
 function renderJournal(tab='clues'){
  const content=$('#journal-content');if(tab==='clues'){content.innerHTML=rumors.length?rumors.map(r=>`<article class="journal-entry"><small>RECOVERED · DAY ${r.day}</small><h3>${r.title}</h3><p>${r.text}</p></article>`).join(''):'<p class="muted">The notebook is empty. The town is not.</p>';$('#clue-count').textContent=state.found}
@@ -189,7 +197,16 @@ function update(dt){
 }
 let speedFactor=1;
 function movePlayer(dx,dy){const r=.22;const nx=state.x+dx,ny=state.y+dy;if(!collides(nx,state.y,r))state.x=nx;if(!collides(state.x,ny,r))state.y=ny}
-function movePeople(dt,night){for(const p of people){const d=dist(state,p);if(d<4.2&&night){p.fear+=dt*.15;if(Math.random()<dt*.018){p.x=clamp(p.x+rnd(-1,1),2,MW-2);p.y=clamp(p.y+rnd(-1,1),2,MH-2)}}else if(d>5){p.phase+=dt*(p.routine===0?.12:.05);const tx=p.home.x+Math.sin(p.phase)*.7,ty=p.home.y+Math.cos(p.phase*.73)*.55;if(Math.random()<dt*.3&&!collides(tx,ty,.2)){p.x+=(tx-p.x)*dt*.12;p.y+=(ty-p.y)*dt*.12}}}}
+function movePeople(dt,night){
+ const hour=state.time;for(const p of people){const d=dist(state,p);p.phase+=dt*(p.routine===0?.75:.43);p.activityTimer-=dt;
+  const activity=night?(p.routine===2?'watching the road':'turning in for the night'):hour<9?'opening for the day':hour<17?['at work','making rounds','keeping watch'][p.routine]:'walking home';
+  if(p.activity!==activity){p.activity=activity;p.activityTimer=0;p.gesture=rnd(.2,1)}
+  if(p.activityTimer<=0){p.activityTimer=rnd(2.5,6);p.target={x:p.home.x+rnd(-.62,.62),y:p.home.y+rnd(-.48,.48)}}
+  if(d<3.2){p.look=Math.min(1,p.look+dt*2);if(night)p.fear+=dt*.08}else p.look=Math.max(0,p.look-dt*.3);
+  const tx=p.target?.x??p.home.x,ty=p.target?.y??p.home.y,dx=tx-p.x,dy=ty-p.y,step=dt*.17;if(Math.hypot(dx,dy)>.08){const nx=p.x+Math.sign(dx)*Math.min(Math.abs(dx),step),ny=p.y+Math.sign(dy)*Math.min(Math.abs(dy),step);if(!collides(nx,p.y,.16))p.x=nx;if(!collides(p.x,ny,.16))p.y=ny}
+ }
+ for(const c of critters){const playerDistance=dist(state,c);if(c.sprite==='cat'&&playerDistance<1.1&&!c.fleeing){const away=Math.atan2(c.y-state.y,c.x-state.x);c.home.x=clamp(c.x+Math.cos(away)*1.8,2,MW-2);c.home.y=clamp(c.y+Math.sin(away)*1.8,2,MH-2);c.fleeing=true}else if(playerDistance>2.2)c.fleeing=false;c.phase+=dt*(c.sprite==='bird'?1.5:.65);const radius=c.sprite==='bird'?.24:.8,tx=c.home.x+Math.sin(c.phase)*radius,ty=c.home.y+Math.cos(c.phase*.73)*radius*.65,step=dt*c.speed;if(!collides(tx,ty,.08)){c.x+=(tx-c.x)*Math.min(1,step);c.y+=(ty-c.y)*Math.min(1,step)}}
+}
 function moveThreats(dt,night){
  if(night&&threats.length===0&&Math.random()<dt*.014){const a=state.angle+pick([-1,1])*rnd(.65,1.3),x=state.x+Math.cos(a)*rnd(5,8),y=state.y+Math.sin(a)*rnd(5,8);if(!collides(x,y,.2))threats.push({x,y,name:'The Listener',sprite:'threat',mode:'stalk',speed:rnd(.4,.65),cooldown:0})}
  for(let i=threats.length-1;i>=0;i--){const e=threats[i],d=dist(state,e);if(d<.62){e.cooldown-=dt;if(e.cooldown<=0){state.health-=rnd(5,11);state.mind=clamp(state.mind-4,0,100);state.alert=2;e.cooldown=1.8;say('A hand closes around your sleeve. It is colder than the rain.');sound('threat')}}else if(d<5||state.alert>0){const vx=(state.x-e.x)/d,vy=(state.y-e.y)/d,step=e.speed*dt*(state.crouch?.65:1);if(!collides(e.x+vx*step,e.y,.2))e.x+=vx*step;if(!collides(e.x,e.y+vy*step,.2))e.y+=vy*step}else if(d>11)threats.splice(i,1)}
