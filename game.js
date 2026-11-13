@@ -1,6 +1,6 @@
 (() => {
 'use strict';
-const canvas=document.getElementById('view'),ctx=canvas.getContext('2d',{alpha:false}),W=640,H=360,MW=40,MH=40;
+const canvas=document.getElementById('view'),ctx=canvas.getContext('2d',{alpha:false}),W=800,H=450,MW=40,MH=40;
 canvas.width=W;canvas.height=H;
 const $=s=>document.querySelector(s),clamp=(n,a,b)=>Math.max(a,Math.min(b,n)),dist=(a,b)=>Math.hypot(a.x-b.x,a.y-b.y),rnd=(a,b)=>a+Math.random()*(b-a),pick=a=>a[Math.floor(Math.random()*a.length)];
 const map=new Uint8Array(MW*MH),labels=new Array(MW*MH).fill(''),doors=[],objects=[],people=[],walkers=[],clues=[],rumors=[],threats=[];
@@ -78,15 +78,18 @@ function spawnWalkers(){
 const state={x:start.x,y:start.y,angle:-Math.PI/2,pitch:0,health:92,mind:78,stamina:100,hunger:14,thirst:9,fatigue:8,ammo:2,med:1,flash:true,keys:[],found:0,decisions:[],time:6.67,weather:'OVERCAST',weatherTimer:75,day:1,alert:0,steps:0,ending:false,started:false,paused:false,near:null,radio:false,crouch:false,lastEvent:0,visitCount:0,seed:Math.random()};
 const keysDown=new Set(),depthBuffer=new Float32Array(W),offscreen=document.createElement('canvas');offscreen.width=W;offscreen.height=H;const oc=offscreen.getContext('2d');
 const textures={1:['#494440','#56514b','#363435'],2:['#49423d','#665950','#393432'],3:['#4c4a46','#5b5954','#3b3a38'],4:['#434744','#585b55','#343735'],5:['#37423a','#505c4a','#2e352e'],8:['#49352f','#674b41','#352b28'],6:['#292b2d','#37393a','#252628']};
-function resize(){const d=Math.min(1.6,devicePixelRatio||1);canvas.style.imageRendering='pixelated';}window.addEventListener('resize',resize);resize();
+function resize(){canvas.style.imageRendering='auto';}window.addEventListener('resize',resize);resize();
 let frame=0,toastTimer=0,toastNode=$('#toast'),lastTime=performance.now(),lastStep=0;
 function sky(){const night=Math.max(0,Math.min(1,(state.time<5||state.time>19)?1:.15));return{top:night?[17,20,25]:[48,55,59],low:night?[42,45,47]:[113,112,104],fog:state.weather==='FOG'?7:state.weather==='RAIN'?9:night?12:15}}
 function render(){
  const horizon=H*(.49+state.pitch),g=oc.createLinearGradient(0,0,0,horizon+H*.08),s=sky();g.addColorStop(0,`rgb(${s.top.join(',')})`);g.addColorStop(1,`rgb(${s.low.join(',')})`);oc.fillStyle=g;oc.fillRect(0,0,W,Math.min(H,horizon+H*.08));
- const floor=oc.createLinearGradient(0,horizon-H*.01,0,H);floor.addColorStop(0,'#383633');floor.addColorStop(.28,state.weather==='RAIN'?'#27292a':'#302f2e');floor.addColorStop(1,'#111315');oc.fillStyle=floor;oc.fillRect(0,Math.max(0,horizon-H*.01),W,H);
+ const floor=oc.createLinearGradient(0,horizon-H*.01,0,H);floor.addColorStop(0,'#383633');floor.addColorStop(.24,state.weather==='RAIN'||state.weather==='STORM'?'#292b2c':'#333230');floor.addColorStop(1,'#17191a');oc.fillStyle=floor;oc.fillRect(0,Math.max(0,horizon-H*.01),W,H);
  // Long asphalt seams and a road that disappears into damp town fog.
  oc.strokeStyle='rgba(194,185,164,.09)';oc.lineWidth=1;for(let i=0;i<8;i++){const y=horizon+H*.06+i*i*4;oc.beginPath();oc.moveTo(W/2-8-i*22,y);oc.lineTo(W/2+8+i*22,y);oc.stroke()}
- const fov=1.08,step=2;
+ // Fine deterministic road grit adds surface scale without flickering.
+  const groundTop=Math.max(0,horizon);for(let i=0;i<190;i++){const seed=(i*9301+49297)%233280,x=(i*137.5+seed*3)%W,y=groundTop+((i*71+seed*11)%(H-groundTop||1)),scale=.35+(y-groundTop)/H*1.4;oc.fillStyle=`rgba(${i%4===0?'180,174,157':'8,9,10'},${.025+(y-groundTop)/H*.075})`;oc.fillRect(x,y,scale,scale)}
+  if(state.weather==='RAIN'||state.weather==='STORM'){for(let i=0;i<9;i++){const y=horizon+H*.12+i*i*2.7;if(y>=H)break;const x=W*.5+Math.sin(i*12.7+state.x)*W*.28,rx=2+(y-horizon)*.055;oc.fillStyle=`rgba(142,158,160,${.025+i*.004})`;oc.beginPath();oc.ellipse(x,y,rx,Math.max(1,rx*.22),-.08,0,Math.PI*2);oc.fill()}}
+  const fov=1.08,step=2;
  for(let sx=0;sx<W;sx+=step){const cam=2*sx/W-1,rayA=state.angle+Math.atan(cam*Math.tan(fov/2)),rx=Math.cos(rayA),ry=Math.sin(rayA);let mx=Math.floor(state.x),my=Math.floor(state.y),ddx=Math.abs(1/(rx||.00001)),ddy=Math.abs(1/(ry||.00001)),sxstep,ystep,sdx,sdy,side=0;
   if(rx<0){sxstep=-1;sdx=(state.x-mx)*ddx}else{sxstep=1;sdx=(mx+1-state.x)*ddx}if(ry<0){ystep=-1;sdy=(state.y-my)*ddy}else{ystep=1;sdy=(my+1-state.y)*ddy}
   let wall=0,guard=0;while(!wall&&guard++<70){if(sdx<sdy){sdx+=ddx;mx+=sxstep;side=0}else{sdy+=ddy;my+=ystep;side=1}wall=tile(mx,my)}
@@ -95,7 +98,8 @@ function render(){
   const band=Math.sin((edge*10+frame*.004))*2,br=wall===8?'#765645':tex[Math.floor((edge*11+Math.floor(mx+my))%tex.length)];let rgb=hexRgb(br);const fog=Math.min(.8,d/(s.fog*1.2));for(let c=0;c<3;c++)rgb[c]=Math.floor((rgb[c]*shade*edgeShade*(wall===8?1.1:1))*(1-fog)+s.low[c]*fog);oc.fillStyle=`rgb(${rgb.join(',')})`;oc.fillRect(sx,top,step+1,wallH);
   // Brick courses, peeling plaster, damp streaks and a few tired windows.
   if(wall!==6&&wall!==8){oc.fillStyle=`rgba(12,13,14,${.11+fog*.12})`;for(let k=1;k<5;k++)if((Math.floor(edge*7)+k)%2===0)oc.fillRect(sx,top+wallH*k/5,step+1,1);if(edge>.13&&edge<.34&&wallH>28){oc.fillStyle=`rgba(183,167,133,${.14*shade})`;oc.fillRect(sx,top+wallH*.28,step+1,wallH*.23);oc.fillStyle='rgba(10,12,13,.4)';oc.fillRect(sx,top+wallH*.3,step+1,wallH*.18)}}
-  if(wall===8){oc.fillStyle=`rgba(12,10,9,${.27+fog*.2})`;oc.fillRect(sx,top+wallH*.15,step+1,wallH*.72);oc.fillStyle=`rgba(158,105,82,${.16*shade})`;oc.fillRect(sx,top+wallH*.5,step+1,2)}
+  if(wall!==6&&wall!==8&&wallH>24){const facade=wallH*.22,wy=top+wallH*.3;if(edge>.13&&edge<.34){oc.fillStyle=`rgba(185,174,148,${.15*shade})`;oc.fillRect(sx,wy-2,step+1,2);oc.fillStyle=`rgba(12,16,17,${.62+fog*.2})`;oc.fillRect(sx,wy,step+1,facade*.72);oc.fillStyle=`rgba(174,163,140,${.2*shade})`;oc.fillRect(sx,wy+facade*.72,step+1,2);if(edge>.225&&edge<.245){oc.fillStyle=`rgba(160,153,137,${.35*shade})`;oc.fillRect(sx,wy,step+1,facade*.72)}}if(edge<.035||edge>.965){oc.fillStyle=`rgba(15,15,14,${.2+fog*.16})`;oc.fillRect(sx,top,step+1,wallH)}}
+   if(wall===8){oc.fillStyle=`rgba(12,10,9,${.27+fog*.2})`;oc.fillRect(sx,top+wallH*.15,step+1,wallH*.72);oc.fillStyle=`rgba(158,105,82,${.16*shade})`;oc.fillRect(sx,top+wallH*.5,step+1,2)}
   if(wall===6){oc.fillStyle=`rgba(183,178,160,${.12*shade})`;oc.fillRect(sx,top+wallH*.45,step+1,1)}
   if(d<5&&state.flash){const beam=Math.max(0,1-Math.abs(cam)*1.8)*.16;oc.fillStyle=`rgba(210,205,185,${beam})`;oc.fillRect(sx,top,step+1,wallH)}
   if(fog>.35){oc.fillStyle=`rgba(${s.low.join(',')},${fog*.5})`;oc.fillRect(sx,top,step+1,wallH)}
