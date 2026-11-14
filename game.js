@@ -25,6 +25,33 @@ const colliders=[], interactables=[], lights=[], movable=[];
 const physicsProps=[], effects=[], animatedDoors=[];
 const particleGeo=new THREE.SphereGeometry(.018,5,4);
 const particleMaterials={dust:mat('#c9b991',.9,{transparent:true,opacity:.48}),water:mat('#a9d8db',.22,{transparent:true,opacity:.72}),steam:mat('#d6d5ca',.9,{transparent:true,opacity:.16})};
+// A brief, peripheral figure: unmistakably person-shaped, but gone when directly noticed.
+const apparitionMaterial=new THREE.MeshBasicMaterial({color:'#101310',transparent:true,opacity:0,depthWrite:false,side:THREE.DoubleSide});
+const apparition=new THREE.Group();
+function apparitionPart(geometry,x,y,z,sx=1,sy=1,sz=1){const mesh=new THREE.Mesh(geometry,apparitionMaterial);mesh.position.set(x,y,z);mesh.scale.set(sx,sy,sz);apparition.add(mesh)}
+apparitionPart(new THREE.ConeGeometry(.38,1.38,8),0,.76,0,1,1,.72);
+apparitionPart(new THREE.SphereGeometry(.19,8,7),0,1.58,0,.9,1.1,.9);
+apparitionPart(new THREE.CylinderGeometry(.065,.09,.72,6),-.31,1.02,0,1,1,1);
+apparitionPart(new THREE.CylinderGeometry(.065,.09,.72,6),.31,1.02,0,1,1,1);
+apparition.visible=false;scene.add(apparition);
+let apparitionLife=0,apparitionLook=0;
+const apparitionDuration=3.1,apparitionDirection=new THREE.Vector3(),apparitionCameraPosition=new THREE.Vector3();
+function showPeripheralApparition(){
+ if(currentRoom==='OUTSIDE')return;
+ const fx=-Math.sin(yaw),fz=-Math.cos(yaw),rx=Math.cos(yaw),rz=-Math.sin(yaw),sides=[rand()<.5?-1:1,rand()<.5?1:-1];
+ let point=null;
+ for(const side of sides){for(const [depth,offset] of [[3.1,1.55],[2.5,1.35],[3.3,1.1]]){const x=player.position.x+fx*depth+rx*side*offset,z=player.position.z+fz*depth+rz*side*offset;if(roomAt(x,z)===currentRoom&&!overlaps(x,z,.28)){point={x,z};break}}if(point)break}
+ if(!point)return;
+ apparition.position.set(point.x,0,point.z);apparition.lookAt(player.position.x,1.05,player.position.z);apparition.visible=true;apparitionLife=apparitionDuration;apparitionLook=0;apparitionMaterial.opacity=0;
+}
+function updateApparition(dt){
+ if(!apparition.visible)return;
+ apparitionLife-=dt;camera.getWorldDirection(apparitionDirection);camera.getWorldPosition(apparitionCameraPosition);
+ const toward=apparition.position.clone().sub(apparitionCameraPosition);toward.y=0;apparitionDirection.y=0;
+ if(toward.lengthSq()>0&&apparitionDirection.lengthSq()>0&&apparitionDirection.normalize().dot(toward.normalize())>.95)apparitionLook+=dt;else apparitionLook=0;
+ if(apparitionLook>.08||apparitionLife<=0){apparition.visible=false;apparitionMaterial.opacity=0;return}
+ const elapsed=apparitionDuration-apparitionLife,fade=Math.min(1,elapsed/.18,apparitionLife/.42);apparitionMaterial.opacity=.68*Math.max(0,fade);
+}
 function emitParticles(x,y,z,type='dust',count=12,power=.7){
   for(let i=0;i<count;i++){const mesh=new THREE.Mesh(particleGeo,particleMaterials[type].clone());mesh.position.set(x,y,z);mesh.scale.setScalar(type==='steam'?1.7:1);scene.add(mesh);const a=Math.random()*Math.PI*2,s=.12+Math.random()*power;effects.push({mesh,vx:Math.cos(a)*s,vy:.2+Math.random()*power,vz:Math.sin(a)*s,life:.65+Math.random()*.75,type})}
 }
@@ -212,6 +239,7 @@ function triggerEvent(){
  const available=events.filter(e=>e.test());const chain=available.filter(e=>e.id.includes('memory')||e.id==='first-footsteps'||e.id==='voice-memory');
  const pool=chain.length&&rand()<.68?chain:available;if(pool.length)pick(pool).run();
  if(needs.stress>72&&rand()<pressure*.4)whisper(pick(['You have time. Breathe slowly.','The room is quiet now.','You can check the door if you want.','It is all right to sit down.']))
+ if(state.encounters>=3&&pressure>.3&&rand()<Math.min(.38,.12+(pressure-.3)*.65))showPeripheralApparition();
 }
 function audioTone(freq=180,duration=.12,volume=.04){try{const Ctx=window.AudioContext||window.webkitAudioContext;if(!Ctx)return;audioContext??=new Ctx();const osc=audioContext.createOscillator(),gain=audioContext.createGain();osc.type='sine';osc.frequency.value=freq;gain.gain.setValueAtTime(volume,audioContext.currentTime);gain.gain.exponentialRampToValueAtTime(.001,audioContext.currentTime+duration);osc.connect(gain);gain.connect(audioContext.destination);osc.start();osc.stop(audioContext.currentTime+duration)}catch{}}
 let audioContext=null;
@@ -239,7 +267,7 @@ function updatePhysicalWorld(dt){
 // Input, interface bindings, and the render/update loop.
 function setLantern(on){lanternOn=on;lantern.intensity=on?3.2:0;document.querySelector('#flash-indicator').textContent=on?'◉ LANTERN ON':'◯ LANTERN OFF'}
 function bindButton(id,action){document.querySelector(`#${id}`).addEventListener('click',action)}
-function startNew(){localStorage.removeItem(saveKey);state.day=1;state.minutes=7*60+12;state.totalMinutes=state.minutes;state.seen.clear();state.history=[];state.flags={};state.doors={};state.encounters=0;state.found=0;state.called=false;state.eventAt=517;state.lastEvent=-1000;state.weather='OVERCAST';state.seed=Math.random()*1e6>>>0;rngSeed=state.seed;Object.assign(needs,{hunger:18,thirst:12,rest:82,hygiene:71,stress:19,fear:0,isolation:23,suspicion:9,stability:81});stamina=100;exhausted=false;setCrouched(false);camera.position.y=1.62;moveKeys.clear();inventory.clear();['keys','phone','apple','tea'].forEach(i=>inventory.add(i));for(const motion of animatedDoors){motion.target=motion.closed;motion.group.rotation.y=motion.closed;syncDoorLabel(motion)}frontDoor.rotation.y=0;backDoor.rotation.y=0;currentRoom='THE HALL';document.querySelector('#room-name').textContent=currentRoom;state.tv=false;tvscreen.material=M.screen;apple.visible=true;photo.visible=true;photoPrint.visible=true;fridgeState.open=false;fridgeDoor.position.x=7.27;fridgeDoor.rotation.y=0;player.position.set(0,0,1.1);yaw=0;pitch=0;setLantern(true);displayTime();updateLightAndSky();document.querySelector('#journal-text').textContent='The kettle needs descaling. Pick up milk if you go out.';startDay()}
+function startNew(){localStorage.removeItem(saveKey);state.day=1;state.minutes=7*60+12;state.totalMinutes=state.minutes;state.seen.clear();state.history=[];state.flags={};state.doors={};state.encounters=0;state.found=0;state.called=false;state.eventAt=517;state.lastEvent=-1000;state.weather='OVERCAST';state.seed=Math.random()*1e6>>>0;rngSeed=state.seed;Object.assign(needs,{hunger:18,thirst:12,rest:82,hygiene:71,stress:19,fear:0,isolation:23,suspicion:9,stability:81});stamina=100;exhausted=false;setCrouched(false);camera.position.y=1.62;moveKeys.clear();inventory.clear();['keys','phone','apple','tea'].forEach(i=>inventory.add(i));for(const motion of animatedDoors){motion.target=motion.closed;motion.group.rotation.y=motion.closed;syncDoorLabel(motion)}frontDoor.rotation.y=0;backDoor.rotation.y=0;currentRoom='THE HALL';document.querySelector('#room-name').textContent=currentRoom;state.tv=false;tvscreen.material=M.screen;apple.visible=true;photo.visible=true;photoPrint.visible=true;fridgeState.open=false;fridgeDoor.position.x=7.27;fridgeDoor.rotation.y=0;apparition.visible=false;apparitionLife=0;apparitionLook=0;apparitionMaterial.opacity=0;player.position.set(0,0,1.1);yaw=0;pitch=0;setLantern(true);displayTime();updateLightAndSky();document.querySelector('#journal-text').textContent='The kettle needs descaling. Pick up milk if you go out.';startDay()}
 bindButton('start-button',startDay);
 bindButton('continue-button',loadGame);
 bindButton('new-button',startNew);
@@ -272,7 +300,7 @@ document.addEventListener('keydown',e=>{
 document.addEventListener('keyup',e=>moveKeys.delete(e.code));
 document.addEventListener('pointerlockchange',()=>{if(!touchDevice&&started&&!paused&&document.pointerLockElement!==canvas)pause()});
 document.addEventListener('visibilitychange',()=>{if(document.hidden&&started&&!paused)pause()});
-function animate(){requestAnimationFrame(animate);const dt=Math.min(clock.getDelta(),.05);if(started&&!paused){movePlayer(dt);updateNeeds(dt);updateTime(dt);updateRoom();findTarget();if(Math.floor(state.minutes/12)!==state._saveMinute){state._saveMinute=Math.floor(state.minutes/12);persistWorld()}}updateObjectives();updatePhysicalWorld(dt);renderer.render(scene,camera)}
+function animate(){requestAnimationFrame(animate);const dt=Math.min(clock.getDelta(),.05);if(started&&!paused){movePlayer(dt);updateNeeds(dt);updateTime(dt);updateRoom();updateApparition(dt);findTarget();if(Math.floor(state.minutes/12)!==state._saveMinute){state._saveMinute=Math.floor(state.minutes/12);persistWorld()}}updateObjectives();updatePhysicalWorld(dt);renderer.render(scene,camera)}
 function resize(){camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix();renderer.setSize(innerWidth,innerHeight)}
 window.addEventListener('resize',resize);
 setLantern(true);displayTime();updateLightAndSky();animate();
