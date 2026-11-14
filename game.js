@@ -71,6 +71,23 @@ for(let x=-75;x<-48;x+=7)for(let z=59;z<86;z+=7)tree(x, z,.65+rand()*.28);
 // Yard fences and tiny cottages complete the residential streets without blocking roads.
 const cottageColors=[0xb68b68,0x899f8e,0xc0ad83,0x9e766d,0x82969b].map(c=>mat(c));
 for(let i=0;i<23;i++){let x=-82+rand()*164,z=-72+rand()*144;if(Math.abs(x%30)<8||Math.abs(z%30)<8)continue;if(sites.some(s=>Math.abs(x-s.x)<13&&Math.abs(z-s.z)<13))continue;let w=4.2+rand()*2.2,d=4+rand()*2,h=3.5+rand()*1;box(scene,x,h/2,z,w,h,d,cottageColors[i%cottageColors.length]);box(scene,x,h+.2,z,w+.45,.35,d+.45,roofM[i%5]);box(scene,x,1.7,z+d/2+.03,.63,1.05,.05,windowMat,false);walls.push({x,z,w:w+.4,d:d+.5})}
+// Friendly townsfolk drift between porches, lamps and the town center in small loops.
+const npcDefs=[
+  {x:-72,z:-48,homeX:-72,homeZ:-48,color:0xe0c59e,shirt:0x586d7d,speed:1.05},
+  {x:-35,z:-9,homeX:-35,homeZ:-9,color:0xc0a884,shirt:0x8a6e5f,speed:1.2},
+  {x:34,z:-46,homeX:34,homeZ:-46,color:0xe1c192,shirt:0x6e5d4d,speed:1.0},
+  {x:72,z:-18,homeX:72,homeZ:-18,color:0x9f9084,shirt:0x4a5864,speed:1.15},
+  {x:-3,z:28,homeX:-3,homeZ:28,color:0xd5ab83,shirt:0x6a7b5e,speed:1.1},
+  {x:41,z:28,homeX:41,homeZ:28,color:0xa8b695,shirt:0x6d5a4d,speed:1.0},
+  {x:-4,z:64,homeX:-4,homeZ:64,color:0xd0b094,shirt:0x7b5f48,speed:1.08},
+  {x:78,z:58,homeX:78,homeZ:58,color:0x9aa07d,shirt:0x3d4a56,speed:1.22}
+];
+const npcState=[];
+function createNpc(def){const group=new THREE.Group();scene.add(group);const skin=mat(def.color),shirt=mat(def.shirt),pants=mat(0x4a4d4b),shoe=mat(0x1f2427);box(group,0,1.1,0,.6,1.05,.32,shirt);box(group,0,2.05,0,.42,.42,.38,skin);box(group,0,1.0,.16,.18,.5,.1,pants);box(group,0,1.0,-.16,.18,.5,.1,pants);box(group,0,.46,.15,.23,.2,.12,shoe);box(group,0,.46,-.15,.23,.2,.12,shoe);const npc={...def,x:def.x,z:def.z,group,target:{x:def.x,z:def.z},dir:0,phase:rand()*Math.PI*2};npcState.push(npc);return npc}
+for(const def of npcDefs)createNpc(def);
+function npcCollides(x,z,r=.6){if(Math.abs(x)>112||Math.abs(z)>94)return true;for(const b of walls){const dx=Math.max(Math.abs(x-b.x)-b.w/2,0),dz=Math.max(Math.abs(z-b.z)-b.d/2,0);if(dx<r&&dz<r)return true}return false}
+function chooseNpcTarget(npc){let best={x:npc.homeX,z:npc.homeZ},bestDist=Infinity;for(let i=0;i<12;i++){const ang=rand()*Math.PI*2;const radius=.8+rand()*4.2;const x=npc.homeX+Math.cos(ang)*radius;const z=npc.homeZ+Math.sin(ang)*radius;if(!npcCollides(x,z,.62)){const d=Math.hypot(x-npc.homeX,z-npc.homeZ);if(d<bestDist){bestDist=d;best={x,z}}}}npc.target=best}
+function tickNpc(npc,dt){const dx=npc.target.x-npc.x,dz=npc.target.z-npc.z;const dist=Math.hypot(dx,dz);if(dist<.7||!npc.target){chooseNpcTarget(npc)};const dirX=npc.target.x-npc.x,dirZ=npc.target.z-npc.z;const d=Math.hypot(dirX,dirZ)||1;const walkAmt=(npc.speed*dt);const nextX=npc.x+(dirX/d)*walkAmt;const nextZ=npc.z+(dirZ/d)*walkAmt;if(!npcCollides(nextX,npc.z,.62))npc.x=nextX;if(!npcCollides(npc.x,nextZ,.62))npc.z=nextZ;npc.dir=Math.atan2(npc.target.x-npc.x,npc.target.z-npc.z);npc.group.rotation.y=-npc.dir+Math.PI/2;const bob=(Math.abs(Math.sin((npc.phase+=dt*2.5)*2))*0.08);npc.group.position.set(npc.x,bob,npc.z)}
 // County signposts with reflective enamel plates.
 for(const [x,z,label] of [[-58,-42,'JUNIPER ROW'],[-28,-12,'CIVIC SQUARE'],[32,18,'OLD MAIN'],[62,48,'NORTHLINE']]){cyl(scene,x,1.4,z,.07,.09,2.8,wood,8);box(scene,x,2.45,z,.2,.9,.16,signMat);box(scene,x,2.45,z+.1,1.8,.52,.05,mat(0x425e50),false)}
 // Player, first-person camera and movement state.
@@ -98,7 +115,7 @@ addEventListener('keydown',e=>{const k=e.key.toLowerCase();if(['arrowup','arrowd
 function bindPad(id,look=false){const pad=document.getElementById(id),knob=pad.querySelector('.knob');let pid=null,last={x:0,y:0};function delta(e){const r=pad.getBoundingClientRect();return{x:e.clientX-(r.left+r.width/2),y:e.clientY-(r.top+r.height/2)}}function move(e){const r=delta(e),len=Math.hypot(r.x,r.y),max=35,mul=len>max?max/len:1,x=r.x*mul,y=r.y*mul;knob.style.transform=`translate(${x}px,${y}px)`;if(look){if(last.active)lookBy(e.clientX-last.x,e.clientY-last.y,1.35);last={x:e.clientX,y:e.clientY,active:true}}else{joy.x=x/max;joy.y=y/max}}
 pad.addEventListener('pointerdown',e=>{e.preventDefault();pid=e.pointerId;pad.setPointerCapture(pid);pad.classList.add('active');startGame();last={active:false};move(e)});pad.addEventListener('pointermove',e=>{if(e.pointerId===pid)move(e)});function end(e){if(e.pointerId!==pid)return;pid=null;pad.classList.remove('active');knob.style.transform='';if(!look)joy.x=joy.y=0;last={active:false}}pad.addEventListener('pointerup',end);pad.addEventListener('pointercancel',end)}bindPad('movePad');bindPad('lookPad',true);
 // Quiet details in the scene move gently with the breeze.
-const clock=new THREE.Clock();function animate(){requestAnimationFrame(animate);const dt=Math.min(clock.getDelta(),.04),t=clock.elapsedTime,locked=journal.classList.contains('open');let forward=(keys.w||keys.arrowup?1:0)-(keys.s||keys.arrowdown?1:0)-joy.y,side=(keys.d||keys.arrowright?1:0)-(keys.a||keys.arrowleft?1:0)+joy.x;if(locked||!started){forward=0;side=0}let moving=Math.abs(forward)+Math.abs(side)>.05;
+const clock=new THREE.Clock();function animate(){requestAnimationFrame(animate);const dt=Math.min(clock.getDelta(),.04),t=clock.elapsedTime,locked=journal.classList.contains('open');for(const npc of npcState)tickNpc(npc,dt);let forward=(keys.w||keys.arrowup?1:0)-(keys.s||keys.arrowdown?1:0)-joy.y,side=(keys.d||keys.arrowright?1:0)-(keys.a||keys.arrowleft?1:0)+joy.x;if(locked||!started){forward=0;side=0}let moving=Math.abs(forward)+Math.abs(side)>.05;
  if(moving){const len=Math.hypot(forward,side)||1;forward/=len;side/=len;const speed=(keys.shift?7.2:4.5),sn=Math.sin(yaw),cs=Math.cos(yaw),dx=(-sn*forward+cs*side)*speed*dt,dz=(-cs*forward-sn*side)*speed*dt;if(!collides(player.x+dx,player.z))player.x+=dx;if(!collides(player.x,player.z+dz))player.z+=dz;walk+=dt*(keys.shift?13:10)}
  const bob=moving?Math.abs(Math.sin(walk*2))*.065:Math.sin(t*1.3)*.008;camera.position.set(player.x,1.72+bob,player.z);camera.rotation.set(pitch+(moving?Math.cos(walk*2)*.006:0),yaw,moving?Math.sin(walk)*.008:0);
  updateNearby();renderer.render(scene,camera)}animate();
