@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <meta name="theme-color" content="#11110f" />
   <title>The House Within</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -34,6 +34,12 @@
       <aside class="journal" id="journal"><div class="journal-kicker">HOUSEHOLD NOTES <span>✦</span></div><p id="journal-text">The kettle needs descaling. Pick up milk if you go out.</p></aside>
       <div class="bottom-left"><span class="flash-indicator" id="flash-indicator">◉ LANTERN ON</span><span class="separator">/</span><span id="inventory-line">POCKETS: KEYS · PHONE</span></div>
       <div class="bottom-right"><span>WASD MOVE</span><i>·</i><span>MOUSE LOOK</span><i>·</i><span>E INTERACT</span><i>·</i><span>F LIGHT</span><i>·</i><span>ESC PAUSE</span></div>
+      <div class="mobile-controls" id="mobile-controls" aria-label="Touch controls">
+        <div class="move-stick" id="move-stick" aria-label="Move joystick"><div class="move-stick-knob" id="move-stick-knob"></div></div>
+        <button class="touch-action touch-interact" id="touch-interact" type="button" aria-label="Interact">USE</button>
+        <button class="touch-action touch-lantern" id="touch-lantern" type="button" aria-label="Toggle lantern">LIGHT</button>
+        <button class="touch-action touch-pause" id="touch-pause" type="button" aria-label="Pause">Ⅱ</button>
+      </div>
       <div class="subtitle" id="subtitle"></div>
       <div class="notification" id="notification"></div>
       <div class="prompt-screen" id="start-screen">
