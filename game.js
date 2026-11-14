@@ -65,7 +65,7 @@ function lamp(g,x,y,z){const base=new THREE.Mesh(new THREE.CylinderGeometry(.13,
 box(living,-5.45,.14,1.1,4.7,.08,3.2,mat('#393931'));const sofa=box(living,-5.5,.58,1.0,2.65,.78,.92,M.fabric);box(living,-5.5,1.05,.61,2.65,.42,.3,M.fabricDark);for(const x of [-6.65,-4.35])box(living,x,.67,1,.28,.7,1.05,M.fabricDark);
 const coffee=table(living,-5.25,.04,1.6,.78,.55);box(living,-5.3,.64,.04,.38,.07,.28,M.paper);const remote=box(living,-4.85,.64,.07,.2,.04,.07,M.black);addInteract('Pick up the remote',()=>{note('The plastic is warm. You put it in your pocket.');remote.visible=false;inventory.add('remote')},remote,'LIVING ROOM');
 const tv=box(living,-2.55,1.7,-.7,.18,1.22,1.8,M.black);const tvscreen=box(living,-2.43,1.72,-.7,.025,1.02,1.6,M.screen);box(living,-2.58,.65,-.7,.32,.5,1.4,M.wood);addInteract('Turn on the television',()=>toggleTV(),[tv,tvscreen],'LIVING ROOM');
-const photo=box(living,-8.39,1.95,-.65,.08,.73,.55,M.wood);box(living,-8.33,1.95,-.65,.025,.59,.41,mat('#bcb49f'));addInteract('Look at the photograph',()=>readLetter('The photograph','A woman in a garden, one hand lifted to shade her face. The other person has been carefully cut out. There is a pale rectangle where the frame used to hang.'),photo,'LIVING ROOM');
+const photo=box(living,-8.39,1.95,-.65,.08,.73,.55,M.wood);const photoPrint=box(living,-8.33,1.95,-.65,.025,.59,.41,mat('#bcb49f'));addInteract('Look at the photograph',()=>readLetter('The photograph','A woman in a garden, one hand lifted to shade her face. The other person has been carefully cut out. There is a pale rectangle where the frame used to hang.'),[photo,photoPrint],'LIVING ROOM');
 lamp(living,-7.3,1.22,2.4);chair(living,-3.8,.7,1.3);
 // Kitchen: cabinets, sink, fridge, stove, kettle and provisions.
 for(let x=3.1;x<8;x+=1.18){box(kitchen,x,1.08,-1.86,1.1,1.12,.52,mat('#777264'));box(kitchen,x,1.82,-1.86,1.08,.32,.54,M.white);box(kitchen,x,2.15,-1.85,1.08,.09,.55,M.trim)}
@@ -95,6 +95,26 @@ const phone=box(hall,1.9,1.35,1.6,.14,.24,.19,M.black);addInteract('Call someone
 const coat=box(hall,-1.82,1.45,5.6,.13,.8,.55,M.fabricDark);addInteract('Take the house keys',()=>{inventory.add('keys');notify('The brass keys are in your palm. They feel familiar.')},coat,'THE HALL');inventory.add('keys');inventory.add('phone');
 // Dining table and a chair give the kitchen a lived-in center.
 table(kitchen,4.2,.8,2.25,1.2,.78);const mug=box(kitchen,4.05,.95,.74,.19,.28,.18,M.white);addInteract('Drink from the mug',()=>{needs.thirst=Math.max(0,needs.thirst-18);notify('The water has gone flat.')},mug,'KITCHEN');chair(kitchen,3.25,1.8,0);chair(kitchen,5.15,1.8,Math.PI);
+// Quiet routines: small actions make the house feel inhabited, and leave persistent traces.
+const stoveControl=box(kitchen,3.22,1.16,-1.42,.16,.12,.16,M.metal);
+addInteract('Cook something simple',()=>{
+ if(state.flags.mealCooked){notify('The pan is clean again. You already ate.');return}
+ if(inventory.has('apple')||inventory.has('milk')){state.flags.mealCooked=true;inventory.delete('apple');inventory.delete('milk');apple.visible=false;needs.hunger=Math.max(0,needs.hunger-38);needs.stress=Math.max(0,needs.stress-3);setTime(24);note('You eat at the kitchen table. The second chair is pulled out when you finish.');}
+ else{notify('There is nothing in the fridge worth cooking.');}
+},stoveControl,'KITCHEN');
+const sinkTap=box(kitchen,6.1,1.14,-1.44,.15,.13,.14,M.metal);
+addInteract('Drink a glass of water',()=>{needs.thirst=Math.max(0,needs.thirst-28);needs.stress=Math.max(0,needs.stress-2);setTime(2);notify('Cold water. The pipes tick as you turn the tap off.')},sinkTap,'KITCHEN');
+const paper=box(living,-4.65,.66,.03,.43,.045,.3,M.paper);
+addInteract('Read the folded newspaper',()=>readLetter('The folded paper','A local paper, years old. The date has been circled twice.\n\n“Search called off near Miller Road.”\n\nThe next column is missing. On the back, in your handwriting: Don’t let them call it an accident.'),paper,'LIVING ROOM');
+const computerDesk=table(bedroom,-3.15,5.65,1.55,.72,.72,M.wood);
+const computer=box(bedroom,-3.15,1.35,5.58,.78,.62,.12,M.black);const computerScreen=box(bedroom,-3.15,1.36,5.5,.67,.47,.02,M.screen);
+addInteract('Use the computer',()=>{
+ setTime(12);needs.rest=Math.max(0,needs.rest-1);state.flags.usedComputer=true;
+ if(!state.flags.computerFile){state.flags.computerFile=true;readLetter('A file on the desktop','DRAFT — unsent\n\nMara, I know what I told you about the night by the river. I know what you remember. I can’t make both versions fit in the same room.\n\nThe cursor blinks after the word “sorry.”');}
+ else{notify(pick(['The connection is down again.','A blank email is open, addressed to Mara.','The clock in the corner says 2:14. Your watch says otherwise.']));if(rand()<.3)needs.suspicion=Math.min(100,needs.suspicion+2)}
+},[computer,computerScreen],'BEDROOM');
+const windowLatch=box(scene,-5.4,1.3,-2.02,.16,.18,.12,M.metal);
+addInteract('Check the front window',()=>{state.flags.checkedWindow=true;setTime(3);if(Math.floor(state.minutes/60)>=20||Math.floor(state.minutes/60)<5){needs.fear=Math.min(100,needs.fear+3);notify('The street is empty. A curtain across the road moves anyway.')}else notify('A quiet street. The neighbor’s porch light is on.')},windowLatch,'LIVING ROOM');
 // Add a neighboring house silhouette outdoors for occasional uncertain sightlines.
 box(scene,-12,1.5,-8,10,4,9,mat('#42463e'),{cast:false});for(const x of [-14,-10]){box(scene,x,2,-3.48,1.2,.9,.06,mat('#444d46'));}
 
@@ -136,7 +156,7 @@ function updateLightAndSky(){const t=state.minutes/1440,night=Math.max(0,Math.mi
 function requestLock(){if(touchDevice)return;try{const result=canvas.requestPointerLock?.();result?.catch?.(()=>{})}catch{}}
 function startDay(){document.querySelector('#start-screen').hidden=true;started=true;paused=false;requestLock()}
 function loadGame(){if(load()){document.querySelector('#start-screen').hidden=true;started=true;paused=false;restoreWorld();notify('The day comes back in pieces.');requestLock()}}
-function restoreWorld(){Object.entries(state.doors).forEach(([name,open])=>{if(name==='front'&&open)frontDoor.rotation.y=-Math.PI/2;if(name==='back'&&open)backDoor.rotation.y=Math.PI/2});if(state.flags.ateApple||!inventory.has('apple')){state.flags.ateApple=true;apple.visible=false}if(state.flags.tv)toggleTV(true)}
+function restoreWorld(){Object.entries(state.doors).forEach(([name,open])=>{if(name==='front'&&open)frontDoor.rotation.y=-Math.PI/2;if(name==='back'&&open)backDoor.rotation.y=Math.PI/2});if(state.flags.ateApple||!inventory.has('apple')){state.flags.ateApple=true;apple.visible=false}if(state.flags.photoMissing){photo.visible=false;photoPrint.visible=false}if(state.flags.tv)toggleTV(true)}
 function pause(){if(!started)return;paused=true;document.querySelector('#pause-screen').hidden=false;if(document.pointerLockElement)document.exitPointerLock();save()}
 function resume(){document.querySelector('#pause-screen').hidden=true;paused=false;requestLock()}
 function sleep(){if(needs.rest>88)notify('You are not tired enough to sleep yet.');else{const hours=7+rand()*2;state.minutes=(state.minutes+Math.round(hours*60))%(24*60);state.day++;needs.rest=96;needs.stress=Math.max(0,needs.stress-12);needs.fear=Math.max(0,needs.fear-14);needs.isolation=Math.min(100,needs.isolation+9);needs.hunger=Math.min(100,needs.hunger+8);needs.thirst=Math.min(100,needs.thirst+11);scheduleNext();notify('You wake to a dim, quiet room.');save()}}
@@ -148,15 +168,31 @@ function leaveHouse(){if(!inventory.has('keys')){notify('You cannot find your ke
 // The event graph is deliberately suggestive rather than diagnostic: each moment has an ordinary explanation.
 function realityBend(){const fade=document.querySelector('#fade');fade.classList.add('active');setTimeout(()=>{player.position.set(0,0,1.1);yaw=0;pitch=0;player.rotation.y=0;camera.rotation.x=0;needs.fear=Math.max(0,needs.fear-24);state.minutes=Math.min(state.minutes+18,23*60);state.encounters++;fade.classList.remove('active');notify('You are back in the hall. The front door is still open.');save()},1200)}
 function ending(title,text){paused=true;document.exitPointerLock?.();document.querySelector('#ending-title').textContent=title;document.querySelector('#ending-copy').textContent=text;document.querySelector('#ending-screen').hidden=false;state.flags.ending=title;save()}
-function triggerEvent(){state.lastEvent=state.minutes;state.eventAt=state.minutes+65+Math.floor(rand()*175);state.encounters++;const hour=Math.floor(state.minutes/60);needs.fear=Math.min(100,needs.fear+2+rand()*5+(needs.stress>50?3:0));needs.stress=Math.min(100,needs.stress+1.5+rand()*2);if(needs.fear>58)needs.suspicion=Math.min(100,needs.suspicion+1);const events=[
- {id:'pipes',test:()=>!state.seen.has('pipes'),run:()=>{state.seen.add('pipes');whisper('A knock travels through the pipes. Then the house settles.')}},
- {id:'phone',test:()=>!state.seen.has('phone-ring')&&inventory.has('phone'),run:()=>{state.seen.add('phone-ring');notify('Your phone vibrates once. No number is shown.');needs.stress=Math.min(100,needs.stress+3)}},
- {id:'hall-light',test:()=>!state.seen.has('hall-light'),run:()=>{state.seen.add('hall-light');lights[0].intensity=.04;setTimeout(()=>{lights[0].intensity=.46},1700);whisper('The hallway seems longer in the dark.')}},
- {id:'memory',test:()=>!state.seen.has('memory')&&state.found>0,run:()=>{state.seen.add('memory');note('You remember a second cup at the table. You cannot remember when you put it away.')}},
- {id:'weather',test:()=>!state.seen.has('weather')&&hour>15,run:()=>{state.seen.add('weather');state.weather=pick(['RAIN','OVERCAST','CLEAR']);updateLightAndSky();notify('The weather changes while you are inside.')}},
- {id:'attic',test:()=>state.flags.visited?.ATTIC&&!state.seen.has('attic-step'),run:()=>{state.seen.add('attic-step');whisper('A soft step overhead. You are standing beneath the roof.')}},
- {id:'settle',test:()=>true,run:()=>{const line=pick(['The refrigerator hum stops. A moment later, it starts again.','A small sound from another room. Probably the old house.','The air smells briefly of rain and wet leaves.','For a moment, you expect someone to answer.']);notify(line);needs.stress=Math.min(100,needs.stress+1)}}
-];const available=events.filter(e=>e.test());if(available.length)pick(available).run();if(needs.stress>70&&rand()<.42)whisper(pick(['You have time. Breathe slowly.','The room is quiet now.','You can check the door if you want.']))}
+function triggerEvent(){
+ state.lastEvent=state.minutes;state.eventAt=state.minutes+72+Math.floor(rand()*220);state.encounters++;
+ const hour=Math.floor(state.minutes/60),late=hour>=22||hour<5,pressure=(needs.stress*.32+needs.fear*.3+(100-needs.rest)*.22+needs.isolation*.16)/100;
+ needs.fear=Math.min(100,needs.fear+1.5+rand()*4+pressure*2);needs.stress=Math.min(100,needs.stress+1+rand()*2+pressure);
+ const once=(id,run)=>({id,test:()=>!state.seen.has(id),run:()=>{state.seen.add(id);run()}});
+ const events=[
+  once('pipes',()=>{whisper('A knock travels through the pipes. Then the house settles.');state.flags.threadStage=Math.max(state.flags.threadStage||0,1)}),
+  once('phone-ring',()=>{notify('Your phone vibrates once. No number is shown.');needs.stress=Math.min(100,needs.stress+3);state.flags.phoneMissed=true}),
+  once('hall-light',()=>{lights[0].intensity=.04;setTimeout(()=>{lights[0].intensity=.46},1700);whisper('The hallway seems longer in the dark.')}),
+  once('weather-shift',()=>{state.weather=pick(['RAIN','OVERCAST','CLEAR']);updateLightAndSky();notify('The weather changes while you are inside.')}),
+  {id:'attic-step',test:()=>state.flags.visited?.ATTIC&&!state.seen.has('attic-step'),run:()=>{state.seen.add('attic-step');whisper('A soft step overhead. You are standing beneath the roof.');state.flags.threadStage=Math.max(state.flags.threadStage||0,2)}},
+  once('first-footsteps',()=>{state.flags.threadStage=1;audioTone(58,.55,.06);whisper('Footsteps cross the empty room above you. They stop at the stairs.')}),
+  {id:'chair-memory',test:()=>state.flags.threadStage===1&&!state.seen.has('chair-memory'),run:()=>{state.seen.add('chair-memory');state.flags.threadStage=2;note('In the morning, a chair is facing the stairs. You are certain it was not there last night.')}} ,
+  {id:'photo-memory',test:()=>state.flags.threadStage===2&&!state.seen.has('photo-memory'),run:()=>{state.seen.add('photo-memory');state.flags.threadStage=3;photo.visible=false;photoPrint.visible=false;state.flags.photoMissing=true;note('The family photograph is gone. There is no glass on the floor, only a clean rectangle in the dust.')}},
+  {id:'voice-memory',test:()=>state.flags.threadStage===3&&!state.seen.has('voice-memory')&&late,run:()=>{state.seen.add('voice-memory');state.flags.threadStage=4;whisper('From the room where the photograph hung: “You said you would come back.”');needs.fear=Math.min(100,needs.fear+7)}},
+  {id:'fridge-open',test:()=>!fridgeState.open&&needs.stress>26,run:()=>{fridgeState.open=true;fridgeDoor.position.x=7.03;fridgeDoor.rotation.y=.55;notify('A pale line of light spills from the kitchen. The refrigerator is open.');state.flags.fridgeMoved=true}},
+  {id:'window-silhouette',test:()=>late&&state.flags.checkedWindow&&!state.seen.has('window-silhouette'),run:()=>{state.seen.add('window-silhouette');whisper('Something stands in the window. When you look directly, it is only your reflection.')}},
+  {id:'time-slip',test:()=>needs.rest<24&&!state.seen.has('time-slip'),run:()=>{state.seen.add('time-slip');const skip=7+Math.floor(rand()*13);setTime(skip);needs.stability=Math.max(0,needs.stability-2);notify('You blink. The clock has moved forward.')}},
+  {id:'memory',test:()=>state.found>0&&!state.seen.has('memory'),run:()=>{state.seen.add('memory');note('You remember a second cup at the table. You cannot remember when you put it away.')}},
+  {id:'settle',test:()=>true,run:()=>{const lines=['The refrigerator hum stops. A moment later, it starts again.','A small sound from another room. Probably the old house.','The air smells briefly of rain and wet leaves.','For a moment, you expect someone to answer.','A floorboard creaks somewhere you cannot reach.','The television clicks, though it is unplugged.'];notify(pick(lines));if(pressure>.55)needs.suspicion=Math.min(100,needs.suspicion+1)}}
+ ];
+ const available=events.filter(e=>e.test());const chain=available.filter(e=>e.id.includes('memory')||e.id==='first-footsteps'||e.id==='voice-memory');
+ const pool=chain.length&&rand()<.68?chain:available;if(pool.length)pick(pool).run();
+ if(needs.stress>72&&rand()<pressure*.4)whisper(pick(['You have time. Breathe slowly.','The room is quiet now.','You can check the door if you want.','It is all right to sit down.']))
+}
 function audioTone(freq=180,duration=.12,volume=.04){try{const Ctx=window.AudioContext||window.webkitAudioContext;if(!Ctx)return;audioContext??=new Ctx();const osc=audioContext.createOscillator(),gain=audioContext.createGain();osc.type='sine';osc.frequency.value=freq;gain.gain.setValueAtTime(volume,audioContext.currentTime);gain.gain.exponentialRampToValueAtTime(.001,audioContext.currentTime+duration);osc.connect(gain);gain.connect(audioContext.destination);osc.start();osc.stop(audioContext.currentTime+duration)}catch{}}
 let audioContext=null;
 const raycaster=new THREE.Raycaster();raycaster.far=2.65;const moveKeys=new Set(),touchMove={x:0,z:0};const touchDevice=matchMedia('(pointer: coarse)').matches||navigator.maxTouchPoints>0;document.body.classList.toggle('touch-device',touchDevice);if(touchDevice){document.querySelector('#interact kbd').textContent='TAP';document.querySelector('.start-tip').textContent='Left stick to move · drag to look · USE to interact · LIGHT for your lantern'}let focused=null,stepSound=0,touchLookId=null,lastTouchX=0,lastTouchY=0,stickPointerId=null;
@@ -170,7 +206,7 @@ function persistWorld(){state.flags.ateApple=!apple.visible;save()}
 // Input, interface bindings, and the render/update loop.
 function setLantern(on){lanternOn=on;lantern.intensity=on?3.2:0;document.querySelector('#flash-indicator').textContent=on?'◉ LANTERN ON':'◯ LANTERN OFF'}
 function bindButton(id,action){document.querySelector(`#${id}`).addEventListener('click',action)}
-function startNew(){localStorage.removeItem(saveKey);state.day=1;state.minutes=7*60+12;state.seen.clear();state.history=[];state.flags={};state.doors={};state.encounters=0;state.found=0;state.called=false;state.eventAt=517;state.lastEvent=-1000;state.weather='OVERCAST';state.seed=Math.random()*1e6>>>0;rngSeed=state.seed;Object.assign(needs,{hunger:18,thirst:12,rest:82,hygiene:71,stress:19,fear:0,isolation:23,suspicion:9,stability:81});inventory.clear();['keys','phone','apple','tea'].forEach(i=>inventory.add(i));frontDoor.rotation.y=0;backDoor.rotation.y=0;state.tv=false;tvscreen.material=M.screen;apple.visible=true;fridgeState.open=false;fridgeDoor.position.x=7.27;fridgeDoor.rotation.y=0;player.position.set(0,0,1.1);yaw=0;pitch=0;setLantern(true);displayTime();updateLightAndSky();document.querySelector('#journal-text').textContent='The kettle needs descaling. Pick up milk if you go out.';startDay()}
+function startNew(){localStorage.removeItem(saveKey);state.day=1;state.minutes=7*60+12;state.seen.clear();state.history=[];state.flags={};state.doors={};state.encounters=0;state.found=0;state.called=false;state.eventAt=517;state.lastEvent=-1000;state.weather='OVERCAST';state.seed=Math.random()*1e6>>>0;rngSeed=state.seed;Object.assign(needs,{hunger:18,thirst:12,rest:82,hygiene:71,stress:19,fear:0,isolation:23,suspicion:9,stability:81});inventory.clear();['keys','phone','apple','tea'].forEach(i=>inventory.add(i));frontDoor.rotation.y=0;backDoor.rotation.y=0;state.tv=false;tvscreen.material=M.screen;apple.visible=true;photo.visible=true;photoPrint.visible=true;fridgeState.open=false;fridgeDoor.position.x=7.27;fridgeDoor.rotation.y=0;player.position.set(0,0,1.1);yaw=0;pitch=0;setLantern(true);displayTime();updateLightAndSky();document.querySelector('#journal-text').textContent='The kettle needs descaling. Pick up milk if you go out.';startDay()}
 bindButton('start-button',startDay);
 bindButton('continue-button',loadGame);
 bindButton('new-button',startNew);
