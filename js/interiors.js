@@ -6,6 +6,7 @@ const materials = {
   darkWood: new THREE.MeshStandardMaterial({ color: 0x29251f, roughness: 0.9 }),
   paleWood: new THREE.MeshStandardMaterial({ color: 0x75664d, roughness: 0.86 }),
   metal: new THREE.MeshStandardMaterial({ color: 0x454947, roughness: 0.56, metalness: 0.55 }),
+  silver: new THREE.MeshStandardMaterial({ color: 0xb9bdbb, roughness: 0.38, metalness: 0.72 }),
   paper: new THREE.MeshStandardMaterial({ color: 0xb9ae91, roughness: 0.95 }),
   cloth: new THREE.MeshStandardMaterial({ color: 0x596568, roughness: 0.97 }),
   brass: new THREE.MeshStandardMaterial({ color: 0x927748, roughness: 0.42, metalness: 0.58 }),
@@ -111,25 +112,82 @@ function bed(world, loc, x, z, w = 2.2, d = 3.2) {
   box(world, loc, x, 0.9, z - d * 0.42, w + 0.08, 0.28, 0.12, materials.wood);
 }
 
+function addInteractable(world, interactable) {
+  if (world.interactablesById.has(interactable.id)) return;
+  world.interactables.push(interactable);
+  world.interactablesById.set(interactable.id, interactable);
+}
+
 function addEvidence(world, placeId, loc, index, itemMesh) {
   const record = evidenceByPlace[placeId]?.[index];
   if (!record) return;
   const [suffix, label, description] = record;
-  const id = `${placeId}:${suffix}`;
-  if (world.interactablesById.has(id)) return;
   const position = new THREE.Vector3();
   itemMesh.getWorldPosition(position);
-  const interactable = {
-    id,
+  addInteractable(world, {
+    id: `${placeId}:${suffix}`,
     position,
     label,
     description,
     kind: 'evidence',
     location: placeId,
     object: itemMesh,
-  };
-  world.interactables.push(interactable);
-  world.interactablesById.set(id, interactable);
+  });
+}
+
+function addPortalPair(world, id, loc, fromPosition, toPosition, options = {}) {
+  const {
+    from = 'street',
+    to = id,
+    enterLabel = from === 'street' ? `Enter ${loc.short || loc.name}` : `Enter ${loc.short || loc.name}`,
+    exitLabel = from === 'street' ? 'Exit building' : `Return to ${from}`,
+  } = options;
+  const source = new THREE.Vector3(...fromPosition);
+  const destination = new THREE.Vector3(...toPosition);
+  addInteractable(world, {
+    id: `${id}:enter`,
+    position: source,
+    destinationPosition: destination.clone(),
+    label: enterLabel,
+    description: `${enterLabel}.`,
+    kind: 'portal',
+    action: 'travel',
+    from,
+    to,
+    location: id,
+  });
+  addInteractable(world, {
+    id: `${id}:exit`,
+    position: destination,
+    destinationPosition: source.clone(),
+    label: exitLabel,
+    description: `${exitLabel}.`,
+    kind: 'portal',
+    action: 'travel',
+    from: to,
+    to: from,
+    location: id,
+  });
+}
+
+function addBuildingPortals(world, id, loc) {
+  const { x, z, w, d } = loc;
+  const door = loc.door || 'south';
+  let exterior, interior;
+  if (door === 'north') {
+    exterior = [x, 1, z - d / 2 - 1.4];
+    interior = [x, 1, z - d / 2 + 1.7];
+  } else if (door === 'east') {
+    exterior = [x + w / 2 + 1.4, 1, z];
+    interior = [x + w / 2 - 1.7, 1, z];
+  } else if (door === 'west') {
+    exterior = [x - w / 2 - 1.4, 1, z];
+    interior = [x - w / 2 + 1.7, 1, z];
+  } else {
+    exterior = [x, 1, z + d / 2 + 1.4];
+    interior = [x, 1, z + d / 2 - 1.7];
+  }
+  addPortalPair(world, id, loc, exterior, interior);
 }
 
 function shelf(world, loc, x, z, width = 2.4, levels = 3) {
@@ -240,7 +298,7 @@ function buildDiner(world, loc) {
   }
   const cup = cylinder(world, loc, -4.25, 1.13, 1.05, 0.16, 0.12, 0.24, materials.ceramic, 12);
   const handle = new THREE.Mesh(new THREE.TorusGeometry(0.1, 0.025, 6, 10), materials.ceramic);
-  handle.position.copy(point(loc, -4.05, 1.13, 1.05)); handle.rotation.y = Math.PI / 2; world.scene.add(handle);
+  handle.position.copy(point(loc, -4.05, 1.13, 1.05)); handle.rotation.y = Math.PI / 2; (loc.group || world.scene).add(handle);
   addEvidence(world, 'diner', loc, 0, cup);
 }
 
@@ -255,10 +313,10 @@ function buildHospital(world, loc) {
   box(world, loc, -0.2, 1.6, -6.9, 3.6, 2.8, 0.15, materials.cloth);
   box(world, loc, -0.2, 1.8, -6.78, 2.4, 0.06, 0.04, materials.paper);
   const chart = box(world, loc, 0.8, 1.28, 4.0, 0.64, 0.08, 0.46, materials.paper, -0.16);
-  const tray = box(world, loc, -0.5, 1.05, 0.6, 0.9, 0.1, 0.62, materials.metal);
-  box(world, loc, -0.5, 1.14, 0.6, 0.6, 0.045, 0.04, materials.cloth);
+  box(world, loc, -0.5, 1.05, 0.6, 0.9, 0.1, 0.62, materials.metal);
+  const fiber = box(world, loc, -0.5, 1.12, 0.6, 0.42, 0.025, 0.035, materials.cloth, 0.4);
   addEvidence(world, 'hospital', loc, 0, chart);
-  addEvidence(world, 'hospital', loc, 1, tray);
+  addEvidence(world, 'hospital', loc, 1, fiber);
 }
 
 function buildBar(world, loc) {
@@ -312,7 +370,7 @@ function buildFoundry(world, loc) {
     cylinder(world, loc, x, 1.05, 8.8, 0.12, 0.12, 0.18, materials.brass, 10);
   }
   const sheet = box(world, loc, 0, 3.2, 2.25, 0.85, 0.08, 0.6, materials.paper, 0.05);
-  const ash = cylinder(world, loc, 1.25, 3.0, 1.0, 0.18, 0.2, 0.08, materials.evidence, 10);
+  const ash = cylinder(world, loc, 1.25, 3.0, 1.0, 0.18, 0.2, 0.08, materials.stone, 10);
   addEvidence(world, 'foundry', loc, 0, sheet);
   addEvidence(world, 'foundry', loc, 1, ash);
 }
@@ -376,18 +434,19 @@ function buildUndercroft(world, loc) {
   const ring = new THREE.Mesh(new THREE.TorusGeometry(2.15, 0.045, 6, 36), materials.brass);
   ring.rotation.x = Math.PI / 2;
   ring.position.copy(point(loc, 0, -3.53, 0));
-  world.scene.add(ring);
+  (loc.group || world.scene).add(ring);
   for (let i = 0; i < 9; i++) {
     const a = i * Math.PI * 2 / 9;
     cylinder(world, loc, Math.cos(a) * 2.15, -3.43, Math.sin(a) * 2.15, 0.07, 0.08, 0.3, materials.candle, 8);
   }
   const mark = box(world, loc, 0, -3.51, 0, 0.34, 0.035, 0.34, materials.evidence);
-  const medal = cylinder(world, loc, -3.25, -1.42, -4.0, 0.23, 0.23, 0.07, materials.brass, 16);
+  const medal = cylinder(world, loc, -3.25, -1.42, -4.0, 0.23, 0.23, 0.07, materials.silver, 16);
   addEvidence(world, 'chapelBasement', loc, 0, mark);
   addEvidence(world, 'chapelBasement', loc, 1, medal);
   const light = new THREE.PointLight(0xb89563, 0.45, 16, 2);
   light.position.copy(point(loc, 0, -1.0, 0));
-  world.scene.add(light);
+  (loc.group || world.scene).add(light);
+  return light;
 }
 
 const layouts = {
@@ -410,7 +469,29 @@ export function buildInteriors(world) {
   world.interactablesById ||= new Map(world.interactables.map(item => [item.id, item]));
   for (const [id, build] of Object.entries(layouts)) {
     const loc = LOCATIONS[id];
-    if (loc) build(world, loc);
+    if (!loc) continue;
+    build(world, loc);
+    addBuildingPortals(world, id, loc);
   }
-  buildUndercroft(world, LOCATIONS.chapelBasement);
+  const undercroft = LOCATIONS.chapelBasement;
+  if (undercroft) {
+    const light = buildUndercroft(world, undercroft);
+    world.interiors.push({ id: 'chapelBasement', loc: undercroft, light });
+    const chapel = LOCATIONS.chapel;
+    if (chapel) {
+      addPortalPair(
+        world,
+        'chapelBasement',
+        undercroft,
+        [chapel.x + 3.4, 1, chapel.z + 0.2],
+        [undercroft.x + 3.4, -1, undercroft.z + 0.2],
+        {
+          from: 'chapel',
+          to: 'chapelBasement',
+          enterLabel: 'Descend to the undercroft',
+          exitLabel: 'Climb to the chapel',
+        },
+      );
+    }
+  }
 }
