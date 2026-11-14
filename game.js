@@ -117,7 +117,7 @@ function updateNeeds(dt){if(!started||paused)return;const sim=dt*1.25;needs.hung
  document.querySelector('#inventory-line').textContent='POCKETS: '+[...inventory].map(x=>x.toUpperCase()).join(' · ');if(needs.rest<20){needs.stress=Math.min(100,needs.stress+dt*.16);}
 }
 function updateLightAndSky(){const t=state.minutes/1440,night=Math.max(0,Math.min(1,(Math.cos((t-.5)*Math.PI*2)+.18)/1.18));skyLight.intensity=.18+night*.7;sun.intensity=.12+(1-night)*1.3;scene.background.set(night>.6?'#151a1c':'#8a8b80');scene.fog.color.set(night>.6?'#1a1e20':'#777970');scene.fog.density=.025+night*.006;lights.forEach(l=>{l.intensity=.46*(1-night*.56)});const wash=document.querySelector('.color-wash');wash.style.background=night>.7?'linear-gradient(180deg,rgba(6,9,13,.4),rgba(8,10,13,.16) 50%,rgba(4,5,8,.63))':'linear-gradient(180deg,rgba(8,10,9,.42),transparent 25%,transparent 65%,rgba(5,6,6,.5))';document.querySelector('#weather').textContent=state.weather;document.querySelector('#weather-icon').textContent=state.weather==='RAIN'?'☂':state.weather==='CLEAR'?'☼':'☁';}
-function requestLock(){try{const result=canvas.requestPointerLock?.();result?.catch?.(()=>{})}catch{}}
+function requestLock(){if(touchDevice)return;try{const result=canvas.requestPointerLock?.();result?.catch?.(()=>{})}catch{}}
 function startDay(){document.querySelector('#start-screen').hidden=true;started=true;paused=false;requestLock()}
 function loadGame(){if(load()){document.querySelector('#start-screen').hidden=true;started=true;paused=false;restoreWorld();notify('The day comes back in pieces.');requestLock()}}
 function restoreWorld(){Object.entries(state.doors).forEach(([name,open])=>{if(name==='front'&&open)frontDoor.rotation.y=-Math.PI/2;if(name==='back'&&open)backDoor.rotation.y=Math.PI/2});if(state.flags.ateApple)apple.visible=false;if(state.flags.tv)toggleTV(true)}
@@ -143,11 +143,11 @@ function triggerEvent(){state.lastEvent=state.minutes;state.eventAt=state.minute
 ];const available=events.filter(e=>e.test());if(available.length)pick(available).run();if(needs.stress>70&&rand()<.42)whisper(pick(['You have time. Breathe slowly.','The room is quiet now.','You can check the door if you want.']))}
 function audioTone(freq=180,duration=.12,volume=.04){try{const Ctx=window.AudioContext||window.webkitAudioContext;if(!Ctx)return;audioContext??=new Ctx();const osc=audioContext.createOscillator(),gain=audioContext.createGain();osc.type='sine';osc.frequency.value=freq;gain.gain.setValueAtTime(volume,audioContext.currentTime);gain.gain.exponentialRampToValueAtTime(.001,audioContext.currentTime+duration);osc.connect(gain);gain.connect(audioContext.destination);osc.start();osc.stop(audioContext.currentTime+duration)}catch{}}
 let audioContext=null;
-const raycaster=new THREE.Raycaster();raycaster.far=2.65;const moveKeys=new Set();let focused=null,stepSound=0;
+const raycaster=new THREE.Raycaster();raycaster.far=2.65;const moveKeys=new Set(),touchMove={x:0,z:0};const touchDevice=matchMedia('(pointer: coarse)').matches||navigator.maxTouchPoints>0;document.body.classList.toggle('touch-device',touchDevice);if(touchDevice){document.querySelector('#interact kbd').textContent='TAP';document.querySelector('.start-tip').textContent='Left stick to move · drag to look · USE to interact · LIGHT for your lantern'}let focused=null,stepSound=0,touchLookId=null,lastTouchX=0,lastTouchY=0,stickPointerId=null;
 function findTarget(){raycaster.setFromCamera(new THREE.Vector2(0,0),camera);const candidates=interactables.filter(i=>i.room===currentRoom).flatMap(i=>i.meshes.filter(m=>m.visible).map(mesh=>({mesh,entry:i})));const hit=raycaster.intersectObjects(candidates.map(x=>x.mesh),false)[0];if(!hit){focused=null;document.querySelector('#interact').hidden=true;return}focused=hit.object.userData.interactable;document.querySelector('#interact-label').textContent=focused.label;document.querySelector('#interact').hidden=false}
 function interact(){if(focused&&started&&!paused){focused.action();findTarget();audioTone(360,.07,.025)}}
 function overlaps(x,z,r=.22){return colliders.some(c=>x+r>c.x&&x-r<c.x+c.w&&z+r>c.z&&z-r<c.z+c.d)}
-function movePlayer(dt){let x=(moveKeys.has('KeyD')?1:0)-(moveKeys.has('KeyA')?1:0),z=(moveKeys.has('KeyS')?1:0)-(moveKeys.has('KeyW')?1:0);if(!x&&!z)return;const len=Math.hypot(x,z);x/=len;z/=len;const speed=(moveKeys.has('ShiftLeft')?3.7:2.55)*dt;const sin=Math.sin(yaw),cos=Math.cos(yaw),dx=(x*cos+z*sin)*speed,dz=(z*cos-x*sin)*speed;const px=player.position.x,pz=player.position.z;let nx=px+dx,nz=pz+dz;if(nx>-8.2&&nx<8.3&&!overlaps(nx,pz))player.position.x=nx;if(nz>-12&&nz<18&&!overlaps(player.position.x,nz))player.position.z=nz;const walking=Math.abs(player.position.x-px)+Math.abs(player.position.z-pz)>.001;if(walking){stepSound+=dt;if(stepSound>.48){stepSound=0;if(rand()<.18)audioTone(72,.035,.012)}}}
+function movePlayer(dt){let x=(moveKeys.has('KeyD')?1:0)-(moveKeys.has('KeyA')?1:0)+touchMove.x,z=(moveKeys.has('KeyS')?1:0)-(moveKeys.has('KeyW')?1:0)+touchMove.z;if(!x&&!z)return;const len=Math.hypot(x,z);x/=len;z/=len;const speed=(moveKeys.has('ShiftLeft')?3.7:2.55)*dt;const sin=Math.sin(yaw),cos=Math.cos(yaw),dx=(x*cos+z*sin)*speed,dz=(z*cos-x*sin)*speed;const px=player.position.x,pz=player.position.z;let nx=px+dx,nz=pz+dz;if(nx>-8.2&&nx<8.3&&!overlaps(nx,pz))player.position.x=nx;if(nz>-12&&nz<18&&!overlaps(player.position.x,nz))player.position.z=nz;const walking=Math.abs(player.position.x-px)+Math.abs(player.position.z-pz)>.001;if(walking){stepSound+=dt;if(stepSound>.48){stepSound=0;if(rand()<.18)audioTone(72,.035,.012)}}}
 function updateTime(dt){if(!started||paused)return;const oldDay=state.day;setTime(dt*2.7);if(state.day!==oldDay){needs.rest=Math.min(100,needs.rest+2);state.weather=pick(['OVERCAST','OVERCAST','RAIN','CLEAR']);save()}if(state.minutes>=state.eventAt&&state.minutes-state.lastEvent>30)triggerEvent();displayTime();updateLightAndSky()}
 function persistWorld(){state.flags.ateApple=!apple.visible;save()}
 
@@ -164,8 +164,20 @@ bindButton('leave-button',()=>{persistWorld();document.querySelector('#pause-scr
 bindButton('close-letter',closeLetter);
 bindButton('ending-return',()=>{document.querySelector('#ending-screen').hidden=true;document.querySelector('#start-screen').hidden=false;started=false;paused=true;save()});
 if(localStorage.getItem(saveKey))document.querySelector('#continue-button').disabled=false;
-canvas.addEventListener('click',()=>{if(started&&!paused)requestLock()});
-document.addEventListener('mousemove',e=>{if(document.pointerLockElement!==canvas||paused)return;yaw-=e.movementX*.0022;pitch=Math.max(-1.35,Math.min(1.35,pitch-e.movementY*.0019));player.rotation.y=yaw;camera.rotation.x=pitch});
+canvas.addEventListener('click',()=>{if(!touchDevice&&started&&!paused)requestLock()});
+document.addEventListener('mousemove',e=>{if(document.pointerLockElement!==canvas||paused)return;lookBy(e.movementX,e.movementY)});
+function lookBy(dx,dy){yaw-=dx*.0022;pitch=Math.max(-1.35,Math.min(1.35,pitch-dy*.0019));player.rotation.y=yaw;camera.rotation.x=pitch}
+if(touchDevice){
+ canvas.addEventListener('pointerdown',e=>{if(e.pointerType!=='touch'||!started||paused||touchLookId!==null)return;touchLookId=e.pointerId;lastTouchX=e.clientX;lastTouchY=e.clientY;canvas.setPointerCapture?.(e.pointerId);e.preventDefault()});
+ canvas.addEventListener('pointermove',e=>{if(e.pointerId!==touchLookId||paused)return;const dx=e.clientX-lastTouchX,dy=e.clientY-lastTouchY;lastTouchX=e.clientX;lastTouchY=e.clientY;lookBy(dx,dy);e.preventDefault()});
+ const endTouchLook=e=>{if(e.pointerId===touchLookId)touchLookId=null};canvas.addEventListener('pointerup',endTouchLook);canvas.addEventListener('pointercancel',endTouchLook);
+ const stick=document.querySelector('#move-stick'),knob=document.querySelector('#move-stick-knob');
+ const updateStick=e=>{const rect=stick.getBoundingClientRect(),radius=rect.width*.34,dx=e.clientX-(rect.left+rect.width/2),dy=e.clientY-(rect.top+rect.height/2),length=Math.hypot(dx,dy),scale=length>radius?radius/length:1,nx=dx*scale,ny=dy*scale;knob.style.transform=`translate(${nx}px,${ny}px)`;touchMove.x=Math.abs(nx/radius)<.12?0:nx/radius;touchMove.z=Math.abs(ny/radius)<.12?0:ny/radius};
+ stick.addEventListener('pointerdown',e=>{stickPointerId=e.pointerId;stick.setPointerCapture(e.pointerId);updateStick(e);e.preventDefault()});
+ stick.addEventListener('pointermove',e=>{if(e.pointerId===stickPointerId)updateStick(e)});
+ const resetStick=e=>{if(e.pointerId!==stickPointerId)return;stickPointerId=null;touchMove.x=0;touchMove.z=0;knob.style.transform='translate(0,0)'};stick.addEventListener('pointerup',resetStick);stick.addEventListener('pointercancel',resetStick);
+ bindButton('touch-interact',interact);bindButton('touch-lantern',()=>setLantern(!lanternOn));bindButton('touch-pause',pause);
+}
 document.addEventListener('keydown',e=>{
  if(e.code==='Escape'){if(!document.querySelector('#letter-screen').hidden){closeLetter();return}if(!document.querySelector('#pause-screen').hidden){resume();return}if(started&&!paused)pause();return}
  if(!started||paused)return;
@@ -173,7 +185,7 @@ document.addEventListener('keydown',e=>{
  if(e.code==='KeyE'&&!e.repeat)interact();if(e.code==='KeyF'&&!e.repeat)setLantern(!lanternOn);
 });
 document.addEventListener('keyup',e=>moveKeys.delete(e.code));
-document.addEventListener('pointerlockchange',()=>{if(started&&!paused&&document.pointerLockElement!==canvas)pause()});
+document.addEventListener('pointerlockchange',()=>{if(!touchDevice&&started&&!paused&&document.pointerLockElement!==canvas)pause()});
 document.addEventListener('visibilitychange',()=>{if(document.hidden&&started&&!paused)pause()});
 function animate(){requestAnimationFrame(animate);const dt=Math.min(clock.getDelta(),.05);if(started&&!paused){movePlayer(dt);updateNeeds(dt);updateTime(dt);updateRoom();findTarget();if(Math.floor(state.minutes/12)!==state._saveMinute){state._saveMinute=Math.floor(state.minutes/12);persistWorld()}}renderer.render(scene,camera)}
 function resize(){camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix();renderer.setSize(innerWidth,innerHeight)}
