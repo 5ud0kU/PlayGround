@@ -1,81 +1,239 @@
 <!doctype html>
 <html lang="en">
 <head>
-<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no"><meta name="theme-color" content="#bedde0">
-<title>Little Harbor — a walkable town</title><link rel="icon" href="data:,">
-<style>
-@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Fraunces:opsz,wght@9..144,600;9..144,700&display=swap');
-:root{--ink:#24383b;--muted:#667c7d;--cream:#fffaf0;--coral:#e9896b;--teal:#4e8d88}*{box-sizing:border-box}html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#bedde0;color:var(--ink);font-family:'DM Sans',sans-serif}canvas{display:block;width:100%;height:100%;touch-action:none}#ui{position:fixed;inset:0;pointer-events:none}.topbar{position:absolute;top:24px;left:28px;display:flex;align-items:center;gap:12px}.brandmark{width:42px;height:42px;border-radius:14px;background:#fff9e9;display:grid;place-items:center;box-shadow:0 6px 18px #33565b22;font-size:22px}.brand h1{font:700 22px Fraunces,serif;margin:0;letter-spacing:-.3px}.brand p{margin:2px 0 0;color:#516c6d;font-size:11px;letter-spacing:1.5px;text-transform:uppercase;font-weight:700}.card{position:absolute;top:24px;right:26px;width:255px;padding:17px 18px 15px;border:1px solid #ffffffb0;border-radius:18px;background:#fffaf0ed;box-shadow:0 8px 30px #345d6120;backdrop-filter:blur(8px)}.card-top{display:flex;align-items:center;justify-content:space-between}.eyebrow{font-size:10px;font-weight:700;letter-spacing:1.7px;color:var(--teal);text-transform:uppercase}.count{font-weight:700;font-size:13px;color:#51676a}.card h2{font:700 20px Fraunces,serif;margin:9px 0 4px}.card p{font-size:12px;line-height:1.55;color:#667879;margin:0}.progress{height:5px;border-radius:4px;background:#e8e4d8;margin-top:13px;overflow:hidden}.progress span{height:100%;width:0;display:block;background:linear-gradient(90deg,#79b49d,#e7ad6d);transition:width .4s}.hint{position:absolute;bottom:24px;left:50%;transform:translateX(-50%);padding:11px 16px;border-radius:14px;background:#24383be8;color:#fffaf0;font-size:12px;white-space:nowrap;box-shadow:0 8px 24px #24383b35;transition:opacity .5s}.hint strong{color:#f3c37a}.toast{position:absolute;left:50%;top:105px;transform:translate(-50%,-10px);padding:12px 18px;border-radius:14px;background:#fffaf0;color:var(--ink);font-size:13px;font-weight:600;box-shadow:0 9px 30px #24383b2a;opacity:0;transition:.3s}.toast.show{opacity:1;transform:translate(-50%,0)}.look-note{position:absolute;bottom:27px;right:28px;font-size:11px;color:#456164;background:#ffffffa8;padding:8px 11px;border-radius:10px}.crosshair{position:absolute;left:50%;top:50%;width:5px;height:5px;border-radius:50%;background:#fff;box-shadow:0 0 0 2px #203b3d55;opacity:0;transform:translate(-50%,-50%)}#touch{display:none;pointer-events:none;position:absolute;left:22px;bottom:24px;width:132px;height:132px;border-radius:50%;background:#fff7e255;border:1px solid #fff9;touch-action:none}.stick{position:absolute;left:41px;top:41px;width:50px;height:50px;border-radius:50%;background:#fffaf0d9;box-shadow:0 3px 12px #203b3d30}.mobile-look{display:none}.welcome{position:absolute;inset:0;background:linear-gradient(180deg,#e1f1ef 0%,#d2e8e3 100%);display:flex;align-items:center;justify-content:center;transition:opacity .7s,visibility .7s;pointer-events:auto}.welcome.gone{opacity:0;visibility:hidden;pointer-events:none}.welcome-box{text-align:center;width:min(440px,calc(100% - 38px));padding:36px 36px 32px;border-radius:28px;background:#fffaf0f3;box-shadow:0 20px 70px #335e5e25;border:1px solid white}.sun{margin:0 auto 15px;width:62px;height:62px;border-radius:22px;display:grid;place-items:center;background:#f8e6bf;font-size:32px}.welcome h2{font:700 34px Fraunces,serif;margin:0 0 9px;letter-spacing:-.6px}.welcome p{font-size:14px;line-height:1.65;color:#647778;margin:0 auto;max-width:330px}.start{margin-top:24px;border:0;border-radius:14px;background:#e9896b;color:white;padding:13px 25px;font:700 14px 'DM Sans';cursor:pointer;box-shadow:0 5px 0 #c66d55;transition:transform .15s,box-shadow .15s}.start:hover{transform:translateY(-2px);box-shadow:0 7px 0 #c66d55}.keys{display:flex;justify-content:center;gap:6px;margin-top:20px;color:#698081;font-size:11px}.key{padding:5px 8px;background:#f1eee4;border-radius:6px;font-weight:700;color:#42595b}.mobile-hint{display:none}
-@media(max-width:700px){.topbar{top:14px;left:14px;gap:8px}.brandmark{width:36px;height:36px;font-size:19px;border-radius:12px}.brand h1{font-size:18px}.brand p{font-size:9px}.card{top:14px;right:12px;width:190px;padding:12px;border-radius:14px}.card h2{font-size:16px;margin:6px 0 3px}.card p{font-size:10px}.eyebrow{font-size:9px}.progress{margin-top:9px}.hint{bottom:15px;font-size:10px;left:50%;max-width:90%;white-space:normal;text-align:center;padding:9px 12px}.look-note{display:none}#touch{display:block}.crosshair{display:none}.welcome-box{padding:29px 24px 25px}.welcome h2{font-size:29px}.welcome p{font-size:13px}.keys{display:none}.mobile-hint{display:block;font-size:11px;color:#789;margin-top:17px}}
-</style>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<meta name="theme-color" content="#0a0c0d">
+<title>THE NINTH HOUR — Mercy Falls Homicide</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' fill='%23090b0c'/><circle cx='16' cy='16' r='9' fill='none' stroke='%23a8432f' stroke-width='2'/><path d='M16 4v24M8 9l16 14M24 9L8 23' stroke='%23a8432f' stroke-width='1'/></svg>">
+<link rel="stylesheet" href="css/style.css">
 </head>
 <body>
-<div id="scene"></div>
-<div id="ui">
- <div class="topbar"><div class="brandmark">⚓</div><div class="brand"><h1>Little Harbor</h1><p>Take the long way home</p></div></div>
- <section class="card"><div class="card-top"><span class="eyebrow">A little adventure</span><span class="count" id="count">0 / 5</span></div><h2>Postcards from town</h2><p>Wander the streets and find the little keepsakes tucked around town.</p><div class="progress"><span id="progress"></span></div></section>
- <div class="hint" id="hint">Use <strong>W A S D</strong> to stroll · <strong>drag</strong> to look around</div><div class="look-note">WASD to walk &nbsp;·&nbsp; drag to look</div><div class="crosshair"></div><div class="toast" id="toast">A postcard for your collection!</div>
- <div id="touch"><div class="stick"></div></div>
- <div class="welcome" id="welcome"><div class="welcome-box"><div class="sun">🌤️</div><h2>A slower kind of day.</h2><p>Take a wander through Little Harbor. Follow the lanes, listen to the gulls, and see what the town has left for you.</p><button class="start" id="start">Take a stroll&nbsp; →</button><div class="keys"><span class="key">W</span><span class="key">A</span><span class="key">S</span><span class="key">D</span><span style="padding:5px 4px">to walk</span><span style="margin-left:8px" class="key">DRAG</span><span style="padding:5px 4px">to look</span></div><div class="mobile-hint">Use the little joystick to stroll · swipe to look</div></div></div>
+<div id="app">
+  <div id="scene"></div>
+
+  <!-- ============ FILM OVERLAYS ============ -->
+  <div id="fx">
+    <div class="vignette"></div>
+    <div class="grain"></div>
+    <div class="scanlines"></div>
+    <div id="flash"></div>
+    <div id="dread"></div>
+  </div>
+
+  <!-- ============ HUD ============ -->
+  <div id="hud" class="hidden">
+    <header class="hud-top">
+      <div class="hud-badge">
+        <svg viewBox="0 0 48 48" class="seal" aria-hidden="true">
+          <circle cx="24" cy="24" r="19" fill="none" stroke="currentColor" stroke-width="1.2"/>
+          <circle cx="24" cy="24" r="15" fill="none" stroke="currentColor" stroke-width=".5" stroke-dasharray="1 3"/>
+          <path d="M24 8v32M10 16l28 16M38 16L10 32" stroke="currentColor" stroke-width=".9"/>
+          <circle cx="24" cy="24" r="3.4" fill="currentColor" opacity=".8"/>
+        </svg>
+      </div>
+      <div class="hud-id">
+        <div class="hud-dept">MERCY FALLS POLICE DEPARTMENT</div>
+        <div class="hud-case">HOMICIDE · CASE 09-114</div>
+        <div class="hud-time"><span id="clock">DAY 1 — 18:12</span><span class="dot">·</span><span id="weather">RAIN</span><span class="dot">·</span><span id="moon">DUSK</span></div>
+      </div>
+      <div class="hud-right">
+        <div class="hud-stress-label">PSYCHOLOGICAL STATE</div>
+        <div class="stress-word" id="stress-word">STEADY</div>
+      </div>
+    </header>
+
+    <div class="objective" id="objective">
+      <div class="objective-eyebrow"><span class="pulse"></span> CURRENT OBJECTIVE</div>
+      <h3 id="objective-title">Process the Foundry scene</h3>
+      <p id="objective-sub">Evidence degrades. Photograph what you can before the rain gets in.</p>
+    </div>
+
+    <div class="hud-bottom">
+      <div class="vitals">
+        <div class="vital">
+          <span class="vital-name">VITALS</span>
+          <div class="meter"><i id="meter-health" style="width:100%"></i></div>
+          <span class="vital-val" id="val-health">100</span>
+        </div>
+        <div class="vital">
+          <span class="vital-name">STRESS</span>
+          <div class="meter stress"><i id="meter-stress" style="width:18%"></i></div>
+          <span class="vital-val" id="val-stress">18</span>
+        </div>
+        <div class="vital">
+          <span class="vital-name">STAMINA</span>
+          <div class="meter stamina"><i id="meter-stamina" style="width:100%"></i></div>
+          <span class="vital-val" id="val-stamina">100</span>
+        </div>
+      </div>
+      <div class="hud-tools">
+        <div class="tool" id="tool-flash"><span class="keycap">F</span> FLASHLIGHT <em>OFF</em></div>
+        <div class="tool"><span class="keycap">TAB</span> CASEBOOK</div>
+        <div class="tool"><span class="keycap">E</span> INTERACT</div>
+      </div>
+    </div>
+
+    <div class="crosshair" id="crosshair"><i></i></div>
+    <div class="prompt hidden" id="prompt"><span class="keycap">E</span><span id="prompt-text">Examine</span></div>
+    <div class="toast-stack" id="toasts"></div>
+    <div class="news-ticker"><div class="ticker-label">MERCY FALLS HERALD</div><div class="ticker-track" id="ticker">The river is high. The town is quiet.</div></div>
+    <div class="controls-hint" id="controls-hint">WASD move · SHIFT run · E interact · F flashlight · TAB casebook · M map</div>
+    <div class="interact-progress" id="interact-progress"><i></i></div>
+  </div>
+
+  <!-- ============ TITLE ============ -->
+  <div id="title-screen">
+    <div class="title-bg"></div>
+    <div class="title-frame">
+      <div class="title-top">
+        <span>MERCY FALLS, POP. 4,312</span>
+        <span>OCTOBER 1989 — 6:12 PM</span>
+      </div>
+      <div class="title-sigil">
+        <svg viewBox="0 0 200 200" aria-hidden="true">
+          <circle cx="100" cy="100" r="76" fill="none" stroke="currentColor" stroke-width="1"/>
+          <circle cx="100" cy="100" r="64" fill="none" stroke="currentColor" stroke-width=".5" stroke-dasharray="2 6"/>
+          <circle cx="100" cy="100" r="57" fill="none" stroke="currentColor" stroke-width="1.4" stroke-dasharray="9 5"/>
+          <path d="M100 24v152M42 58l116 84M158 58L42 142M32 100h136M100 24l-22 24h44z" stroke="currentColor" stroke-width=".8" opacity=".9"/>
+          <path d="M78 68c0-12 10-20 22-20s22 8 22 20c0 8-5 12-11 16v14m-22 0V84c-6-4-11-8-11-16z" fill="none" stroke="currentColor" stroke-width="1.3"/>
+          <circle cx="100" cy="46" r="2.6" fill="currentColor"/>
+        </svg>
+      </div>
+      <h1>THE<br><span>NINTH HOUR</span></h1>
+      <p class="title-kicker">A psychological horror &amp; homicide investigation</p>
+      <p class="title-blurb">Nine days ago, a woman disappeared. Last night, she was returned.<br>Mercy Falls is a town that keeps its promises.</p>
+      <div class="title-actions">
+        <button id="btn-start" class="btn-primary">Start</button>
+        <button id="btn-continue" class="btn-ghost hidden">Continue Case</button>
+        <button id="btn-load" class="btn-ghost">Load Case</button>
+        <button id="btn-help" class="btn-link">How to Play</button>
+      </div>
+      <div class="title-footer">
+        <span>THREE.JS · PROCEDURAL SIMULATION</span>
+        <span class="title-warn">CONTAINS VIOLENT &amp; DISTURBING CONTENT</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ HOW TO PLAY ============ -->
+  <div id="help-modal" class="modal-wrap hidden">
+    <div class="modal">
+      <div class="modal-head"><span class="eyebrow">FIELD MANUAL</span><h2>How to Investigate</h2><button class="close" data-close="help-modal">✕</button></div>
+      <div class="help-grid">
+        <div><h4>Move</h4><p><b>W A S D</b> walk, <b>Shift</b> run, mouse to look. Click the scene to capture the cursor. <b>Esc</b> releases it.</p></div>
+        <div><h4>Work the scene</h4><p>Approach the glinting markers and press <b>E</b>. Every piece of evidence is logged to your casebook. Some clues only resolve in the lab.</p></div>
+        <div><h4>Casebook</h4><p><b>Tab</b> opens the case file: evidence, suspects, map, the sect, notes. You can fast-travel to known locations from the map.</p></div>
+        <div><h4>Interviews</h4><p>Press <b>E</b> on a person. Ask about the victim, the sect, alibis. Present evidence to break a story. People remember how you treat them.</p></div>
+        <div><h4>Warrant</h4><p>Background checks reveal physical traits. Compare them against the lab results, verify alibis, then request a warrant on the Suspects page.</p></div>
+        <div><h4>Stay human</h4><p>Sleep, eat, and keep your stress down. The town does not pause for you, and the killer is watching how you work.</p></div>
+      </div>
+      <div class="modal-foot"><span>Mercy Falls P.D. — Homicide Division</span><button class="btn-ghost" data-close="help-modal">Close</button></div>
+    </div>
+  </div>
+
+  <!-- ============ LOAD / SAVE SLOTS ============ -->
+  <div id="slots-modal" class="modal-wrap hidden">
+    <div class="modal slots-modal">
+      <div class="modal-head"><span class="eyebrow">CASE ARCHIVE</span><h2 id="slots-title">Load Case</h2><button class="close" id="slots-close">✕</button></div>
+      <div id="slots-list" class="slots-list"></div>
+      <div class="modal-foot"><span id="slots-mode">Select a case file</span><button class="btn-ghost" id="slots-cancel">Cancel</button></div>
+    </div>
+  </div>
+
+  <!-- ============ CASEBOOK ============ -->
+  <div id="casebook" class="hidden">
+    <div class="book-spine"></div>
+    <aside class="book-nav">
+      <div class="book-brand">
+        <svg viewBox="0 0 48 48" class="seal"><circle cx="24" cy="24" r="19" fill="none" stroke="currentColor" stroke-width="1.2"/><path d="M24 6v36M8 17l32 14M40 17L8 31" stroke="currentColor" stroke-width=".8"/></svg>
+        <div><b>MERCY FALLS P.D.</b><span>CASE 09-114 · HOMICIDE</span></div>
+      </div>
+      <button class="nav-item active" data-tab="case">CASE OVERVIEW<span>01</span></button>
+      <button class="nav-item" data-tab="evidence">EVIDENCE<span id="nav-evidence">0</span></button>
+      <button class="nav-item" data-tab="suspects">SUSPECTS<span id="nav-suspects">0</span></button>
+      <button class="nav-item" data-tab="map">TOWN MAP<span>04</span></button>
+      <button class="nav-item" data-tab="sect">THE NINTH HOUR<span>05</span></button>
+      <button class="nav-item" data-tab="notes">NOTES &amp; MEDIA<span>06</span></button>
+      <button class="nav-item" data-tab="system">SYSTEM<span>07</span></button>
+      <div class="book-nav-foot">
+        <div class="nav-clock" id="book-clock">DAY 1 · 18:12</div>
+        <div class="nav-weather" id="book-weather">RAIN · 54°F</div>
+        <button class="btn-link" id="book-close">CLOSE [TAB]</button>
+      </div>
+    </aside>
+    <main class="book-main">
+      <div class="book-paper">
+        <div class="paper-head">
+          <div><span class="eyebrow" id="page-eyebrow">MERCY FALLS P.D. · HOMICIDE</span><h2 id="page-title">The Foundry Girl</h2></div>
+          <div class="paper-stamp" id="paper-stamp">ACTIVE</div>
+        </div>
+        <div class="paper-body" id="book-content"></div>
+        <div class="paper-foot"><span>Det. R. VALE · BADGE 1147</span><span id="page-foot">CONFIDENTIAL — ACTIVE INVESTIGATION</span></div>
+      </div>
+    </main>
+  </div>
+
+  <!-- ============ DIALOGUE ============ -->
+  <div id="dialogue" class="hidden">
+    <div class="dlg-card">
+      <div class="dlg-left">
+        <div class="dlg-portrait" id="dlg-portrait"><span id="dlg-initials">?</span></div>
+        <div class="dlg-meta">
+          <div class="dlg-name" id="dlg-name">Name</div>
+          <div class="dlg-role" id="dlg-role">Role</div>
+          <div class="dlg-mood" id="dlg-mood">Composed</div>
+          <div class="dlg-trust"><span>TRUST</span><div class="meter tiny"><i id="dlg-trust-bar" style="width:50%"></i></div></div>
+        </div>
+      </div>
+      <div class="dlg-right">
+        <div class="dlg-tape">RECORDED STATEMENT · MFP</div>
+        <p class="dlg-text" id="dlg-text">…</p>
+        <div class="dlg-options" id="dlg-options"></div>
+        <div class="dlg-foot"><span id="dlg-hint">Statements are recorded. Lies have a shape.</span><button class="btn-link" id="dlg-leave">END INTERVIEW</button></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ PAUSE ============ -->
+  <div id="pause" class="modal-wrap hidden">
+    <div class="modal pause-modal">
+      <span class="eyebrow">INVESTIGATION SUSPENDED</span>
+      <h2>Paused</h2>
+      <p class="pause-quote">“A town is only as honest as the things it agrees not to see.”</p>
+      <div class="pause-grid">
+        <button class="btn-ghost" id="pause-resume">Resume</button>
+        <button class="btn-ghost" id="pause-save">Save Case</button>
+        <button class="btn-ghost" id="pause-load">Load Case</button>
+        <button class="btn-ghost" id="pause-help">Field Manual</button>
+        <button class="btn-ghost danger" id="pause-quit">Abandon to Title</button>
+      </div>
+      <div class="pause-settings">
+        <label><input type="checkbox" id="opt-audio" checked> Sound</label>
+        <label><input type="checkbox" id="opt-grain" checked> Film grain</label>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ ENDING ============ -->
+  <div id="ending-screen" class="hidden">
+    <div class="ending-bg"></div>
+    <div class="ending-card">
+      <span class="eyebrow" id="ending-eyebrow">CASE 09-114 · CLOSED</span>
+      <h1 id="ending-title">The Ninth Hour</h1>
+      <p class="ending-text" id="ending-text">…</p>
+      <div class="ending-stats" id="ending-stats"></div>
+      <div class="ending-actions">
+        <button class="btn-primary" id="ending-restart">Begin a New Investigation</button>
+        <button class="btn-ghost" id="ending-titlebtn">Return to Title</button>
+      </div>
+      <p class="ending-note">Every investigation is seeded differently. The Hand, the victims, and the town’s secrets change.</p>
+    </div>
+  </div>
+
+  <div id="fade" class="fade"></div>
+  <div id="hint-banner" class="hint-banner hidden"></div>
 </div>
-<script type="module">
-import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js';
-const scene=new THREE.Scene();scene.background=new THREE.Color(0xb9d8d9);scene.fog=new THREE.Fog(0xb9d8d9,45,115);
-const camera=new THREE.PerspectiveCamera(54,innerWidth/innerHeight,.1,220);
-const renderer=new THREE.WebGLRenderer({antialias:true,powerPreference:'high-performance'});renderer.setPixelRatio(Math.min(devicePixelRatio,1.7));renderer.setSize(innerWidth,innerHeight);renderer.shadowMap.enabled=true;renderer.shadowMap.type=THREE.PCFSoftShadowMap;renderer.outputColorSpace=THREE.SRGBColorSpace;renderer.toneMapping=THREE.ACESFilmicToneMapping;renderer.toneMappingExposure=1.15;document.querySelector('#scene').appendChild(renderer.domElement);
-scene.add(new THREE.HemisphereLight(0xe9f7f2,0x89917b,2.1));const sun=new THREE.DirectionalLight(0xffedcf,3.2);sun.position.set(-28,45,-22);sun.castShadow=true;sun.shadow.mapSize.set(2048,2048);sun.shadow.camera.left=-55;sun.shadow.camera.right=55;sun.shadow.camera.top=55;sun.shadow.camera.bottom=-55;sun.shadow.bias=-.0002;scene.add(sun);
-const mat=(color,rough=.85)=>new THREE.MeshStandardMaterial({color,roughness:rough});const groundMat=mat(0x9cae85),roadMat=mat(0xc9c1a8),sideMat=mat(0xe5dcc4),waterMat=new THREE.MeshStandardMaterial({color:0x79b9c3,roughness:.36,metalness:.08});
-function box(parent,x,y,z,w,h,d,m){const o=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),m);o.position.set(x,y,z);o.castShadow=true;o.receiveShadow=true;parent.add(o);return o}function cyl(parent,x,y,z,r1,r2,h,m,seg=10){let o=new THREE.Mesh(new THREE.CylinderGeometry(r1,r2,h,seg),m);o.position.set(x,y,z);o.castShadow=true;o.receiveShadow=true;parent.add(o);return o}
-// broad grassy island with a waterside edge
-box(scene,0,-.55,0,180,1.1,150,groundMat);box(scene,0,-.42,-75,180,.7,16,waterMat);box(scene,0,-.1,-66,180,.24,3,sideMat);
-// town lanes: a central avenue and cross streets
-const road=box(scene,0,.015,8,11,.05,110,roadMat);road.receiveShadow=true;box(scene,-26,.015,-4,9,.05,96,roadMat);box(scene,26,.015,-4,9,.05,96,roadMat);box(scene,0,.02,-25,66,.055,8,roadMat);box(scene,0,.02,27,66,.055,8,roadMat);
-// paving edges and road markings
-for(const z of [-40,-31,-20,-12,1,16,22,32,41]){box(scene,0,.055,z,.13,.025,.32,mat(0xf6e8c8));}
-// sidewalks around blocks
-for(const x of [-18,18,-34,34])box(scene,x,.06,2,2,.12,82,sideMat);
-for(const z of [-20,18])box(scene,0,.06,z,63,.12,1.7,sideMat);
-// homes and shops, colorful little facades
-const palette=[0xe8a878,0xd78e79,0xd8c391,0xa9c5b0,0x8db5b8,0xe6cf9e,0xc3a3b8,0xb7c7cf];const roofM=[0x704f48,0x8d6256,0x657876,0x9b705b,0x536d72].map(c=>mat(c));
-function makeBuilding(x,z,w,d,h,color,seed,shop=false){const g=new THREE.Group();g.position.set(x,0,z);scene.add(g);let wall=mat(color),trim=mat(0xf5e9d2),dark=mat(0x49666a),roof=roofM[seed%roofM.length];box(g,0,h/2,0,w,h,d,wall);box(g,0,h+.16,0,w+.34,.3,d+.34,roof);
-// gable on the shorter front side
-const roofGeom=new THREE.ConeGeometry(Math.max(w,d)*.78,.95,4);const peak=new THREE.Mesh(roofGeom,roof);peak.rotation.y=Math.PI/4;peak.scale.set(1,.8,Math.min(w,d)/Math.max(w,d));peak.position.set(0,h+.42,d/2-.08);peak.castShadow=true;g.add(peak);
-// windows on front facade
-const n=Math.max(1,Math.floor(w/2.5));for(let i=0;i<n;i++){let wx=(i-(n-1)/2)*(w/(n+.2));for(let floor=0;floor<Math.max(1,Math.floor((h-1.6)/2.4));floor++){let wy=1.65+floor*2.35;box(g,wx,wy,d/2+.035,.72,.95,.1,dark);box(g,wx,wy,d/2+.1,.08,1.02,.08,trim);box(g,wx,wy,d/2+.1,.72,.07,.08,trim);box(g,wx,wy,d/2+.15,.055,.86,.04,trim);}}
-box(g,0,.75,d/2+.08,.82,1.5,.13,trim);box(g,0,.74,d/2+.16,.5,1.1,.08,mat(0x8b7563));if(shop){box(g,0,2.45,d/2+.12,w*.7,.48,.12,mat(0xf4ddae));box(g,0,2.47,d/2+.2,w*.56,.23,.04,mat(0x547b78));}
-// chimney and small planter
-if(seed%2===0){box(g,w*.27,h+.85,-d*.2,.48,1.5,.5,mat(0xb76f58));}
-box(g,-w*.22,.28,d/2+.65,.7,.42,.55,mat(seed%2?0x879879:0xb97f66));const shrubs=mat(0x6e9471);for(let a=0;a<3;a++){let leaf=new THREE.Mesh(new THREE.SphereGeometry(.24,8,6),shrubs);leaf.position.set(-w*.22+(a-1)*.2,.65,d/2+.65);leaf.castShadow=true;g.add(leaf)}
-return g;}
-let buildings=[];let seed=0;for(let side of [-1,1]){for(let row=0;row<3;row++){for(let col=0;col<2;col++){let z=-28+row*27+col*12+(row%2?2:-2);let x=side*(11.2+col*13);let w=6.5+(seed%3)*.65,d=7.4+(seed%2)*1.3,h=5.8+(seed%4)*.7;let b=makeBuilding(x,z,w,d,h,palette[seed%palette.length],seed,seed%5===1);buildings.push({x,z,r:Math.max(w,d)*.64});seed++;}}}
-// distant silhouette around the harbor
-for(let i=0;i<34;i++){let x=-58+(i%17)*7.2,z=-51-Math.floor(i/17)*10,h=4+(i*17%9);makeBuilding(x,z,5.8,6,h,palette[(i+2)%palette.length],i+4,false)}
-// lampposts, trees, shrubs
-const trunk=mat(0x80634c),leafMats=[mat(0x648c69),mat(0x789b70),mat(0x86a474)];function tree(x,z,s=1){cyl(scene,x,.9*s,z,.17*s,.25*s,1.8*s,trunk,8);for(let i=0;i<3;i++){let l=new THREE.Mesh(new THREE.IcosahedronGeometry((1.05-i*.12)*s,1),leafMats[(Math.floor(x+z)+i+9)%3]);l.position.set(x+(i-1)*.35*s,2.2*s+i*.33*s,z+(i%2-.5)*.24*s);l.castShadow=true;l.receiveShadow=true;scene.add(l)}}
-function lamp(x,z){cyl(scene,x,1.7,z,.08,.11,3.3,mat(0x526765),8);box(scene,x,3.35,z,.5,.13,.5,mat(0x526765));let light=new THREE.Mesh(new THREE.SphereGeometry(.17,10,8),new THREE.MeshStandardMaterial({color:0xffe6a4,emissive:0xffbf5b,emissiveIntensity:.75}));light.position.set(x,3.25,z);scene.add(light)}
-for(let z=-35;z<42;z+=13){lamp(-6.8,z);lamp(6.8,z);tree(-21,z+5,.9);tree(21,z-4,.88)}
-// welcoming little central square, fountain, benches
-const fountainStone=mat(0xd2c6ad),fountainWater=new THREE.MeshStandardMaterial({color:0x73b8bb,roughness:.25,metalness:.1});cyl(scene,0,.18,0,2.7,2.7,.35,fountainStone,20);cyl(scene,0,.4,0,2.05,2.05,.16,fountainWater,20);cyl(scene,0,.72,0,.27,.4,.7,fountainStone,12);cyl(scene,0,1.08,0,.8,.8,.18,fountainStone,16);cyl(scene,0,1.23,0,.67,.67,.1,fountainWater,16);
-function bench(x,z,rot=0){let g=new THREE.Group();g.position.set(x,0,z);g.rotation.y=rot;scene.add(g);let wood=mat(0xb17f59);box(g,0,.62,0,1.8,.14,.48,wood);box(g,0,1,.2,1.8,.68,.13,wood);for(let dx of [-.65,.65]){box(g,dx,.32,0,.12,.58,.12,trunk);box(g,dx,.73,.19,.12,.65,.1,trunk)}}bench(-4.2,-4,Math.PI/2);bench(4.2,4,Math.PI/2);bench(-4,4,0);
-// character assembled from soft blocky pieces
-const player=new THREE.Group();player.position.set(0,0,8.5);scene.add(player);const avatar=new THREE.Group();avatar.rotation.y=Math.PI;player.add(avatar);const skin=mat(0xdcae87),shirt=mat(0xe47f62),pants=mat(0x4d7376),shoe=mat(0xeee3cd),hair=mat(0x55463c);function part(x,y,z,w,h,d,m){return box(avatar,x,y,z,w,h,d,m)}part(0,1.24,0,.66,.72,.4,shirt);part(0,1.83,0,.5,.53,.48,skin);part(0,2.08,-.03,.54,.22,.52,hair);part(-.12,1.84,.245,.045,.055,.025,mat(0x354548));part(.12,1.84,.245,.045,.055,.025,mat(0x354548));const arms=[],legs=[];for(let s of [-1,1]){let arm=part(s*.43,1.27,0,.2,.65,.22,skin);arm.userData={side:s,baseY:1.27};arms.push(arm);let leg=part(s*.18,.55,0,.25,.65,.3,pants);leg.userData={side:s};legs.push(leg);part(s*.18,.19,.055,.28,.2,.42,shoe)}
-// postcard collectibles with warm floating glow
-const cardSpots=[[-5,0,-29],[0,0,-20],[-31,0,9],[31,0,-8],[0,0,39]];let cards=[];const cardMat=new THREE.MeshStandardMaterial({color:0xffe3a8,emissive:0xe6973f,emissiveIntensity:.65,roughness:.4});for(let i=0;i<cardSpots.length;i++){let [x,y,z]=cardSpots[i],g=new THREE.Group();g.position.set(x,1.35,z);scene.add(g);let c=new THREE.Mesh(new THREE.BoxGeometry(.72,.92,.1),cardMat);c.castShadow=true;g.add(c);let stripe=new THREE.Mesh(new THREE.BoxGeometry(.42,.055,.03),mat(0xc97857));stripe.position.set(0,.19,.07);g.add(stripe);let dot=new THREE.Mesh(new THREE.SphereGeometry(.1,8,8),mat(0x6b9890));dot.position.set(-.19,-.12,.08);g.add(dot);const glow=new THREE.PointLight(0xffc674,1.1,4);glow.position.z=.45;g.add(glow);cards.push({g,x,z,got:false,phase:i*1.7})}
-// collision bounds for structures and waterfront
-const blocks=buildings.map(b=>({x:b.x,z:b.z,r:b.r+1.4}));function collides(x,z){if(Math.abs(x)>49||z>54||z< -59)return true;if(z< -65)return true;if(Math.hypot(x,z)<3.15)return true;for(const b of blocks){if(Math.abs(x-b.x)<4.2&&Math.abs(z-b.z)<4.7)return true}return false}
-let yaw=0,camPitch=.15,keys={},started=false,walk=0,joy={x:0,y:0},toastTimer;const welcome=document.querySelector('#welcome');function startGame(){started=true;welcome.classList.add('gone');document.querySelector('#hint').style.opacity=1;setTimeout(()=>{if(!isMobile)document.querySelector('#hint').style.opacity=0},8000)}document.querySelector('#start').addEventListener('click',startGame);
-const isMobile=matchMedia('(max-width:700px)').matches;let dragging=false,lastX=0,lastY=0;renderer.domElement.addEventListener('pointerdown',e=>{if(!started)return;dragging=true;lastX=e.clientX;lastY=e.clientY;renderer.domElement.setPointerCapture(e.pointerId)});renderer.domElement.addEventListener('pointerup',()=>dragging=false);renderer.domElement.addEventListener('pointermove',e=>{if(!dragging||!started)return;let dx=e.clientX-lastX,dy=e.clientY-lastY;lastX=e.clientX;lastY=e.clientY;yaw-=dx*.004;camPitch=THREE.MathUtils.clamp(camPitch+dy*.002,-.1,.55)});
-addEventListener('keydown',e=>{keys[e.key.toLowerCase()]=true;if(['ArrowUp','ArrowDown','ArrowLeft','ArrowRight',' '].includes(e.key))e.preventDefault();if(!started&&['w','a','s','d','arrowup','arrowdown','arrowleft','arrowright'].includes(e.key.toLowerCase()))startGame()});addEventListener('keyup',e=>keys[e.key.toLowerCase()]=false);
-const touch=document.querySelector('#touch'),stick=document.querySelector('.stick');let touchId=null;touch.addEventListener('pointerdown',e=>{touchId=e.pointerId;touch.setPointerCapture(touchId);startGame();moveStick(e)});touch.addEventListener('pointermove',e=>{if(e.pointerId===touchId)moveStick(e)});touch.addEventListener('pointerup',e=>{if(e.pointerId===touchId){touchId=null;joy={x:0,y:0};stick.style.transform='translate(0,0)'}});function moveStick(e){let r=touch.getBoundingClientRect(),dx=e.clientX-(r.left+r.width/2),dy=e.clientY-(r.top+r.height/2),len=Math.hypot(dx,dy),max=41;if(len>max){dx*=max/len;dy*=max/len}joy={x:dx/max,y:dy/max};stick.style.transform=`translate(${dx}px,${dy}px)`}
-function showToast(msg){let t=document.querySelector('#toast');t.textContent=msg;t.classList.add('show');clearTimeout(toastTimer);toastTimer=setTimeout(()=>t.classList.remove('show'),2300)}
-const clock=new THREE.Clock();function animate(){requestAnimationFrame(animate);let dt=Math.min(clock.getDelta(),.04),t=clock.elapsedTime;
-let forward=(keys.w||keys.arrowup?1:0)-(keys.s||keys.arrowdown?1:0)-joy.y;let side=(keys.d||keys.arrowright?1:0)-(keys.a||keys.arrowleft?1:0)+joy.x;let moving=Math.abs(forward)+Math.abs(side)>.05;
-if(started&&moving){let len=Math.hypot(forward,side)||1;forward/=len;side/=len;const speed=5.1;let dx=(Math.sin(yaw)*forward+Math.cos(yaw)*side)*speed*dt,dz=(-Math.cos(yaw)*forward+Math.sin(yaw)*side)*speed*dt;if(!collides(player.position.x+dx,player.position.z))player.position.x+=dx;if(!collides(player.position.x,player.position.z+dz))player.position.z+=dz;avatar.rotation.y=Math.atan2(dx,dz);walk+=dt*10;legs.forEach(l=>l.rotation.x=Math.sin(walk+(l.userData.side>0?Math.PI:0))*.48);arms.forEach(a=>a.rotation.x=-Math.sin(walk+(a.userData.side>0?Math.PI:0))*.38)}else{legs.forEach(l=>l.rotation.x*=.8);arms.forEach(a=>a.rotation.x*=.8)}
-avatar.position.y=moving?Math.abs(Math.sin(walk*2))*.055:Math.sin(t*1.8)*.018;
-for(let c of cards){if(c.got)continue;c.g.position.y=1.38+Math.sin(t*2+c.phase)*.13;c.g.rotation.y=Math.sin(t*.75+c.phase)*.16;if(Math.hypot(player.position.x-c.x,player.position.z-c.z)<1.65){c.got=true;scene.remove(c.g);let got=cards.filter(a=>a.got).length;document.querySelector('#count').textContent=`${got} / 5`;document.querySelector('#progress').style.width=`${got*20}%`;showToast(got===5?'All five found — what a lovely day!':'A postcard for your collection!')}}
-// camera trails behind the walker, with gentle look controls
-let distance=7.8,lookAt=new THREE.Vector3(player.position.x,1.2,player.position.z);let target=new THREE.Vector3(player.position.x-Math.sin(yaw)*distance*Math.cos(camPitch),3.7+camPitch*4,player.position.z+Math.cos(yaw)*distance*Math.cos(camPitch));camera.position.lerp(target,1-Math.exp(-dt*5));lookAt.x=player.position.x;lookAt.y=1.3;lookAt.z=player.position.z;camera.lookAt(lookAt);
-renderer.render(scene,camera)}animate();
-addEventListener('resize',()=>{camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix();renderer.setPixelRatio(Math.min(devicePixelRatio,1.7));renderer.setSize(innerWidth,innerHeight)});
-</script>
-</body></html>
+<script type="module" src="js/main.js"></script>
+</body>
+</html>
