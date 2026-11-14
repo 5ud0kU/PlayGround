@@ -72,7 +72,7 @@ for(let x=3.1;x<8;x+=1.18){box(kitchen,x,1.08,-1.86,1.1,1.12,.52,mat('#777264'))
 box(kitchen,5.3,.89,-1.49,5.7,.14,.9,mat('#817965'));const sink=box(kitchen,6.1,.99,-1.44,.95,.05,.54,M.metal);const fridge=box(kitchen,7.75,1.2,.05,.9,2.25,.82,mat('#9a9b91',.42));const fridgeDoor=box(kitchen,7.27,1.2,.05,.08,2.2,.79,mat('#b7b7ab',.37));box(kitchen,7.21,1.24,.32,.045,.58,.035,M.metal);const fridgeState={open:false};addInteract('Open the refrigerator',()=>{fridgeState.open=!fridgeState.open;fridgeDoor.position.x=fridgeState.open?7.03:7.27;fridgeDoor.rotation.y=fridgeState.open?.55:0;notify(fridgeState.open?'Cold air spills over your hands.':'The door seals with a soft thud.');if(fridgeState.open)inventory.add('milk')},[fridge,fridgeDoor],'KITCHEN');
 const stove=box(kitchen,3.5,.96,-1.42,1.15,.14,.8,M.black);for(let i=0;i<4;i++){const burner=new THREE.Mesh(new THREE.TorusGeometry(.17,.035,6,16),M.metal);burner.rotation.x=Math.PI/2;burner.position.set(3.2+(i%2)*.48,1.06,-1.58+Math.floor(i/2)*.36);kitchen.add(burner)}
 const kettle=box(kitchen,4.15,1.26,-1.45,.35,.48,.32,M.metal);addInteract('Make a cup of tea',()=>{if(inventory.has('tea')){inventory.delete('tea');needs.thirst=Math.max(0,needs.thirst-23);note('The tea is over-steeped. You drink it anyway.')}else note('You cannot remember where you put the tea.');},kettle,'KITCHEN');
-const apple=new THREE.Mesh(new THREE.SphereGeometry(.14,16,12),mat('#a45b3e'));apple.position.set(5.1,1.16,-1.35);kitchen.add(apple);addInteract('Eat the apple',()=>{needs.hunger=Math.max(0,needs.hunger-27);needs.stress=Math.max(0,needs.stress-2);apple.visible=false;inventory.delete('apple');note('The apple is bruised, but sweet.')},apple,'KITCHEN');inventory.add('apple');inventory.add('tea');
+const apple=new THREE.Mesh(new THREE.SphereGeometry(.14,16,12),mat('#a45b3e'));apple.position.set(5.1,1.16,-1.35);kitchen.add(apple);addInteract('Eat the apple',()=>{needs.hunger=Math.max(0,needs.hunger-27);needs.stress=Math.max(0,needs.stress-2);apple.visible=false;inventory.delete('apple');state.flags.ateApple=true;note('The apple is bruised, but sweet.')},apple,'KITCHEN');inventory.add('apple');inventory.add('tea');
 addInteract('Wash your hands',()=>{needs.hygiene=Math.min(100,needs.hygiene+22);needs.stress=Math.max(0,needs.stress-4);notify('The water takes a moment to run clear.')},sink,'KITCHEN');
 // Bedroom and sleep.
 box(bedroom,-5.1,.4,7.2,3.6,.4,2.9,M.wood);box(bedroom,-5.1,.76,7.2,3.5,.46,2.8,M.fabricDark);box(bedroom,-5.1,1.04,8.0,3.45,.32,1.15,M.white);box(bedroom,-6.22,1.25,8.08,.9,.26,.7,M.paper);box(bedroom,-3.5,.62,5.2,.72,1.22,.68,M.wood);lamp(bedroom,-3.5,1.28,5.2);
@@ -112,15 +112,31 @@ function setTime(mins){state.minutes=(state.minutes+mins)%(24*60);if(state.minut
 function displayTime(){let h=Math.floor(state.minutes/60),m=Math.floor(state.minutes%60),ap=h>=12?'PM':'AM';h=h%12||12;document.querySelector('#clock').innerHTML=`${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')} <small>${ap}</small>`;document.querySelector('#day-label').textContent=`${['SUNDAY','MONDAY','TUESDAY','WEDNESDAY','THURSDAY','FRIDAY','SATURDAY'][(state.day)%7]} · DAY ${String(state.day).padStart(2,'0')}`;}
 function roomAt(x,z){if(z>10.25&&x<-2.1)return 'BASEMENT';if(z>10.25&&x>2.1)return 'ATTIC';if(z>4.65&&x<-2.1)return 'BEDROOM';if(z>4.65&&x>2.1)return 'BATHROOM';if(x<-2.1)return 'LIVING ROOM';if(x>2.1)return 'KITCHEN';return 'THE HALL'}
 function updateRoom(){let r=roomAt(player.position.x,player.position.z);if(r!==currentRoom){currentRoom=r;document.querySelector('#room-name').textContent=r;state.flags.visited=state.flags.visited||{};state.flags.visited[r]=true;if(r==='BASEMENT'&&state.encounters>1&&!state.seen.has('basement-voice')){state.seen.add('basement-voice');whisper('You came down here already.');}}}
-function updateNeeds(dt){if(!started||paused)return;const sim=dt*1.25;needs.hunger=Math.min(100,needs.hunger+sim*.22);needs.thirst=Math.min(100,needs.thirst+sim*.29);needs.rest=Math.max(0,needs.rest-sim*.095);needs.hygiene=Math.max(0,needs.hygiene-sim*.055);needs.isolation=Math.min(100,needs.isolation+sim*.045);needs.stress=Math.max(0,needs.stress-sim*.012);
- for(const [key,val] of [['hunger',needs.hunger],['thirst',needs.thirst],['rest',needs.rest]]){document.querySelector(`#${key}-value`).textContent=Math.round(val);const bar=document.querySelector(`#${key}-bar`);bar.style.width=`${Math.max(3,100-val)}%`;bar.style.background=val>72?'#b16d5a':'#d3c5a5'}
- document.querySelector('#inventory-line').textContent='POCKETS: '+[...inventory].map(x=>x.toUpperCase()).join(' · ');if(needs.rest<20){needs.stress=Math.min(100,needs.stress+dt*.16);}
+function updateNeeds(dt){
+ if(!started||paused)return;
+ const sim=dt*1.25;
+ needs.hunger=Math.min(100,needs.hunger+sim*.22);
+ needs.thirst=Math.min(100,needs.thirst+sim*.29);
+ needs.rest=Math.max(0,needs.rest-sim*.095);
+ needs.hygiene=Math.max(0,needs.hygiene-sim*.055);
+ needs.isolation=Math.min(100,needs.isolation+sim*.045);
+ needs.stress=Math.max(0,needs.stress-sim*.012);
+
+ for(const [key,value] of [['hunger',needs.hunger],['thirst',needs.thirst],['rest',needs.rest]]){
+  document.querySelector(`#${key}-value`).textContent=Math.round(value);
+  const bar=document.querySelector(`#${key}-bar`);
+  bar.style.width=`${Math.max(3,value)}%`;
+  const critical=key==='rest'?value<28:value>72;
+  bar.style.background=critical?'#b16d5a':'#d3c5a5';
+ }
+ document.querySelector('#inventory-line').textContent='POCKETS: '+[...inventory].map(item=>item.toUpperCase()).join(' · ');
+ if(needs.rest<20)needs.stress=Math.min(100,needs.stress+dt*.16);
 }
 function updateLightAndSky(){const t=state.minutes/1440,night=Math.max(0,Math.min(1,(Math.cos((t-.5)*Math.PI*2)+.18)/1.18));skyLight.intensity=.18+night*.7;sun.intensity=.12+(1-night)*1.3;scene.background.set(night>.6?'#151a1c':'#8a8b80');scene.fog.color.set(night>.6?'#1a1e20':'#777970');scene.fog.density=.025+night*.006;lights.forEach(l=>{l.intensity=.46*(1-night*.56)});const wash=document.querySelector('.color-wash');wash.style.background=night>.7?'linear-gradient(180deg,rgba(6,9,13,.4),rgba(8,10,13,.16) 50%,rgba(4,5,8,.63))':'linear-gradient(180deg,rgba(8,10,9,.42),transparent 25%,transparent 65%,rgba(5,6,6,.5))';document.querySelector('#weather').textContent=state.weather;document.querySelector('#weather-icon').textContent=state.weather==='RAIN'?'☂':state.weather==='CLEAR'?'☼':'☁';}
 function requestLock(){if(touchDevice)return;try{const result=canvas.requestPointerLock?.();result?.catch?.(()=>{})}catch{}}
 function startDay(){document.querySelector('#start-screen').hidden=true;started=true;paused=false;requestLock()}
 function loadGame(){if(load()){document.querySelector('#start-screen').hidden=true;started=true;paused=false;restoreWorld();notify('The day comes back in pieces.');requestLock()}}
-function restoreWorld(){Object.entries(state.doors).forEach(([name,open])=>{if(name==='front'&&open)frontDoor.rotation.y=-Math.PI/2;if(name==='back'&&open)backDoor.rotation.y=Math.PI/2});if(state.flags.ateApple)apple.visible=false;if(state.flags.tv)toggleTV(true)}
+function restoreWorld(){Object.entries(state.doors).forEach(([name,open])=>{if(name==='front'&&open)frontDoor.rotation.y=-Math.PI/2;if(name==='back'&&open)backDoor.rotation.y=Math.PI/2});if(state.flags.ateApple||!inventory.has('apple')){state.flags.ateApple=true;apple.visible=false}if(state.flags.tv)toggleTV(true)}
 function pause(){if(!started)return;paused=true;document.querySelector('#pause-screen').hidden=false;if(document.pointerLockElement)document.exitPointerLock();save()}
 function resume(){document.querySelector('#pause-screen').hidden=true;paused=false;requestLock()}
 function sleep(){if(needs.rest>88)notify('You are not tired enough to sleep yet.');else{const hours=7+rand()*2;state.minutes=(state.minutes+Math.round(hours*60))%(24*60);state.day++;needs.rest=96;needs.stress=Math.max(0,needs.stress-12);needs.fear=Math.max(0,needs.fear-14);needs.isolation=Math.min(100,needs.isolation+9);needs.hunger=Math.min(100,needs.hunger+8);needs.thirst=Math.min(100,needs.thirst+11);scheduleNext();notify('You wake to a dim, quiet room.');save()}}
