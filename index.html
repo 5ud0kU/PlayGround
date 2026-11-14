@@ -32,12 +32,14 @@
       <div class="crosshair"><span></span><i></i></div>
       <div class="interact" id="interact" hidden><kbd>E</kbd><span id="interact-label">Inspect</span></div>
       <aside class="journal" id="journal"><div class="journal-kicker">HOUSEHOLD NOTES <span>✦</span></div><p id="journal-text">The kettle needs descaling. Pick up milk if you go out.</p></aside>
-      <div class="bottom-left"><span class="flash-indicator" id="flash-indicator">◉ LANTERN ON</span><span class="separator">/</span><span id="inventory-line">POCKETS: KEYS · PHONE</span></div>
-      <div class="bottom-right"><span>WASD MOVE</span><i>·</i><span>MOUSE LOOK</span><i>·</i><span>E INTERACT</span><i>·</i><span>F LIGHT</span><i>·</i><span>ESC PAUSE</span></div>
+      <aside class="objective" aria-live="polite"><div class="objective-kicker">WHAT REMAINS</div><div class="objective-row" id="objective-clues"><i></i><span>Look through the house</span><b>0 / 3</b></div><div class="objective-row" id="objective-call"><i></i><span>Call someone</span><b>—</b></div><div class="objective-row" id="objective-leave"><i></i><span>Step outside</span><b>—</b></div></aside>
+      <div class="bottom-left"><span class="flash-indicator" id="flash-indicator">◉ LANTERN ON</span><span class="separator">/</span><span id="inventory-line">POCKETS: KEYS · PHONE</span><span class="separator">/</span><span id="stance-label">WALKING</span><span class="stamina-meter"><i id="stamina-bar"></i></span></div>
+      <div class="bottom-right"><span>WASD MOVE</span><i>·</i><span>MOUSE LOOK</span><i>·</i><span>E INTERACT</span><i>·</i><span>SHIFT RUN</span><i>·</i><span>C CROUCH</span><i>·</i><span>F LIGHT</span><i>·</i><span>ESC PAUSE</span></div>
       <div class="mobile-controls" id="mobile-controls" aria-label="Touch controls">
         <div class="move-stick" id="move-stick" aria-label="Move joystick"><div class="move-stick-knob" id="move-stick-knob"></div></div>
         <button class="touch-action touch-interact" id="touch-interact" type="button" aria-label="Interact">USE</button>
         <button class="touch-action touch-lantern" id="touch-lantern" type="button" aria-label="Toggle lantern">LIGHT</button>
+        <button class="touch-action touch-crouch" id="touch-crouch" type="button" aria-label="Toggle crouch" aria-pressed="false">CROUCH</button>
         <button class="touch-action touch-pause" id="touch-pause" type="button" aria-label="Pause">Ⅱ</button>
       </div>
       <div class="subtitle" id="subtitle"></div>
