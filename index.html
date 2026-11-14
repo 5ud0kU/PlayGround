@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="theme-color" content="#11110f" />
+  <title>The House Within</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=DM+Sans:wght@400;500;600;700&family=Playfair+Display:ital,wght@0,500;0,600;1,500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css" />
+  <link rel="icon" href="data:," />
+  <script type="importmap">{"imports":{"three":"https://unpkg.com/three@0.169.0/build/three.module.js"}}</script>
+  <script type="module" src="game.js"></script>
+</head>
+<body>
+  <main id="game">
+    <canvas id="scene" aria-label="First person view of the house"></canvas>
+    <div class="film-grain"></div><div class="vignette"></div><div class="color-wash"></div>
+    <div class="hud">
+      <header class="topbar">
+        <div class="brand"><span class="brand-mark">H</span><span>THE HOUSE<br><i>WITHIN</i></span></div>
+        <div class="dayline"><span id="weather-icon">☁</span><span id="weather">OVERCAST</span><b>·</b><span id="day-label">MONDAY · DAY 01</span></div>
+        <div class="clock-wrap"><span class="clock-label">LOCAL TIME</span><strong id="clock">07:12 <small>AM</small></strong></div>
+      </header>
+      <section class="vitals" aria-label="Condition">
+        <div class="vital"><span>HUNGER</span><div class="meter"><i id="hunger-bar"></i></div><b id="hunger-value">18</b></div>
+        <div class="vital"><span>THIRST</span><div class="meter"><i id="thirst-bar"></i></div><b id="thirst-value">12</b></div>
+        <div class="vital"><span>REST</span><div class="meter"><i id="rest-bar"></i></div><b id="rest-value">82</b></div>
+      </section>
+      <div class="room-label"><span class="room-line"></span><span id="room-name">THE HALL</span></div>
+      <div class="crosshair"><span></span><i></i></div>
+      <div class="interact" id="interact" hidden><kbd>E</kbd><span id="interact-label">Inspect</span></div>
+      <aside class="journal" id="journal"><div class="journal-kicker">HOUSEHOLD NOTES <span>✦</span></div><p id="journal-text">The kettle needs descaling. Pick up milk if you go out.</p></aside>
+      <div class="bottom-left"><span class="flash-indicator" id="flash-indicator">◉ LANTERN ON</span><span class="separator">/</span><span id="inventory-line">POCKETS: KEYS · PHONE</span></div>
+      <div class="bottom-right"><span>WASD MOVE</span><i>·</i><span>MOUSE LOOK</span><i>·</i><span>E INTERACT</span><i>·</i><span>F LIGHT</span><i>·</i><span>ESC PAUSE</span></div>
+      <div class="subtitle" id="subtitle"></div>
+      <div class="notification" id="notification"></div>
+      <div class="prompt-screen" id="start-screen">
+        <div class="start-card">
+          <div class="eyebrow"><span></span> A QUIET KIND OF DREAD</div>
+          <h1>The House<br><em>Within</em></h1>
+          <p class="intro">It is an ordinary Monday. The house is yours. The day is yours, too — for now.</p>
+          <div class="start-meta"><span>ONE HOUSE</span><b>·</b><span>NO WAY TO KNOW</span><b>·</b><span>DAY 01</span></div>
+          <button id="start-button">ENTER THE HOUSE <span>↗</span></button>
+          <div class="save-row"><button id="continue-button" class="quiet-button">CONTINUE SAVED DAY</button><button id="new-button" class="quiet-button">START OVER</button></div>
+          <div class="start-tip"><kbd>W A S D</kbd> to move <span>—</span> <kbd>E</kbd> to interact <span>—</span> <kbd>F</kbd> to use your lantern</div>
+        </div>
+        <div class="start-footer">A PSYCHOLOGICAL HORROR EXPERIENCE <span>·</span> TAKE YOUR TIME</div>
+      </div>
+      <div class="pause-screen" id="pause-screen" hidden>
+        <div class="pause-card"><div class="eyebrow">A MOMENT OF QUIET</div><h2>Still here.</h2><p>The kettle has gone cold.</p><div class="pause-actions"><button id="resume-button">RETURN TO THE HOUSE</button><button id="save-button">SAVE & KEEP WALKING</button><button id="leave-button">SAVE & CLOSE</button></div><p class="pause-small">Your day is saved automatically, too.</p></div>
+      </div>
+      <div class="ending-screen" id="ending-screen" hidden><div class="ending-card"><div class="eyebrow">THE HOUSE WITHIN</div><h2 id="ending-title">Outside, at last.</h2><p id="ending-copy"></p><button id="ending-return">SIT WITH IT</button></div></div>
+      <div class="letter-screen" id="letter-screen" hidden><article class="letter"><button id="close-letter" aria-label="Close letter">×</button><div class="letter-top">FOUND IN THE HOUSE <span>·</span> DAY <i id="letter-day">01</i></div><h2 id="letter-title">A note</h2><div id="letter-copy"></div><p class="letter-sign">— E.</p><div class="letter-foot">PRESS <kbd>ESC</kbd> TO FOLD IT AWAY</div></article></div>
+      <div class="fade" id="fade"></div>
+    </div>
+  </main>
+</body>
+</html>
