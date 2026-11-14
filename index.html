@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+  <meta name="theme-color" content="#101513" />
+  <title>Last Light on Marigold Street</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <main id="game" aria-label="Last Light on Marigold Street">
+    <canvas id="view" aria-label="First-person view of a quiet town at night"></canvas>
+    <div class="grain" aria-hidden="true"></div>
+    <header class="topbar">
+      <div class="brand"><span class="brand-mark">✳</span><span>MARIGOLD<br><small>RESIDENTS' ASSOCIATION</small></span></div>
+      <div class="night-status"><span class="live-dot"></span><span id="clock">11:42 PM</span><small>THURSDAY · DRIZZLE</small></div>
+      <button class="icon-btn" id="soundBtn" aria-label="Toggle sound">♫</button>
+    </header>
+    <section class="hud" id="hud" hidden>
+      <div class="objective-card"><div class="eyebrow">TONIGHT'S ERRAND</div><div id="objective">Find the three things people remember.</div><div class="progress"><span id="progressFill"></span></div><div class="progress-label" id="progressLabel">0 / 3 recollections</div></div>
+      <div class="status-pills"><div class="pill"><span class="pulse-icon">◉</span><span id="nerveLabel">STEADY</span></div><div class="pill"><span>▣</span><span id="saveLabel">SAVED</span></div></div>
+    </section>
+    <div class="reticle" id="reticle" hidden><i></i><b></b></div>
+    <div class="interact-hint" id="interactHint" hidden><span class="keycap">E</span><span id="hintText">LOOK CLOSER</span></div>
+    <div class="message" id="message" hidden></div>
+    <div class="letterbox" id="letterbox" hidden><div class="letter-inner"><div class="eyebrow" id="letterEyebrow">A THING FOUND</div><div class="letter-text" id="letterText"></div><button id="letterContinue">CONTINUE <span>→</span></button></div></div>
+    <div class="map-panel" id="mapPanel" hidden><div class="map-heading">YOUR NEIGHBOURHOOD <span>N</span></div><canvas id="minimap" width="124" height="124"></canvas><div class="map-legend"><i></i> YOU <b>◇</b> MEMORY</div></div>
+    <div class="touch-controls" id="touchControls" hidden>
+      <div class="stick-zone" id="stickZone"><div class="stick-base"><div class="stick-knob" id="stickKnob"></div></div></div>
+      <button class="touch-action" id="lookBtn" aria-label="Toggle flashlight">LAMP</button>
+      <button class="touch-action interact-touch" id="touchInteract">TOUCH</button>
+    </div>
+    <section class="screen" id="titleScreen">
+      <div class="title-copy"><div class="eyebrow"><span class="dot"></span> A SMALL-TOWN PSYCHOLOGICAL HORROR</div><h1>LAST LIGHT<br/><em>on Marigold Street</em></h1><p class="dek">The porch lights are on. The neighbours are home.<br/>Someone is making sure the town stays quiet.</p><div class="title-rule"></div><div class="story-note"><span>✳</span><p>You live here. You know these streets, and the people who make them a home. After a neighbour goes missing, the details stop adding up. A story about schizophrenia that keeps diagnosis separate from violence.</p></div><button class="primary-btn" id="startBtn">STEP OUTSIDE <span>→</span></button><div class="control-note"><span>WASD / ARROWS</span> WALK <i>·</i> <span>MOUSE</span> LOOK <i>·</i> <span>E</span> REMEMBER</div><div class="mobile-note">USE THE STICK TO WALK · DRAG TO LOOK</div><div class="save-note" id="saveNote"></div></div>
+      <div class="title-side"><div class="postcard"><div class="postcard-scene"><div class="moon"></div><div class="p-houses"><i></i><i></i><i></i></div><div class="p-road"></div><div class="p-lamp"></div></div><div class="postcard-caption"><span>MARIGOLD STREET</span><span>EST. 1958</span></div></div><div class="side-quote">“It’s a lovely place to live.<br/>You’ll see.”<small>— A note in your mailbox</small></div></div>
+    </section>
+    <section class="ending screen" id="endingScreen" hidden><div class="eyebrow">DAWN, AT LAST</div><h2>The town is still here.</h2><p id="endingText">The rain lets up. A kettle clicks on somewhere nearby.</p><div class="ending-stats" id="endingStats"></div><button class="primary-btn" id="returnBtn">GO HOME <span>→</span></button></section>
+    <div class="vignette" aria-hidden="true"></div>
+  </main>
+  <script src="game.js"></script>
+</body>
+</html>
