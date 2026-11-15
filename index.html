@@ -2,13 +2,14 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
   <meta name="theme-color" content="#101a20" />
   <title>Reality Unbound — A Living World</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=DM+Sans:wght@400;500;600;700&family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="styles.css" />
+  <link rel="stylesheet" href="styles.mobile.css" />
 </head>
 <body>
   <div id="game" aria-label="Reality Unbound life simulation">
@@ -17,6 +18,8 @@
     <header class="topbar">
       <div class="brand"><span class="brand-mark">R</span><div><strong>REALITY <i>UNBOUND</i></strong><small>EVERYDAY, UNWRITTEN</small></div></div>
       <div class="world-label"><span class="live-dot"></span><span id="districtLabel">HARBORLIGHT · NORTH DISTRICT</span></div>
+      <div class="mobile-clock" aria-live="polite"><span id="mobileClock">08:15</span><small id="mobileWeather">☀ 19°</small></div>
+      <button class="icon-button mobile-status" id="statusButton" title="Check your wellbeing" aria-label="Check your wellbeing">◉ <span>STATUS</span></button>
       <button class="icon-button" id="saveButton" title="Save world">↧ <span>SAVE</span></button>
     </header>
     <aside class="left-rail">
@@ -37,6 +40,10 @@
     </aside>
     <div class="crosshair"><i></i><i></i></div>
     <div class="interaction-hint" id="interactionHint"><kbd>E</kbd><span>INTERACT</span></div>
+    <div class="touch-controls" id="touchControls" aria-label="Touch controls">
+      <div class="move-pad" id="movePad" role="application" aria-label="Movement joystick"><div class="move-ring"><div class="move-stick" id="moveStick"></div></div><span class="pad-caption">MOVE</span></div>
+      <div class="touch-actions"><button class="touch-action interact-action" id="touchInteract" aria-label="Interact">E<small>INTERACT</small></button><button class="touch-action jump-action" id="touchJump" aria-label="Jump">↑<small>JUMP</small></button></div>
+    </div>
     <div class="location-toast" id="locationToast"><span>⌖</span><div><small>YOU ARE IN</small><strong>North District</strong></div></div>
     <div class="bottom-center"><div class="objective"><span class="objective-mark">✳</span><div><small>YOUR DAY, YOUR CALL</small><strong id="objectiveText">Take a moment. Find your footing.</strong></div><button id="objectivesButton">LIFE OPTIONS <span>↗</span></button></div><div class="interaction-panel" id="interactionPanel"></div></div>
     <div class="toast" id="toast"></div>
