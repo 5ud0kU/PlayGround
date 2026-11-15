@@ -52,6 +52,13 @@ function building(x,z,w,d,h,material,name,kind,description=''){
     box('sill',wx,1.1+f*2.7,z-d/2-.05,.78,.08,.08,'white',false);
   }
   box('door',x,h<5?1.15:1.28,z-d/2-.045,1.05,h<5?2.3:2.55,.09,'wood');
+  // Cornice, corner trim, and a modest shop plaque break up the large flat facades.
+  box('facade cornice',x,h-.28,z-d/2-.08,w,.16,.18,'white',false);
+  for(const side of [-1,1])box('corner pilaster',x+side*(w/2-.16),h/2,z-d/2-.045,.16,h-.18,.12,material==='cream'?'white':'cream',false);
+  if(['cafe','market','work','clinic','library','civic','school'].includes(kind)){
+    box('entrance sign',x,2.85,z-d/2-.11,Math.min(w*.62,6.2),.48,.12,'wood',false);
+    box('sign inset',x,2.85,z-d/2-.18,Math.min(w*.56,5.8),.29,.025,'gold',false);
+  }
   addCollider(x,z,w+.35,d+.35);
   if(kind) addPlace({name,label:name,x,z:z-d/2-2.0,type:kind,description});
 }
@@ -59,11 +66,14 @@ function tree(x,z,size=1){cylinder(x,size*.9,z,.19*size,1.8*size,'wood',8);const
 function lamp(x,z){cylinder(x,1.7,z,.055,3.4,'wood',8);box('lamp',x,3.35,z,.34,.15,.25,'gold',false)}
 function bench(x,z,rot=0){const g=new THREE.Group();const seat=new THREE.Mesh(new THREE.BoxGeometry(1.7,.12,.48),mats.wood);seat.position.y=.57;g.add(seat);const back=new THREE.Mesh(new THREE.BoxGeometry(1.7,.65,.1),mats.wood);back.position.set(0,.91,-.19);g.add(back);for(const xx of [-.65,.65]){const leg=new THREE.Mesh(new THREE.BoxGeometry(.09,.55,.09),mats.road);leg.position.set(xx,.28,0);g.add(leg)}g.position.set(x,0,z);g.rotation.y=rot;scene.add(g);addPlace({name:'Park bench',label:'Sit and take a breather',x,z,type:'bench',description:'A quiet place to let the day slow down.'})}
 function makeWorld(){
-  scene.add(new THREE.HemisphereLight(0xd5e9e4,0x59604f,2.1));
+  world.ambient=new THREE.HemisphereLight(0xd5e9e4,0x59604f,1.2);scene.add(world.ambient);
   const sun=new THREE.DirectionalLight(0xffe6c1,3.15);sun.position.set(-35,52,24);sun.castShadow=true;sun.shadow.mapSize.set(1024,1024);sun.shadow.camera.left=-55;sun.shadow.camera.right=55;sun.shadow.camera.top=55;sun.shadow.camera.bottom=-55;sun.shadow.bias=-.0002;scene.add(sun);world.sun=sun;
   const floor=new THREE.Mesh(new THREE.PlaneGeometry(260,260),mats.grass);floor.rotation.x=-Math.PI/2;floor.position.y=-.12;floor.receiveShadow=true;scene.add(floor);
   // Streets, sidewalks and plaza form a walkable, human-scale district.
   box('main street',0,-.045,0,14,.12,210,'road',false);box('cross street',0,-.035,-31,215,.12,12,'road',false);box('cross street',0,-.035,39,215,.12,12,'road',false);
+  // Subtle lane paint and pedestrian crossings give the avenue a more lived-in scale.
+  for(let z=-99;z<=99;z+=8)box('center lane dash',0,.022,z,.12,.018,3.8,'white',false);
+  for(const crossZ of [-31,39])for(const side of [-1,1])for(let x=-6.1;x<=6.1;x+=1.35)box('crosswalk stripe',x,.029,crossZ+side*4.65,.72,.025,1.05,'white',false);
   for(const z of [-6.9,6.9])box('curb',0,.02,z,210,.17,.48,'sidewalk',false);
   for(const x of [-7.2,7.2])box('curb',x,.02,0,.48,.17,210,'sidewalk',false);
   // walkable central pocket park
@@ -84,8 +94,13 @@ function makeWorld(){
   building(-75,20,20,17,17,'brick','Old Exchange','work');
   building(74,-19,25,18,14,'sage','Schoolhouse','school');
   building(77,20,24,18,20,'blue','Harborlight University','school');
-  // low-density homes beyond the district, trees and small park accents
+  // Low-density homes beyond the district, trees and small park accents.
   for(const [x,z,c] of [[-90,-45,'cream'],[-62,-48,'blue'],[-24,-56,'sage'],[22,-57,'cream'],[62,-51,'red'],[95,-43,'cream'],[-95,49,'sage'],[-56,55,'cream'],[-15,58,'red'],[20,59,'blue'],[62,54,'cream'],[99,50,'sage']])building(x,z,13,12,6.5,c,'homes','home');
+  // Street furniture, bins, and tactile sidewalk details make the public spaces feel inhabited.
+  for(const [x,z] of [[-8,-22],[8,-13],[-8,16],[8,29],[-8,53],[8,-48]]){
+    cylinder(x,.46,z,.22,.92,'darkglass',10);cylinder(x,.94,z,.24,.08,'wood',10);
+  }
+  for(const z of [-25,-8,9,27,46,64])for(const x of [-8.05,8.05])box('sidewalk joint',x,.115,z,.035,.012,1.15,'concrete',false);
   for(let i=0;i<42;i++){let x=(rng()-.5)*210,z=(rng()-.5)*170;if(Math.abs(x)<53&&Math.abs(z)<48)continue;if(Math.abs(x)<13||Math.abs(z+31)<8||Math.abs(z-39)<8)continue;tree(x,z,.65+rng()*.65)}
   for(let z=-68;z<80;z+=17){lamp(-9,z);lamp(9,z)}
   // neighborhood service points outside building fronts
@@ -108,11 +123,20 @@ function createNPC(i){
   const npc={id,name,age:19+Math.floor(rng()*48),job:jobs[Math.floor(rng()*jobs.length)],goal:goals[Math.floor(rng()*goals.length)],personality:['warm','reserved','curious','practical','hopeful'][Math.floor(rng()*5)],energy:40+Math.floor(rng()*55),hunger:10+Math.floor(rng()*65),mood:48+Math.floor(rng()*45),money:120+Math.floor(rng()*1200),x:s[0],z:s[1],homeX:s[0],homeZ:s[1],routine:['heading to work','on a coffee break','running an errand','taking the long way home'][Math.floor(rng()*4)],memory:[],color:'npc'+(1+Math.floor(rng()*5)),skin:'skin'+(1+Math.floor(rng()*4)),relation:0,walkSeed:rng()*10};
   world.people.push(npc);world.relations[id]=0;
   const g=new THREE.Group();
-  const body=new THREE.Mesh(new THREE.CapsuleGeometry(.29,.64,4,8),mats[npc.color]);body.position.y=1.04;body.castShadow=true;g.add(body);
-  const head=new THREE.Mesh(new THREE.SphereGeometry(.22,12,10),mats[npc.skin]);head.position.y=1.65;head.castShadow=true;g.add(head);
-  const hair=new THREE.Mesh(new THREE.SphereGeometry(.224,12,7,0,Math.PI*2,0,Math.PI*.52),mats[npc.color]);hair.position.y=1.73;g.add(hair);
-  const legs=new THREE.Mesh(new THREE.BoxGeometry(.35,.48,.23),mats.road);legs.position.y=.34;g.add(legs);
-  g.position.set(npc.x,0,npc.z);scene.add(g);npc.mesh=g;npcMeshes.push(g);
+  const body=new THREE.Mesh(new THREE.CapsuleGeometry(.29,.64,4,8),mats[npc.color]);body.position.y=1.04;body.castShadow=true;body.receiveShadow=true;g.add(body);
+  const head=new THREE.Mesh(new THREE.SphereGeometry(.22,16,12),mats[npc.skin]);head.position.y=1.65;head.castShadow=true;g.add(head);
+  const hair=new THREE.Mesh(new THREE.SphereGeometry(.224,16,10,0,Math.PI*2,0,Math.PI*.52),mats[npc.color]);hair.position.y=1.73;g.add(hair);
+  const nose=new THREE.Mesh(new THREE.SphereGeometry(.045,8,6),mats[npc.skin]);nose.position.set(0,1.63,-.205);g.add(nose);
+  const limbs={arms:[],legs:[]};
+  for(const side of [-1,1]){
+    const leg=new THREE.Group();leg.position.set(side*.13,.67,0);g.add(leg);limbs.legs.push(leg);
+    const trousers=new THREE.Mesh(new THREE.CapsuleGeometry(.105,.36,3,7),mats.road);trousers.position.y=-.23;trousers.castShadow=true;leg.add(trousers);
+    const shoe=new THREE.Mesh(new THREE.BoxGeometry(.17,.11,.29),mats.darkglass);shoe.position.set(0,-.48,-.055);shoe.castShadow=true;leg.add(shoe);
+    const arm=new THREE.Group();arm.position.set(side*.32,1.31,0);arm.rotation.z=side*-.12;g.add(arm);limbs.arms.push(arm);
+    const sleeve=new THREE.Mesh(new THREE.CapsuleGeometry(.085,.35,3,7),mats[npc.color]);sleeve.position.set(side*-.015,-.21,0);sleeve.castShadow=true;arm.add(sleeve);
+    const hand=new THREE.Mesh(new THREE.SphereGeometry(.075,8,6),mats[npc.skin]);hand.position.set(side*-.015,-.43,0);arm.add(hand);
+  }
+  g.position.set(npc.x,0,npc.z);scene.add(g);npc.mesh=g;npc.limbs=limbs;npcMeshes.push(g);
   return npc;
 }
 if(!world.people?.length){world.people=[];for(let i=0;i<18;i++)createNPC(i)} else {
@@ -135,7 +159,7 @@ function updateUI(){
   $('pulseText').textContent=world.city.mood>70?'Hopeful':world.city.mood<35?'Tense':'Unhurried';$('outlook').textContent=world.city.outlook;
   $('playerName').textContent='YOU · AGE '+(world.age||24);
 }
-function save(){try{const copy={...world,playerPosition:{x:player.position.x,z:player.position.z}};delete copy.sun;delete copy.people;localStorage.setItem('reality-unbound-save',JSON.stringify({version:1,world:{...copy,people:world.people.map(({mesh,...p})=>p)}}));toast('Your life in Harborlight has been saved.')}catch{toast('Could not save this world in your browser.')}}
+function save(){try{const copy={...world,playerPosition:{x:player.position.x,z:player.position.z}};delete copy.sun;delete copy.ambient;delete copy.people;localStorage.setItem('reality-unbound-save',JSON.stringify({version:1,world:{...copy,people:world.people.map(({mesh,...p})=>p)}}));toast('Your life in Harborlight has been saved.')}catch{toast('Could not save this world in your browser.')}}
 
 function goModal(kicker,title,body,options=[]){if(document.pointerLockElement)document.exitPointerLock();keys.clear();$('modalContent').innerHTML=`<div class="modal-kicker">${kicker}</div><h2>${title}</h2>${body}<div class="modal-options">${options.map((o,i)=>`<button class="choice" data-choice="${i}"><strong>${o.title}</strong><small>${o.detail}</small></button>`).join('')}</div>`;$('modalBackdrop').classList.add('open');$('modalContent').querySelectorAll('[data-choice]').forEach(b=>b.onclick=()=>{const chosen=options[+b.dataset.choice];if(chosen?.action)chosen.action();closeModal()})}
 function closeModal(){$('modalBackdrop').classList.remove('open')}
@@ -249,9 +273,38 @@ function simMinute(){world.minute++;if(world.minute>=1440){world.minute=0;world.
   }
   if(world.minute%60===0&&world.minute>=360&&world.minute<1100){world.balance-=world.occupation==='Between chapters'?0:0;}
 }
-function animateNPCs(t){for(const p of world.people){const mesh=p.mesh;const moving=(p.routine.includes('way')||p.routine.includes('errand')||p.routine.includes('heading'));if(moving&&Math.hypot(p.x-player.position.x,p.z-player.position.z)>4){p.x+=Math.sin(t*.12+p.walkSeed)*.002;p.z+=Math.cos(t*.11+p.walkSeed)*.002;mesh.position.x=p.x;mesh.position.z=p.z;mesh.rotation.y=Math.sin(t*.15+p.walkSeed)*.3}mesh.position.y=Math.sin(t*2+p.walkSeed)*.018}}
-function applyLight(){const h=world.minute/60;const warm=Math.max(0,1-Math.abs(h-17)/8);world.sun.intensity=1.55+warm*1.8;world.sun.position.set(-35+Math.cos(h/24*Math.PI*2)*20,30+Math.sin(h/24*Math.PI*2)*22,24);const night=Math.max(0,1-Math.abs(h-12)/7);scene.background.setRGB(.055+night*.53,.09+night*.62,.12+night*.61);scene.fog.color.copy(scene.background);}
-function frame(){requestAnimationFrame(frame);const dt=Math.min(clock.getDelta(),.05),t=clock.elapsedTime;if(started){move(dt);animateNPCs(t);simAccumulator+=dt;if(simAccumulator>=1){simAccumulator-=1;simMinute();updateUI()}findFocus();applyLight();}renderer.render(scene,camera)}
+function animateNPCs(t,dt){
+  for(const p of world.people){
+    const mesh=p.mesh,limbs=p.limbs;
+    const walking=p.routine.includes('way')||p.routine.includes('errand')||p.routine.includes('heading');
+    if(walking&&Math.hypot(p.x-player.position.x,p.z-player.position.z)>4){
+      if(!p.target||Math.hypot(p.target.x-p.x,p.target.z-p.z)<.55){
+        const angle=rng()*Math.PI*2,distance=2+rng()*5;
+        p.target={x:Math.max(-100,Math.min(100,p.x+Math.sin(angle)*distance)),z:Math.max(-77,Math.min(77,p.z+Math.cos(angle)*distance))};
+      }
+      const dx=p.target.x-p.x,dz=p.target.z-p.z,distance=Math.hypot(dx,dz),step=Math.min(distance,.7*dt);
+      if(distance>.1&&!blocked(p.x+dx/distance*step,p.z+dz/distance*step)){
+        p.x+=dx/distance*step;p.z+=dz/distance*step;mesh.rotation.y=Math.atan2(dx,-dz);
+      }else p.target=null;
+    }
+    const gait=walking?Math.sin(t*7+p.walkSeed):Math.sin(t*1.4+p.walkSeed)*.08;
+    limbs.legs.forEach((limb,i)=>limb.rotation.x=walking?gait*(i===0?-.48:.48):0);
+    limbs.arms.forEach((limb,i)=>limb.rotation.x=walking?gait*(i===0?.34:-.34):Math.sin(t*1.2+p.walkSeed+i)*.025);
+    mesh.position.set(p.x,Math.abs(gait)*.025,p.z);
+    if(!walking)mesh.rotation.y=Math.sin(t*.2+p.walkSeed)*.025;
+  }
+}
+function applyLight(){
+  const h=world.minute/60,daylight=Math.max(0,Math.sin((h-6)/12*Math.PI));
+  const sunset=Math.max(0,1-Math.abs(h-17.5)/2.5),night=1-daylight;
+  world.ambient.intensity=.28+daylight*1.35;
+  world.sun.intensity=.08+daylight*2.7+sunset*.45;
+  world.sun.color.setRGB(1,.82+daylight*.14,.68+daylight*.32);
+  world.sun.position.set(-35+Math.cos(h/24*Math.PI*2)*20,12+daylight*48,24);
+  scene.background.setRGB(.025+daylight*(.48+sunset*.12),.045+daylight*(.64-sunset*.12),.075+daylight*(.68-sunset*.24));
+  scene.fog.color.copy(scene.background);
+}
+function frame(){requestAnimationFrame(frame);const dt=Math.min(clock.getDelta(),.05),t=clock.elapsedTime;if(started){move(dt);animateNPCs(t,dt);simAccumulator+=dt;if(simAccumulator>=1){simAccumulator-=1;simMinute();updateUI()}findFocus();applyLight();}renderer.render(scene,camera)}
 frame();
 
 $('beginButton').onclick=()=>{started=true;$('startScreen').classList.add('hidden');if(matchMedia('(pointer:fine)').matches)canvas.requestPointerLock?.();toast(matchMedia('(pointer:coarse)').matches?'Drag the right side to look. Use the pad to move.':'Welcome to Harborlight. Take the day at your pace.');log('You stepped into Harborlight on a clear spring morning.');updateUI()};
