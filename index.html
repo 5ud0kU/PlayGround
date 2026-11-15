@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#101416" />
+  <link rel="icon" href="data:," />
+  <title>VOWS OF THE WILD — First-person 3v3</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700;800&family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <main class="game-shell">
+    <canvas id="world" aria-label="First person battlefield"></canvas>
+    <div class="vignette"></div>
+    <header class="topbar">
+      <div class="brand"><div class="brand-mark">✦</div><div><span class="brand-title">VOWS <i>OF THE</i> WILD</span><span class="brand-sub">THE SHATTERED MARCHES</span></div></div>
+      <div class="match-center"><span class="match-label">THE FRONTIER</span><div class="score"><b class="blue-score">02</b><span class="score-dash">—</span><span id="clock">00:00</span><span class="score-dash">—</span><b class="red-score">01</b></div><span class="match-sub">3V3 · CONQUEST</span></div>
+      <div class="top-actions"><div class="ping"><i></i> 34 ms</div><button id="settingsBtn" class="icon-btn" aria-label="Settings">⚙</button></div>
+    </header>
+    <section class="objective-banner"><span class="objective-gem">✧</span><div><b id="objectiveTitle">THE WILD AWAKENS</b><small id="objectiveText">Claim the relics. Break their keep.</small></div><span class="objective-time" id="objectiveTime">01:20</span></section>
+    <div class="left-stack">
+      <section class="squad-panel glass"><div class="panel-kicker">YOUR COMPANY <span>3 / 3</span></div><div class="squad-row active"><div class="portrait p1">✦</div><div class="squad-info"><b>ASHEN WARDEN</b><small>YOU · THE IRON VOW</small></div><div class="online-dot"></div></div><div class="squad-row"><div class="portrait p2">♜</div><div class="squad-info"><b>BRIAR SPEAR</b><small>ALLY · ROAMING</small></div><div class="ally-hp"><i style="width:86%"></i></div></div><div class="squad-row"><div class="portrait p3">☼</div><div class="squad-info"><b>THE LAMPLIGHTER</b><small>ALLY · MIDFIELD</small></div><div class="ally-hp"><i style="width:68%"></i></div></div></section>
+      <section class="event-feed" id="eventFeed"><div class="event-line"><span class="feed-icon">⚔</span><span>The frontier is yours to shape.</span></div></section>
+    </div>
+    <aside class="right-stack"><section class="map-panel glass"><div class="map-head"><span>WAR TABLE</span><span class="map-coords">MARCHES / 07</span></div><div class="minimap" id="minimap"><svg viewBox="0 0 220 166" preserveAspectRatio="none" aria-hidden="true"><path class="map-land" d="M0 0h220v166H0z"/><path class="map-river" d="M77 -8 91 31 77 57 112 81 99 108 125 136 119 174"/><path class="lane lane-top" d="M20 20 85 61 197 31"/><path class="lane lane-bot" d="M20 144 87 107 200 138"/><path class="jungle-path" d="M48 30 55 74 40 112 65 139M167 29 153 65 179 103 159 137"/></svg><span class="map-base base-blue"></span><span class="map-base base-red"></span><span class="map-objective relic-dot"></span><span class="map-player" id="mapPlayer"></span><span class="map-ally ally-a"></span><span class="map-ally ally-b"></span><span class="map-enemy enemy-a"></span><div class="map-label label-n">NORTH ROAD</div><div class="map-label label-s">SOUTH ROAD</div><div class="map-label label-j">THE GREEN</div></div><div class="map-foot"><span><i class="legend player-key"></i> YOU</span><span><i class="legend enemy-key"></i> FOE</span><span><i class="legend relic-key"></i> RELIC</span></div></section><section class="team-objective glass"><div class="panel-kicker">RELIC CONTROL <span id="relicCount">0 / 2</span></div><div class="relic-progress"><i id="relicProgress"></i></div><small>Hold a relic shrine to empower your siege.</small></section></aside>
+    <div class="world-callout" id="worldCallout"></div>
+    <div class="center-notice" id="centerNotice"><div class="notice-line"></div><b>THE FRONTIER IS OPEN</b><span>Choose your path. Your legend is yours alone.</span></div>
+    <div class="crosshair"><i></i><i></i><i></i><i></i><b></b></div>
+    <div class="interact-prompt" id="interactPrompt"><kbd>F</kbd><span>Claim the <b>Sunken Relic</b></span></div>
+    <div class="damage-flash" id="damageFlash"></div>
+    <footer class="bottom-hud">
+      <div class="hero-panel"><div class="hero-token"><span>✦</span><i id="level">01</i></div><div class="hero-stats"><div class="hero-name">THE ASHEN WARDEN <span id="roleTag">VANGUARD</span></div><div class="health-track"><i id="healthBar"></i><span id="healthText">640 / 640</span><em>♥</em></div><div class="mana-track"><i id="manaBar"></i><span id="manaText">280 / 280</span><em>◆</em></div></div></div>
+      <div class="ability-row"><button class="ability" id="abilityQ"><span class="ability-symbol">⟡</span><kbd>Q</kbd><small>RIFT SLASH</small><i class="cooldown-shade"></i></button><button class="ability" id="abilityE"><span class="ability-symbol">◉</span><kbd>E</kbd><small>IRON SKIN</small><i class="cooldown-shade"></i></button><button class="ability ultimate" id="abilityR"><span class="ability-symbol">✹</span><kbd>R</kbd><small>WILD OATH</small><i class="cooldown-shade"></i></button><div class="ability-divider"></div><button class="potion" id="potionBtn"><span>⚗</span><kbd>1</kbd><small id="potionCount">3</small></button></div>
+      <div class="right-hud"><div class="resource"><span>◈</span><b id="gold">450</b><small>GOLD</small></div><button id="shopBtn" class="shop-button"><span>✣</span> ARMORY <kbd>B</kbd></button></div>
+    </footer>
+    <div class="controls-hint"><span><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> MOVE</span><i></i><span><kbd>SHIFT</kbd> SPRINT</span><i></i><span><kbd>CLICK</kbd> STRIKE</span><i></i><span><kbd>F</kbd> INTERACT</span></div>
+    <div class="match-overlay" id="matchOverlay"><div class="result-card glass"><div class="result-icon">✦</div><div class="result-kicker">THE FRONTIER REMEMBERS</div><h1 id="resultTitle">VICTORY</h1><p id="resultText">The keep has fallen. The march is yours.</p><div class="result-stats"><span><b id="finalKills">0</b> TAKEDOWNS</span><span><b id="finalGold">0</b> GOLD EARNED</span><span><b id="finalTime">00:00</b> MATCH TIME</span></div><button id="playAgain">RETURN TO THE MARCH</button></div></div>
+    <div class="modal-overlay" id="shopModal"><section class="shop-modal glass"><div class="shop-top"><div><span class="modal-kicker">THE FIELD ARMORY</span><h2>Choose your <i>essence.</i></h2></div><button class="close-btn" id="closeShop">✕</button></div><div class="gold-line">AVAILABLE COIN <b>◈ <span id="shopGold">450</span></b></div><div class="item-grid" id="itemGrid"></div><div class="shop-bottom"><span>Essences belong to your vow — no champions, no changing forms.</span><button id="resumeBtn">BACK TO THE FIELD <kbd>ESC</kbd></button></div></section></div>
+    <div class="modal-overlay" id="settingsModal"><section class="settings-modal glass"><div class="shop-top"><div><span class="modal-kicker">BATTLEFIELD OPTIONS</span><h2>Field <i>settings.</i></h2></div><button class="close-btn" id="closeSettings">✕</button></div><div class="settings-row"><span>LOOK SENSITIVITY</span><input id="sensitivity" type="range" min="30" max="150" value="90"></div><div class="settings-row"><span>CAMERA SHAKE</span><button id="shakeToggle" class="setting-toggle on">ON</button></div><div class="settings-row"><span>SHOW CONTROLS</span><button id="hintsToggle" class="setting-toggle on">ON</button></div><p class="settings-note">This is a self-contained frontier skirmish. Your persistent Warden fights alongside two allied and three enemy companions.</p><button id="settingsDone" class="settings-done">RESUME THE MARCH</button></section></div>
+    <div class="toast" id="toast"></div>
+  </main>
+  <script src="game.js"></script>
+</body>
+</html>
