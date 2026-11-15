@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#080b10">
+  <meta name="description" content="NULLSPACE — a persistent world made of addresses, explored with the Lingua programming language.">
+  <title>NULLSPACE — A living system</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="shell">
+    <header class="topbar">
+      <div class="brand"><div class="brand-mark">N<span>_</span></div><div><strong>NULLSPACE</strong><small>PERSONAL SYSTEM / NODE 01</small></div></div>
+      <div class="top-center"><span class="live-dot"></span><span>WORLD PROCESS RUNNING</span><span class="divider"></span><span id="clock">00:00:00</span></div>
+      <div class="top-actions"><button class="icon-button" id="sound-toggle" title="Toggle sound" aria-label="Toggle sound">◖</button><button class="icon-button" id="help-open" title="Open language guide" aria-label="Open language guide">?</button><button class="avatar" id="profile-open" title="Operator profile">OP</button></div>
+    </header>
+    <main class="layout">
+      <aside class="sidebar panel">
+        <div class="section-label">YOUR MACHINE <span class="tiny-led"></span></div>
+        <div class="operator-card"><div class="operator-icon">⌘</div><div><strong>OPERATOR_01</strong><small>GUEST PROCESS</small></div><span class="online-tag">ONLINE</span></div>
+        <div class="resource-list">
+          <div class="resource"><span class="resource-icon cyan">▦</span><span>MEMORY</span><strong id="memory">000</strong><small>BYTES</small></div>
+          <div class="resource"><span class="resource-icon lime">⌁</span><span>ENERGY</span><strong id="energy">100</strong><small>%</small></div>
+          <div class="resource"><span class="resource-icon amber">◇</span><span>CIPHERS</span><strong id="cipher-count">0 / 4</strong><small>FOUND</small></div>
+          <div class="resource"><span class="resource-icon amber">✳</span><span>ROOT KEY</span><strong id="key-count">0 / 1</strong><small>HELD</small></div>
+        </div>
+        <div class="side-rule"></div>
+        <div class="section-label">DIRECTORY <span class="muted">/root/world</span></div>
+        <nav class="directory" id="directory"></nav>
+        <div class="side-rule"></div>
+        <div class="section-label">ACTIVE OBJECTIVE</div>
+        <div class="objective-card"><div class="objective-icon">⌬</div><div class="objective-copy"><strong id="objective-title">Wake the system</strong><p id="objective-desc">Probe nearby nodes. Four ciphers are scattered across the network.</p><div class="progress-track"><i id="objective-progress"></i></div><small id="objective-count">0 / 4 CIPHERS</small></div></div>
+        <div class="sidebar-bottom"><span class="pulse-ring"></span><div><small>UPTIME</small><strong id="uptime">00:00:00</strong></div><span class="build">BUILD 0.8.4</span></div>
+      </aside>
+      <section class="workspace">
+        <div class="workspace-heading"><div><div class="eyebrow"><span class="crumb">/root</span> <span>›</span> <span id="crumb-node">home</span></div><h1 id="node-title">HOME DIRECTORY</h1></div><div class="heading-right"><span class="secure-pill"><i></i> ENCRYPTED</span><button class="text-button" id="map-toggle">⌘ <span>NETWORK MAP</span></button></div></div>
+        <div class="world-card" id="world-card">
+          <div class="world-grid"></div><div class="scanlines"></div><div class="world-noise"></div>
+          <div class="world-topline"><span><b class="active-square"></b><span id="node-type">LOCAL PROCESS</span></span><span id="node-coord">0x0001 · LOOPBACK</span></div>
+          <div class="world-content"><div class="world-copy"><span class="node-index" id="node-index">SECTOR 00 / 08</span><h2 id="world-name">The Quiet Boot</h2><p id="world-desc">A blank prompt blinks in the dark. Somewhere beyond this machine, the network is dreaming.</p><div class="world-tags" id="world-tags"><span>LOCAL</span><span>STABLE</span><span>UNEXPLORED</span></div></div><div class="core-art" id="core-art"><div class="orbit orbit-a"></div><div class="orbit orbit-b"></div><div class="orbit orbit-c"></div><div class="core-center"><span id="core-glyph">⌘</span></div><div class="core-cross cross-a"></div><div class="core-cross cross-b"></div><div class="core-coord">0x01</div></div></div>
+          <div class="world-footer"><span><i class="status-pip"></i><span id="node-status">PROCESS IDLE</span></span><span>LATENCY <b id="latency">04</b> MS</span><span id="world-event">NO SIGNAL LOST</span></div>
+          <button class="world-next" id="focus-action" title="Read this node">↗</button>
+        </div>
+        <div class="lower-grid">
+          <section class="terminal panel"><div class="panel-heading"><div><span class="terminal-icon">›_</span><strong>LINGUA / EXECUTOR</strong><small>v.04 · persistent language</small></div><button id="clear-terminal" class="subtle-button">CLEAR</button></div><div class="terminal-output" id="terminal-output" aria-live="polite"></div><form class="command-form" id="command-form" autocomplete="off"><span class="prompt" id="prompt"><b>op</b><span>@</span>void:<i>~</i><b id="prompt-sign">$</b></span><input id="command-input" aria-label="Enter a command" placeholder='probe()  ·  help()  ·  def ...' spellcheck="false" autocomplete="off"><button type="submit" aria-label="Run command">RUN <span>↵</span></button></form><div class="terminal-hint"><span>LINGUA <b>0.4</b></span><span>↑ ↓ HISTORY</span><span>PROGRAMS <b id="program-count">0</b></span><span><kbd>?</kbd> REFERENCE</span></div></section>
+          <section class="nearby panel"><div class="panel-heading"><div><span class="nearby-icon">⌖</span><strong>NEARBY PROCESSES</strong></div><button id="probe-button" class="subtle-button accent">PROBE ↗</button></div><div id="nearby-list" class="nearby-list"></div><div class="nearby-foot"><span class="tiny-led"></span><span id="nearby-status">SCANNING LOCAL ROUTES</span></div></section>
+        </div>
+        <footer class="workspace-footer"><span>NULLSPACE IS A PLACE MADE OF THOUGHT.</span><span>ALL PROCESSES PERSIST LOCALLY <i>●</i></span></footer>
+      </section>
+      <aside class="rightbar">
+        <section class="mini-map panel"><div class="panel-heading"><div><span class="map-icon">⌘</span><strong>NETWORK</strong></div><button class="expand-button" id="map-expand" aria-label="Expand network map">↗</button></div><div class="map-canvas" id="mini-map"></div><div class="map-legend"><span><i class="legend-current"></i> YOU</span><span><i class="legend-known"></i> KNOWN</span><span><i class="legend-unknown"></i> UNKNOWN</span></div></section>
+        <section class="activity panel"><div class="panel-heading"><div><span class="activity-icon">◷</span><strong>WORLD FEED</strong></div><span class="feed-live"><i></i> LIVE</span></div><div class="feed-list" id="feed-list"></div></section>
+        <section class="tip-card"><div class="tip-mark">✳</div><div><span>FIELD NOTE <b id="tip-index">01</b></span><p id="tip-text">The system keeps running while you're away. Idle processes slowly recover memory.</p><button id="next-tip">NEXT NOTE <span>→</span></button></div></section>
+        <div class="rightbar-foot"><span>◎</span> NO HUMAN WORLD DETECTED</div>
+      </aside>
+    </main>
+  </div>
+  <div class="toast" id="toast" role="status"></div>
+  <div class="modal-backdrop" id="modal-backdrop"><section class="modal panel" id="modal" role="dialog" aria-modal="true"><button class="modal-close" id="modal-close" aria-label="Close">×</button><div class="modal-eyebrow" id="modal-eyebrow">LINGUA SPECIFICATION / 0.4</div><h2 id="modal-title">A language for the void.</h2><p class="modal-intro" id="modal-intro">Lingua is the instruction set your machine understands. Type a command below and the world will answer.</p><div class="syntax-list" id="syntax-list"></div><div class="modal-actions"><button class="primary-button" id="modal-start">RETURN TO SYSTEM ↗</button><button class="reset-button" id="reset-save">RESET LOCAL SAVE</button></div></section></div>
+  <script src="game.js"></script>
+</body>
+</html>
