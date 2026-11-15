@@ -1,73 +1,108 @@
 <!doctype html>
 <html lang="en">
 <head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
-  <meta name="theme-color" content="#101513">
-  <title>District 09 — Signal Lost</title>
-  <link rel="stylesheet" href="style.css">
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no"><meta name="theme-color" content="#10191d">
+<title>City 17: Afterlight</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700;800&family=DM+Mono:wght@400;500&display=swap');
+:root{--amber:#f0a74a;--mint:#78d8ba;--ink:#dce7df}*{box-sizing:border-box}html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#10191d;color:var(--ink);font-family:'DM Mono',monospace}canvas{display:block;width:100%;height:100%;outline:0}.noise{position:fixed;inset:0;pointer-events:none;z-index:2;opacity:.11;background-image:url("data:image/svg+xml,%3Csvg viewBox='0 0 180 180' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.82' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='.4'/%3E%3C/svg%3E")}.vignette{position:fixed;inset:0;pointer-events:none;z-index:1;background:radial-gradient(ellipse at center,transparent 42%,rgba(4,9,11,.48) 100%)}.hud{position:fixed;z-index:3;inset:0;pointer-events:none}.menu-open .hud{visibility:hidden}.topbar{position:absolute;left:34px;right:34px;top:26px;display:flex;justify-content:space-between;align-items:flex-start}.brand{font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:23px;letter-spacing:2px;line-height:1}.brand small{display:block;font:10px 'DM Mono';letter-spacing:2.5px;color:#8da19a;margin-top:8px}.objective{position:absolute;top:30px;left:50%;transform:translateX(-50%);text-align:center;min-width:240px}.objective .label{font-size:9px;letter-spacing:2px;color:var(--amber);text-transform:uppercase}.objective .task{font:600 19px 'Barlow Condensed';letter-spacing:1px;margin-top:5px}.counter{font-size:10px;color:#a6b5ad;margin-top:5px}.rightinfo{text-align:right;font-size:10px;line-height:1.9;color:#9daea7}.rightinfo b{color:var(--mint);font-weight:500}.reticle{position:absolute;left:50%;top:50%;width:18px;height:18px;transform:translate(-50%,-50%);opacity:.85}.reticle:before,.reticle:after{content:'';position:absolute;background:#d9e7d9;box-shadow:0 0 4px #a0eed0}.reticle:before{width:1px;height:15px;left:8px;top:1px}.reticle:after{height:1px;width:15px;top:8px;left:1px}.prompt{position:absolute;left:50%;top:calc(50% + 28px);transform:translateX(-50%);font-size:10px;letter-spacing:1px;color:#fff;text-shadow:0 1px 5px #000;white-space:nowrap;opacity:0;transition:opacity .15s}.bottomleft{position:absolute;left:34px;bottom:28px;display:flex;gap:12px;align-items:end}.statusbox{padding:10px 13px;background:rgba(8,15,17,.62);border-left:2px solid var(--mint);min-width:118px}.statusbox .k{font-size:8px;letter-spacing:1.5px;color:#899b93}.statusbox .v{font:600 17px 'Barlow Condensed';margin-top:4px}.mapbox{position:absolute;right:34px;bottom:28px;width:122px;height:122px;background:rgba(8,15,17,.76);border:1px solid rgba(201,221,209,.16);overflow:hidden}.mapbox canvas{width:100%;height:100%}.maplabel{position:absolute;right:0;top:-17px;font-size:8px;letter-spacing:1.5px;color:#93a69c}.bottomhint{position:absolute;left:50%;bottom:32px;transform:translateX(-50%);font-size:9px;color:#a2b1aa;letter-spacing:.7px;white-space:nowrap}.bottomhint span{color:var(--amber)}.startscreen,.win,.pause{position:fixed;z-index:8;inset:0;display:grid;place-items:center;background:linear-gradient(90deg,rgba(7,14,17,.94),rgba(7,14,17,.68) 58%,rgba(7,14,17,.25)),linear-gradient(0deg,rgba(10,18,20,.6),transparent);transition:opacity .35s}.startscreen.hidden,.win.hidden,.pause.hidden{opacity:0;pointer-events:none}.panel{width:min(560px,calc(100vw - 42px));margin-left:clamp(0px,12vw,180px)}.eyebrow{font-size:10px;color:var(--amber);letter-spacing:3px;margin-bottom:15px}.title{font:800 clamp(56px,9vw,100px)/.8 'Barlow Condensed',sans-serif;letter-spacing:-1px;text-transform:uppercase}.title em{font-style:normal;color:var(--mint)}.subtitle{font-size:11px;line-height:1.9;max-width:390px;color:#b1beb7;margin:25px 0}.startbtn{border:0;background:var(--amber);color:#182022;padding:14px 28px;font:700 12px 'DM Mono';letter-spacing:1.4px;cursor:pointer;clip-path:polygon(0 0,94% 0,100% 25%,100% 100%,6% 100%,0 75%)}.startbtn:hover{background:#ffbf69}.keys{display:flex;gap:18px;flex-wrap:wrap;margin-top:24px;color:#84958e;font-size:9px;line-height:1.7}.keys b{display:block;color:#d3ded7;font-weight:500}.crossline{margin:20px 0 0;width:66px;height:2px;background:var(--mint)}.missiontag{position:absolute;bottom:25px;left:34px;font-size:9px;color:#62726d;letter-spacing:1.4px}.toast{position:absolute;left:50%;top:21%;transform:translate(-50%,-8px);padding:10px 15px;background:rgba(11,24,24,.88);border:1px solid rgba(120,216,186,.5);font-size:10px;letter-spacing:1.2px;color:var(--mint);opacity:0;transition:.3s}.toast.show{opacity:1;transform:translate(-50%,0)}.touch{display:none;pointer-events:auto}.joy{position:absolute;bottom:30px;left:24px;width:126px;height:126px;border-radius:50%;background:#c9e6d11b;border:1px solid #d5f3df45}.nub{position:absolute;left:38px;top:38px;width:48px;height:48px;border-radius:50%;background:#d6e9dc4a;border:1px solid #effff17a}.touchbuttons{position:absolute;right:24px;bottom:36px;display:flex;gap:12px;align-items:end}.touchbtn{width:54px;height:54px;border-radius:50%;background:#152321d9;border:1px solid #d1ead055;color:#e6f4eb;font:10px 'DM Mono';display:grid;place-items:center}.touchbtn.big{width:66px;height:66px;border-color:#78d8ba99;color:var(--mint)}
+@media(max-width:700px){.topbar{left:16px;right:16px;top:16px}.brand{font-size:18px}.objective{top:75px}.rightinfo{font-size:8px}.bottomleft{left:16px;bottom:16px}.mapbox{right:16px;bottom:16px;width:92px;height:92px}.bottomhint{display:none}.startscreen{background:linear-gradient(90deg,rgba(7,14,17,.94),rgba(7,14,17,.48)),linear-gradient(0deg,rgba(10,18,20,.5),transparent)}.panel{margin:0}.missiontag{left:18px;font-size:8px}.touch{display:block}.keys{max-width:300px}}
+</style>
+<script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js"}}</script>
 </head>
-<body>
-  <main id="game-shell">
-    <canvas id="view" aria-label="First person city game"></canvas>
-    <div class="film-grain"></div>
-    <div class="vignette"></div>
-    <div id="damage-flash" class="damage-flash"></div>
-    <div id="pulse-flash" class="pulse-flash"></div>
+<body class="menu-open">
+<div class="noise"></div><div class="vignette"></div>
+<div class="hud">
+ <div class="topbar"><div class="brand">AFTERLIGHT<small>SECTOR 09 · CITY 17</small></div><div class="objective"><div class="label">Current directive</div><div class="task" id="task">Recover signal cores</div><div class="counter" id="counter">0 / 4 CORES SECURED</div></div><div class="rightinfo">LOCAL TIME&nbsp; <b>19:42</b><br>SECTOR&nbsp; <b id="sector">MARKET WARD</b></div></div>
+ <div class="reticle"></div><div class="prompt" id="prompt">[ E ] RECOVER SIGNAL CORE</div><div class="toast" id="toast">SIGNAL CORE SECURED</div>
+ <div class="bottomleft"><div class="statusbox"><div class="k">SUIT INTEGRITY</div><div class="v" id="health">100%</div></div><div class="statusbox"><div class="k">DISTRICT</div><div class="v" id="district">OLD QUARTER</div></div></div>
+ <div class="mapbox"><div class="maplabel">DISTRICT MAP</div><canvas id="map" width="240" height="240"></canvas></div>
+ <div class="bottomhint"><span>WASD</span> MOVE &nbsp;·&nbsp; <span>SHIFT</span> SPRINT &nbsp;·&nbsp; <span>SPACE</span> VAULT &nbsp;·&nbsp; <span>E</span> INTERACT &nbsp;·&nbsp; <span>Q</span> PULSE SCAN</div>
+ <div class="touch"><div class="joy" id="joy"><div class="nub" id="nub"></div></div><div class="touchbuttons"><div class="touchbtn" id="interactBtn">USE</div><div class="touchbtn" id="jumpBtn">JUMP</div><div class="touchbtn big" id="scanBtn">SCAN</div></div></div>
+</div>
+<div class="startscreen" id="startscreen"><div class="panel"><div class="eyebrow">A CITY ON THE EDGE · 19:42</div><div class="title">AFTER<br><em>LIGHT</em></div><div class="crossline"></div><p class="subtitle">The blackout has taken the whole district. Four signal cores are scattered across the old quarter. Bring them to the emergency relay at the tram terminal before the last light fades.</p><button class="startbtn" id="startBtn">ENTER THE DISTRICT&nbsp; →</button><div class="keys"><div><b>W A S D</b> move</div><div><b>SHIFT</b> sprint</div><div><b>SPACE</b> vault</div><div><b>E</b> recover / activate</div><div><b>Q</b> pulse scan</div></div></div><div class="missiontag">FIELD NOTE 04&nbsp; / &nbsp;CIVIL DEFENSE RELAY NETWORK</div></div>
+<div class="pause hidden" id="pause"><div class="panel"><div class="eyebrow">SIGNAL LOST</div><div class="title" style="font-size:64px">DISTRICT<br><em>PAUSED</em></div><p class="subtitle">The streets are holding their breath.</p><button class="startbtn" id="resumeBtn">RETURN TO THE STREETS&nbsp; →</button></div></div>
+<div class="win hidden" id="win"><div class="panel"><div class="eyebrow">RELAY NETWORK RESTORED</div><div class="title">THE CITY<br><em>REMAINS</em></div><p class="subtitle">One by one, the windows flicker awake. Somewhere above the rooftops, the tram line hums back to life.<br><br><span id="finalTime" style="color:var(--mint)"></span></p><button class="startbtn" id="againBtn">WALK THE DISTRICT AGAIN&nbsp; →</button></div></div>
+<script type="module">
+import * as THREE from 'three';
 
-    <section id="title-screen" class="screen visible">
-      <div class="title-mark"><span class="mark-icon">09</span><span>FIELD TRANSMISSION <i> / 03:17 AM</i></span></div>
-      <div class="title-content">
-        <p class="eyebrow">NORTH QUARANTINE ZONE · DAY 184</p>
-        <h1>DISTRICT<br><em>09</em></h1>
-        <div class="title-rule"></div>
-        <p class="subtitle">SIGNAL LOST</p>
-        <p class="story">The relay towers have gone dark.<br>Find the three street-level junctions and bring the evacuation channel back online.</p>
-        <button id="start-button" class="primary-button" aria-label="Start">ENTER THE DISTRICT <span>↗</span></button>
-        <p class="controls-note">WASD MOVE <b>·</b> MOUSE LOOK <b>·</b> E INTERACT <b>·</b> Q PULSE</p>
-      </div>
-      <div class="title-footer"><span>AN ORIGINAL DYSTOPIAN CITY EXPERIENCE</span><span>NO WAY BACK / KEEP MOVING</span></div>
-    </section>
-
-    <section id="pause-screen" class="screen">
-      <div class="pause-card"><p class="eyebrow">FIELD TRANSMISSION / PAUSED</p><h2>TAKE A BREATH.</h2><p>The district is still out there.</p><button id="resume-button" class="primary-button">RESUME MISSION <span>↗</span></button><span class="small-hint">PRESS ESC TO RETURN</span></div>
-    </section>
-
-    <section id="complete-screen" class="screen">
-      <div class="pause-card"><p id="complete-eyebrow" class="eyebrow">EVACUATION CHANNEL RESTORED</p><h2 id="complete-title">YOU'RE NOT<br>ALONE.</h2><p id="final-stats">The signal is moving.</p><button id="replay-button" class="primary-button">WALK IT AGAIN <span>↗</span></button></div>
-    </section>
-
-    <header id="hud-top" class="hud hidden">
-      <div class="mission-tag"><span class="live-dot"></span><span id="clock">03:17 AM</span><i> / </i> DISTRICT 09</div>
-      <div class="objective-tag"><span class="tag-label">TASK</span><span id="objective-text">RESTORE THE STREET RELAYS</span></div>
-      <button id="map-toggle" aria-label="Toggle map">MAP <span> M </span></button>
-    </header>
-
-    <aside id="map-panel" class="map-panel hidden">
-      <div class="map-heading"><span>AREA SURVEY</span><span>N ↑</span></div>
-      <canvas id="minimap" width="180" height="180"></canvas>
-      <div class="map-legend"><span><i class="legend-player"></i> YOU</span><span><i class="legend-node"></i> RELAY</span></div>
-    </aside>
-
-    <div id="crosshair" class="crosshair hidden"><i></i><b></b></div>
-    <div id="interaction" class="interaction hidden"><span class="keycap">E</span><span id="interaction-label">RESTORE RELAY</span></div>
-    <div id="message" class="message"></div>
-    <div id="hint" class="hint hidden">CLICK TO CAPTURE MOUSE <span>ESC TO RELEASE</span></div>
-
-    <footer id="hud-bottom" class="hud hidden">
-      <div class="tool-readout"><span class="tool-icon">⌁</span><div><small>FIELD PULSE</small><strong id="pulse-status">READY</strong></div><kbd>Q</kbd></div>
-      <div class="vitals-readout"><div class="progress-label"><span>VITALS</span><span id="vitals-count">100</span></div><div class="vitals-track"><i id="vitals-fill"></i></div></div>
-      <div class="progress-readout"><div class="progress-label"><span>STREET RELAYS</span><span id="relay-count">0 / 3</span></div><div class="progress-track"><i id="progress-fill"></i><i id="progress-fill-two"></i><i id="progress-fill-three"></i></div></div>
-      <div class="coords-readout"><span>POSITION</span><strong id="coords">N 00 · E 00</strong></div>
-    </footer>
-
-    <div id="mobile-controls" class="mobile-controls hidden">
-      <div id="joystick" class="joystick"><i></i></div>
-      <button id="pulse-touch" class="touch-action">PULSE<small>Q</small></button>
-      <button id="interact-touch" class="touch-action interact-touch hidden">USE<small>E</small></button>
-      <div class="look-label">DRAG TO LOOK</div>
-    </div>
-  </main>
-  <script type="module" src="game.js"></script>
-</body>
-</html>
+// Original, procedural Half-Life-inspired environment: no proprietary game files required.
+const scene=new THREE.Scene();scene.background=new THREE.Color(0x91a19c);scene.fog=new THREE.FogExp2(0x91a19c,.0095);
+const camera=new THREE.PerspectiveCamera(76,innerWidth/innerHeight,.08,450);camera.rotation.order='YXZ';
+const renderer=new THREE.WebGLRenderer({antialias:true,powerPreference:'high-performance'});renderer.setPixelRatio(Math.min(devicePixelRatio,1.7));renderer.setSize(innerWidth,innerHeight);renderer.shadowMap.enabled=false;renderer.toneMapping=THREE.ACESFilmicToneMapping;renderer.toneMappingExposure=1.12;document.body.appendChild(renderer.domElement);
+scene.add(new THREE.HemisphereLight(0xc9d9cf,0x29302d,2.1));const sun=new THREE.DirectionalLight(0xffd5a0,2.4);sun.position.set(-38,65,28);sun.castShadow=true;sun.shadow.mapSize.set(2048,2048);sun.shadow.camera.left=-115;sun.shadow.camera.right=115;sun.shadow.camera.top=115;sun.shadow.camera.bottom=-115;sun.shadow.bias=-.0003;scene.add(sun);
+const mats={road:new THREE.MeshStandardMaterial({color:0x343b3a,roughness:.98}),side:new THREE.MeshStandardMaterial({color:0x77786e,roughness:1}),brick:new THREE.MeshStandardMaterial({color:0x76685a,roughness:.94}),concrete:new THREE.MeshStandardMaterial({color:0x7d817a,roughness:.95}),blue:new THREE.MeshStandardMaterial({color:0x516875,roughness:.9}),dark:new THREE.MeshStandardMaterial({color:0x343b3a,roughness:.9}),glass:new THREE.MeshStandardMaterial({color:0x536e70,roughness:.32,metalness:.25}),litglass:new THREE.MeshStandardMaterial({color:0xf0bb72,emissive:0xc57928,emissiveIntensity:1.45,roughness:.6}),metal:new THREE.MeshStandardMaterial({color:0x58605d,metalness:.55,roughness:.55}),wood:new THREE.MeshStandardMaterial({color:0x584b3d,roughness:1}),green:new THREE.MeshStandardMaterial({color:0x52624b,roughness:1}),yellow:new THREE.MeshStandardMaterial({color:0xd19a4d,roughness:.7}),glow:new THREE.MeshStandardMaterial({color:0x83ffda,emissive:0x2bdab1,emissiveIntensity:2,roughness:.25}),white:new THREE.MeshStandardMaterial({color:0xd4d0bb,roughness:.8})};
+const boxgeo=new THREE.BoxGeometry(1,1,1);function box(parent,x,y,z,w,h,d,mat,coll=true){const o=new THREE.Mesh(boxgeo,mat);o.position.set(x,y,z);o.scale.set(w,h,d);o.castShadow=true;o.receiveShadow=true;parent.add(o);if(coll)colliders.push({x,z,w,d});return o;}
+const colliders=[];const ground=new THREE.Mesh(new THREE.PlaneGeometry(340,340),new THREE.MeshStandardMaterial({color:0x74776e,roughness:1}));ground.rotation.x=-Math.PI/2;ground.position.y=-.09;ground.receiveShadow=true;scene.add(ground);
+// Long cross-streets cut through walkable blocks; stripes, drainage and cracked patches give scale.
+const roads=[{x:0,z:0,w:340,d:18},{x:0,z:-60,w:340,d:12},{x:0,z:60,w:340,d:12},{x:-60,z:0,w:12,d:340},{x:60,z:0,w:12,d:340}];for(const r of roads){const o=new THREE.Mesh(boxgeo,mats.road);o.position.set(r.x,.0,r.z);o.scale.set(r.w,.18,r.d);o.receiveShadow=true;scene.add(o);}
+// Dashed lane markings and curb rails.
+for(let x=-160;x<160;x+=13)box(scene,x,.105,0,6,.012,.16,mats.yellow,false);for(let z=-160;z<160;z+=13)box(scene,0,.105,z,.16,.012,6,mats.yellow,false);
+for(const r of roads){if(r.d<r.w){for(const z of [-r.d/2,r.d/2])box(scene,0,.1,r.z+z,r.w,.16,.45,mats.side,false)}else for(const x of [-r.w/2,r.w/2])box(scene,r.x+x,.1,0,.45,.16,r.d,mats.side,false)}
+// Street grid of irregular, densely detailed tenements.
+let seed=17;function rand(){seed=(seed*1664525+1013904223)>>>0;return seed/4294967296}function choose(a){return a[Math.floor(rand()*a.length)]}
+const blocks=[[-120,-120],[-60,-120],[0,-120],[60,-120],[120,-120],[-120,-60],[120,-60],[-120,0],[120,0],[-120,60],[120,60],[-120,120],[-60,120],[0,120],[60,120],[120,120],[-60,-60],[60,-60],[-60,60],[60,60]];
+const buildingBoxes=[];function addBuilding(bx,bz,idx){const bw=36+rand()*12,bdepth=34+rand()*10,bh=21+rand()*31,colors=[mats.brick,mats.concrete,mats.blue,mats.dark];let wall=choose(colors);const x=bx+(rand()-.5)*5,z=bz+(rand()-.5)*5;box(scene,x,bh/2,z,bw,bh,bdepth,wall,true);buildingBoxes.push({x,z,w:bw,d:bdepth,h:bh});
+// alternate narrow rows of inset windows (geometry is placed on each facade)
+const floors=Math.floor(bh/7),cols=Math.floor(bw/6.2);for(let f=0;f<floors;f++){const yy=4+f*6.2;for(let c=0;c<cols;c++){const xx=x-bw/2+3+c*6;if(xx>x+bw/2-1)continue;const wm=rand()<.18?mats.litglass:mats.glass;for(const face of [-1,1])box(scene,xx,yy,z+face*(bdepth/2+.03),1.8,2.4,.08,wm,false);if(c%2===0)for(const face of [-1,1])box(scene,x+face*(bw/2+.03),yy,z-bdepth/2+3+c*3,.08,2,1.8,rand()<.18?mats.litglass:mats.glass,false);}}
+// roof lip and occasional tank / chimney
+box(scene,x,bh+.35,z,bw+.8,.7,bdepth+.8,mats.dark,false);if(rand()<.7){const tx=x+(rand()-.5)*bw*.5,tz=z+(rand()-.5)*bdepth*.5;box(scene,tx,bh+1.5,tz,3,2.3,3,mats.metal,false);}
+// storefront, canopy and door
+box(scene,x,2.3,z+bdepth/2+.08,3.8,4.2,.18,mats.dark,false);box(scene,x,4.7,z+bdepth/2+.65,Math.min(11,bw*.55),.55,1.2,choose([mats.yellow,mats.blue,mats.green]),false);for(let k=-1;k<=1;k++)box(scene,x+k*2.7,2.7,z+bdepth/2+.2,2.35,2.4,.1,mats.glass,false);
+}
+blocks.forEach((p,i)=>addBuilding(p[0],p[1],i));
+// Landmarks: a tram terminal, civic arch, toppled delivery truck and tiny street stories.
+// Tram terminal in the east edge, with an open, readable entry.
+box(scene,93,7,-4,8,14,42,mats.dark);box(scene,103,7,-4,8,14,42,mats.dark);box(scene,98,14,-4,18,3,42,mats.concrete);box(scene,98,4,-4,1,8,34,mats.blue,false);for(let z=-17;z<14;z+=8)box(scene,98,8,z,1.3,3.6,.15,mats.glow,false);box(scene,98,2,20,20,4,3,mats.dark);box(scene,98,5,20,8,.35,1,mats.yellow,false);const gateLight=new THREE.PointLight(0x40ffca,0,18);gateLight.position.set(98,8,0);scene.add(gateLight);
+// Tram rails and overhead lines.
+for(const z of [-4,-1])box(scene,0,.15,z,330,.18,.18,mats.metal,false);for(let x=-160;x<170;x+=7)box(scene,x,.12,-2.5,.18,.12,5,mats.metal,false);for(let x=-150;x<=150;x+=30){box(scene,x,10,-2.5,.18,20,.18,mats.metal,false);box(scene,x,20,-2.5,30,.12,.12,mats.metal,false)}
+// Monumental square and illuminated arch at the civic steps.
+box(scene,-95,1,-93,25,2,18,mats.concrete,false);box(scene,-95,2.5,-93,18,1,11,mats.dark,false);for(let x=-103;x<=-87;x+=8)box(scene,x,9,-91,1,14,1,mats.concrete);box(scene,-95,16,-91,18,1,1,mats.concrete);box(scene,-95,17,-90,8,.25,.3,mats.glow,false);
+// Old green delivery van, freely walkable around.
+const van=new THREE.Group();van.position.set(-27,0,8);scene.add(van);box(van,0,1.35,0,10,2.2,4.6,mats.green,false);box(van,1,2.35,0,4.8,.8,4.5,mats.green,false);for(const x of [-3.2,3.2])for(const z of [-2.05,2.05]){const wheel=new THREE.Mesh(new THREE.CylinderGeometry(.63,.63,.36,16),mats.dark);wheel.rotation.z=Math.PI/2;wheel.position.set(x,.65,z);wheel.castShadow=true;van.add(wheel);}box(van,-5,1.3,0,.2,.6,1,mats.yellow,false);
+// Street furniture, lamp posts, barriers, trash, crates, bollards.
+function streetlamp(x,z){box(scene,x,5,z,.24,10,.24,mats.metal,false);box(scene,x,10,z,.35,.2,.35,mats.metal,false);box(scene,x,10.05,z,1,.18,.5,mats.yellow,false);const l=new THREE.PointLight(0xffb969,.65,19,2);l.position.set(x,9.5,z);scene.add(l);}
+for(let x=-145;x<=145;x+=30){streetlamp(x,-11);streetlamp(x,11);}for(let z=-145;z<=145;z+=30){streetlamp(-11,z);streetlamp(11,z)}
+for(let i=0;i<38;i++){const x=(rand()-.5)*270,z=(rand()-.5)*270;if(Math.abs(x%60)<10||Math.abs(z%60)<10)continue;const w=1.2+rand()*2,d=1+rand()*1.5,h=.8+rand()*1.5;box(scene,x,h/2,z,w,h,d,choose([mats.wood,mats.dark,mats.concrete]),true);if(rand()<.5)box(scene,x,h+.13,z,w+.1,.22,d+.1,mats.wood,false);}
+for(let i=0;i<30;i++){const x=(rand()-.5)*260,z=(rand()-.5)*260;if(Math.abs(x%60)<9||Math.abs(z%60)<9)continue;const c=new THREE.Mesh(new THREE.CylinderGeometry(.42,.48,1.1,10),mats.dark);c.position.set(x,.55,z);c.castShadow=true;scene.add(c);box(scene,x,.3,z,.9,.16,.9,mats.metal,false);}
+// Collectible signal cores placed at recognizable landmarks.
+const coreSpots=[{x:-95,z:-91,name:'CIVIC SQUARE'},{x:-27,z:8,name:'ABANDONED VAN'},{x:94,z:-73,name:'MARKET ARCADE'},{x:30,z:87,name:'SOUTH TRAM STOP'}];
+// Keep pickup bays clear of incidental props/building edges.
+const cores=[];function makeCore(p,index){const g=new THREE.Group();g.position.set(p.x,1.6,p.z);scene.add(g);const crystal=new THREE.Mesh(new THREE.OctahedronGeometry(.8,0),mats.glow);crystal.position.y=.2;crystal.castShadow=true;g.add(crystal);const ring=new THREE.Mesh(new THREE.TorusGeometry(1.25,.045,8,32),new THREE.MeshStandardMaterial({color:0x8bffde,emissive:0x32d4b0,emissiveIntensity:1.7}));ring.rotation.x=Math.PI/2;g.add(ring);const ring2=ring.clone();ring2.scale.setScalar(.68);ring2.rotation.x=0;g.add(ring2);const light=new THREE.PointLight(0x51ffd2,2.6,13);light.position.y=1;g.add(light);const beacon=new THREE.Mesh(new THREE.CylinderGeometry(.08,.08,32,8),new THREE.MeshBasicMaterial({color:0x74ffdc,transparent:true,opacity:.2}));beacon.position.y=16;g.add(beacon);cores.push({g,p,...p,name:p.name,got:false,phase:index});}
+coreSpots.forEach(makeCore);
+// Radio set beside the terminal, the final objective.
+const radio=new THREE.Group();radio.position.set(88,.5,20);scene.add(radio);box(radio,0,.8,0,2,1.6,1.5,mats.dark,false);box(radio,0,1.65,0,1.4,.22,1,mats.metal,false);for(let i=0;i<3;i++){const b=new THREE.Mesh(new THREE.SphereGeometry(.12,12,8),mats.glow);b.position.set(-.45+i*.45,1.82,.15);radio.add(b)}const aerial=new THREE.Mesh(new THREE.CylinderGeometry(.025,.025,3,6),mats.metal);aerial.position.set(.7,2.7,-.4);aerial.rotation.z=-.12;radio.add(aerial);
+// Dust motes and distant silhouette city.
+const dustgeo=new THREE.BufferGeometry(),dustN=240,dustPos=new Float32Array(dustN*3);for(let i=0;i<dustN;i++){dustPos[i*3]=(rand()-.5)*300;dustPos[i*3+1]=1+rand()*24;dustPos[i*3+2]=(rand()-.5)*300;}dustgeo.setAttribute('position',new THREE.BufferAttribute(dustPos,3));scene.add(new THREE.Points(dustgeo,new THREE.PointsMaterial({color:0xd8c9a0,size:.12,transparent:true,opacity:.55})));
+for(let i=0;i<90;i++){const a=i/90*Math.PI*2,r=155+rand()*20,h=18+rand()*80,w=6+rand()*15;const b=new THREE.Mesh(boxgeo,new THREE.MeshStandardMaterial({color:0x4d5a57,roughness:1}));b.position.set(Math.cos(a)*r,h/2,Math.sin(a)*r);b.scale.set(w,h,w);scene.add(b);}
+// The viewmodel is handmade geometry, not an external asset.
+const view=new THREE.Group();camera.add(view);scene.add(camera);const glove=new THREE.Mesh(new THREE.BoxGeometry(.2,.23,.27),new THREE.MeshStandardMaterial({color:0x65594b,roughness:.85}));glove.position.set(.29,-.34,-.53);view.add(glove);const crowbar=new THREE.Mesh(new THREE.CylinderGeometry(.025,.035,.68,8),new THREE.MeshStandardMaterial({color:0xa45a3d,metalness:.35,roughness:.55}));crowbar.position.set(.24,-.2,-.55);crowbar.rotation.z=-.34;view.add(crowbar);const crook=new THREE.Mesh(new THREE.TorusGeometry(.09,.025,6,12,Math.PI),new THREE.MeshStandardMaterial({color:0xa45a3d,metalness:.4,roughness:.5}));crook.position.set(.4,.1,-.56);crook.rotation.z=.45;view.add(crook);
+const keys={};let yaw=0,pitch=0,locked=false,started=false,paused=false,won=false,coresGot=0,elapsed=0,health=100,scanTime=0,interactNear=null,toastTimer=0,velY=0,onGround=true;const player={x:14,y:1.7,z:18};const clock=new THREE.Clock();let bob=0,moveMag=0,flash=0;
+function setCamera(){camera.position.set(player.x,player.y,player.z);camera.rotation.set(pitch,yaw,0,'YXZ')};setCamera();
+function tryLock(){if(!started)return;renderer.domElement.requestPointerLock?.();}
+document.getElementById('startBtn').onclick=()=>{started=true;document.body.classList.remove('menu-open');document.getElementById('startscreen').classList.add('hidden');tryLock()};document.getElementById('resumeBtn').onclick=()=>tryLock();document.getElementById('againBtn').onclick=()=>location.reload();document.addEventListener('pointerlockchange',()=>{locked=document.pointerLockElement===renderer.domElement;if(started&&!won){paused=!locked;document.getElementById('pause').classList.toggle('hidden',!paused)}});
+document.addEventListener('mousemove',e=>{if(!locked)return;yaw-=e.movementX*.0022;pitch-=e.movementY*.0022;pitch=Math.max(-1.48,Math.min(1.48,pitch))});document.addEventListener('keydown',e=>{keys[e.code]=true;if(['Space','ArrowUp','ArrowDown','ArrowLeft','ArrowRight'].includes(e.code))e.preventDefault();if(e.code==='KeyE')interact();if(e.code==='KeyQ')pulse()});document.addEventListener('keyup',e=>keys[e.code]=false);document.addEventListener('contextmenu',e=>e.preventDefault());
+// Mobile look drag and virtual stick
+let lookTouch=null;renderer.domElement.addEventListener('touchstart',e=>{if(e.touches.length){const t=e.touches[0];lookTouch={x:t.clientX,y:t.clientY}}},{passive:true});renderer.domElement.addEventListener('touchmove',e=>{if(!lookTouch)return;const t=e.touches[0];const dx=t.clientX-lookTouch.x,dy=t.clientY-lookTouch.y;yaw-=dx*.006;pitch=Math.max(-1.35,Math.min(1.35,pitch-dy*.006));lookTouch={x:t.clientX,y:t.clientY}},{passive:true});renderer.domElement.addEventListener('touchend',()=>lookTouch=null);
+let joyVec={x:0,y:0};const joy=document.getElementById('joy'),nub=document.getElementById('nub');joy.addEventListener('touchstart',e=>{e.preventDefault();joyMove(e)},{passive:false});joy.addEventListener('touchmove',e=>{e.preventDefault();joyMove(e)},{passive:false});joy.addEventListener('touchend',()=>{joyVec={x:0,y:0};nub.style.transform='translate(0,0)' });function joyMove(e){const r=joy.getBoundingClientRect(),t=e.touches[0],dx=t.clientX-(r.left+r.width/2),dy=t.clientY-(r.top+r.height/2),len=Math.min(43,Math.hypot(dx,dy)),a=Math.atan2(dy,dx);joyVec={x:Math.cos(a)*len/43,y:Math.sin(a)*len/43};nub.style.transform=`translate(${joyVec.x*35}px,${joyVec.y*35}px)`}
+document.getElementById('interactBtn').onclick=interact;document.getElementById('scanBtn').onclick=pulse;document.getElementById('jumpBtn').onclick=()=>{if(onGround){velY=7.6;onGround=false}};
+function collides(nx,nz){for(const c of colliders){const px=Math.max(c.x-c.w/2,Math.min(nx,c.x+c.w/2)),pz=Math.max(c.z-c.d/2,Math.min(nz,c.z+c.d/2));if((nx-px)**2+(nz-pz)**2<.75*.75)return true;}return false;}
+function nearest(){let best=null,dist=2.8;for(const c of cores){if(c.got)continue;const d=Math.hypot(player.x-c.x,player.z-c.z);if(d<dist){dist=d;best=c;}}if(coresGot===4){const d=Math.hypot(player.x-88,player.z-20);if(d<3.6)best={radio:true,d};}return best;}
+function interact(){if(!started||won)return;const t=nearest();if(!t){notify('MOVE CLOSER TO THE SIGNAL');return}if(t.radio){won=true;gateLight.intensity=4;document.getElementById('finalTime').textContent=`FIELD TIME · ${formatTime(elapsed)}`;document.getElementById('win').classList.remove('hidden');document.exitPointerLock?.();return;}t.got=true;coresGot++;t.g.visible=false;document.getElementById('counter').textContent=`${coresGot} / 4 CORES SECURED`;document.getElementById('task').textContent=coresGot===4?'Reach the tram terminal':'Recover signal cores';notify(`SIGNAL CORE SECURED · ${t.name}`);if(coresGot===4){gateLight.intensity=3;gateLight.distance=42;notify('ALL CORES ONLINE · REACH THE TRAM TERMINAL',2600)}}
+function notify(msg,duration=1700){const el=document.getElementById('toast');el.textContent=msg;el.classList.add('show');clearTimeout(toastTimer);toastTimer=setTimeout(()=>el.classList.remove('show'),duration)}
+function pulse(){if(!started)return;scanTime=2.1;flash=1;}
+function formatTime(s){const m=Math.floor(s/60),ss=Math.floor(s%60);return `${String(m).padStart(2,'0')}:${String(ss).padStart(2,'0')}`}
+const mapctx=document.getElementById('map').getContext('2d');function drawMap(){const c=mapctx;c.clearRect(0,0,240,240);c.fillStyle='#182321';c.fillRect(0,0,240,240);c.save();c.translate(120-player.x*.66,120-player.z*.66);c.fillStyle='#434a45';for(const r of roads)c.fillRect((r.x-r.w/2)*.66,(r.z-r.d/2)*.66,r.w*.66,r.d*.66);c.fillStyle='#65665d';for(const b of buildingBoxes)c.fillRect((b.x-b.w/2)*.66,(b.z-b.d/2)*.66,b.w*.66,b.d*.66);c.fillStyle='#85ffe0';for(const q of cores)if(!q.got){c.beginPath();c.arc(q.x*.66,q.z*.66,3.5,0,Math.PI*2);c.fill()}c.fillStyle='#f0a74a';c.fillRect(88*.66-3,20*.66-3,6,6);c.restore();c.save();c.translate(120,120);c.rotate(-yaw);c.fillStyle='#f3f5de';c.beginPath();c.moveTo(0,-8);c.lineTo(-5,5);c.lineTo(0,2);c.lineTo(5,5);c.closePath();c.fill();c.restore();}
+drawMap();let lastStep=0;function frame(){requestAnimationFrame(frame);const dt=Math.min(clock.getDelta(),.04);if(started&&!paused&&!won){elapsed+=dt;if(scanTime>0)scanTime-=dt;if(flash>0)flash=Math.max(0,flash-dt*1.5);if(health<100)health=Math.min(100,health+dt*.5);document.getElementById('health').textContent=`${Math.round(health)}%`;
+let f=(keys.KeyW||keys.ArrowUp?1:0)-(keys.KeyS||keys.ArrowDown?1:0)-joyVec.y;let s=(keys.KeyD||keys.ArrowRight?1:0)-(keys.KeyA||keys.ArrowLeft?1:0)+joyVec.x;const len=Math.hypot(f,s);if(len>1){f/=len;s/=len}moveMag=len;const sprint=keys.ShiftLeft||keys.ShiftRight,speed=sprint?8.8:5.5;const dx=(Math.sin(yaw)*f+Math.cos(yaw)*s)*speed*dt,dz=(-Math.cos(yaw)*f+Math.sin(yaw)*s)*speed*dt;if(!collides(player.x+dx,player.z))player.x+=dx;if(!collides(player.x,player.z+dz))player.z+=dz;
+if((keys.Space||keys.Spacebar)&&onGround){velY=7.4;onGround=false}if(!onGround){velY-=19*dt;player.y+=velY*dt;if(player.y<=1.7){player.y=1.7;velY=0;onGround=true}}if(Math.abs(player.x)>164)player.x=Math.sign(player.x)*164;if(Math.abs(player.z)>164)player.z=Math.sign(player.z)*164;
+if(moveMag>.1)bob+=dt*(sprint?13:9);camera.position.set(player.x,player.y+(moveMag>.1&&onGround?Math.sin(bob)*.045:0),player.z);camera.rotation.set(pitch,yaw,0,'YXZ');view.position.y=Math.sin(bob)*.018*moveMag;view.rotation.z=Math.sin(bob/2)*.018*moveMag;
+interactNear=nearest();document.getElementById('prompt').style.opacity=interactNear?'1':'0';if(interactNear)document.getElementById('prompt').textContent=interactNear.radio?'[ E ] ACTIVATE EMERGENCY RELAY':'[ E ] RECOVER SIGNAL CORE';const dist=Math.hypot(player.x,player.z);let area=dist<38?'MARKET WARD':player.x>45?'TRAM TERMINAL':player.z>70?'SOUTH QUARTER':player.z< -65?'CIVIC SQUARE':'OLD QUARTER';document.getElementById('district').textContent=area.toUpperCase();document.getElementById('sector').textContent=area.toUpperCase();
+for(const c of cores)if(!c.got){c.g.rotation.y+=dt*.7;c.g.position.y=1.55+Math.sin(elapsed*1.8+c.phase)*.18;const d=Math.hypot(player.x-c.x,player.z-c.z);c.g.visible=scanTime>0||d<55;c.g.children[0].material=scanTime>0?mats.glow:mats.glow;}
+if(scanTime>0){for(const c of cores)if(!c.got)c.g.visible=true;}
+if(Math.floor(elapsed*5)!==lastStep){drawMap();lastStep=Math.floor(elapsed*5)}
+}else if(!started){camera.position.set(14,1.7,18);camera.rotation.set(-.02,-.25,0,'YXZ')}
+renderer.render(scene,camera)}frame();
+addEventListener('resize',()=>{camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix();renderer.setSize(innerWidth,innerHeight);renderer.setPixelRatio(Math.min(devicePixelRatio,1.7))});
+</script>
+</body></html>
