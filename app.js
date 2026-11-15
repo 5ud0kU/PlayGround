@@ -29,7 +29,8 @@ const interactables = [];
 const npcMeshes = [];
 const world = {
   day: 1, minute: 495, weather: 'Clear', temp: 19, balance: 420,
-  needs: { energy: 78, hunger: 24, social: 56, stress: 18 },
+  needs: { energy: 78, hunger: 24, social: 56, stress: 18, hygiene: 82 },
+  inventory: { groceries: 1, toiletries: 1, cleaningSupplies: 1, books: 0 }, homeCare: 78,
   occupation: 'Between chapters', skill: 0, reputation: 0, people: [], relations: {}, log: [], events: [],
   city: { jobs: 12, employed: .91, mood: 62, prices: 1, outlook: 'Stable' }, seed: Math.floor(Math.random()*1e8),
   hasWork: false, lastDay: 1
@@ -37,6 +38,9 @@ const world = {
 const saved = (()=>{try{return JSON.parse(localStorage.getItem('reality-unbound-save')||'null')}catch{return null}})();
 const rng = (()=>{let s=world.seed;return()=>{s=(s*1664525+1013904223)>>>0;return s/4294967296}})();
 if(saved?.version===1){Object.assign(world,saved.world);world.seed=saved.world.seed;}
+world.needs={energy:78,hunger:24,social:56,stress:18,hygiene:82,...world.needs};
+world.inventory={groceries:1,toiletries:1,cleaningSupplies:1,books:0,...world.inventory};
+world.homeCare=world.homeCare??78;
 
 const mats = {};
 const mat = (name,color,roughness=.85,metalness=0)=>mats[name]=new THREE.MeshStandardMaterial({color,roughness,metalness});
@@ -131,6 +135,8 @@ function makeWorld(){
   building(-75,20,20,17,17,'brick','Old Exchange','work');
   building(74,-19,25,18,14,'sage','Schoolhouse','school');
   building(77,20,24,18,20,'blue','Harborlight University','school');
+  building(-43,-47,18,14,9,'blue','Harborlight Movement Studio','gym');
+  building(44,-50,20,14,10,'brick','Northlight Cinema','cinema');
   // Low-density homes beyond the district, trees and small park accents.
   for(const [x,z,c] of [[-90,-45,'cream'],[-62,-48,'blue'],[-24,-56,'sage'],[22,-57,'cream'],[62,-51,'red'],[95,-43,'cream'],[-95,49,'sage'],[-56,55,'cream'],[-15,58,'red'],[20,59,'blue'],[62,54,'cream'],[99,50,'sage']])building(x,z,13,12,6.5,c,'homes','home');
   // Street furniture, bins, and tactile sidewalk details make the public spaces feel inhabited.
@@ -242,7 +248,7 @@ function renderLog(){ $('logCount').textContent=String(world.log.length).padStar
 function toast(text){const el=$('toast');el.textContent=text;el.classList.add('show');clearTimeout(toast.timer);toast.timer=setTimeout(()=>el.classList.remove('show'),2400)}
 function updateUI(){
   $('clock').textContent=displayTime();$('money').textContent=Math.floor(world.balance).toLocaleString();
-  for(const n of ['energy','hunger','social','stress']){$(n+'Bar').style.width=`${Math.max(0,Math.min(100,world.needs[n]))}%`;$(n+'Val').textContent=Math.round(world.needs[n])}
+  for(const n of ['energy','hunger','social','stress','hygiene']){$(n+'Bar').style.width=`${Math.max(0,Math.min(100,world.needs[n]))}%`;$(n+'Val').textContent=Math.round(world.needs[n])}
   $('occupation').textContent=world.occupation;$('dayProgress').style.width=`${(world.minute/1440)*100}%`;
   const mood=world.needs.stress>70?'Overloaded':world.needs.energy<25?'Worn down':world.needs.social<20?'Isolated':world.needs.hunger>75?'Hungry':'Steady';$('moodLabel').textContent=mood.toUpperCase();
   $('weatherText').textContent=`${world.weather.toUpperCase()} · ${world.temp}°C`;$('weatherIcon').textContent=world.weather==='Rain'?'☂':world.weather==='Cloudy'?'☁':'☀';
@@ -253,11 +259,67 @@ function updateUI(){
 }
 function save(){try{const copy={...world,playerPosition:{x:player.position.x,z:player.position.z}};delete copy.sun;delete copy.ambient;delete copy.people;localStorage.setItem('reality-unbound-save',JSON.stringify({version:1,world:{...copy,people:world.people.map(({mesh,...p})=>p)}}));toast('Your life in Harborlight has been saved.')}catch{toast('Could not save this world in your browser.')}}
 
-function goModal(kicker,title,body,options=[]){if(document.pointerLockElement)document.exitPointerLock();keys.clear();$('modalContent').innerHTML=`<div class="modal-kicker">${kicker}</div><h2>${title}</h2>${body}<div class="modal-options">${options.map((o,i)=>`<button class="choice" data-choice="${i}"><strong>${o.title}</strong><small>${o.detail}</small></button>`).join('')}</div>`;$('modalBackdrop').classList.add('open');$('modalContent').querySelectorAll('[data-choice]').forEach(b=>b.onclick=()=>{const chosen=options[+b.dataset.choice];if(chosen?.action)chosen.action();closeModal()})}
+function goModal(kicker,title,body,options=[]){if(document.pointerLockElement)document.exitPointerLock();keys.clear();$('modalContent').innerHTML=`<div class="modal-kicker">${kicker}</div><h2>${title}</h2>${body}<div class="modal-options">${options.map((o,i)=>`<button class="choice" data-choice="${i}"><strong>${o.title}</strong><small>${o.detail}</small></button>`).join('')}</div>`;$('modalBackdrop').classList.add('open');$('modalContent').querySelectorAll('[data-choice]').forEach(b=>b.onclick=()=>{const chosen=options[+b.dataset.choice];closeModal();if(chosen?.action)chosen.action()})}
 function closeModal(){$('modalBackdrop').classList.remove('open')}
 $('modalClose').onclick=closeModal;$('modalBackdrop').addEventListener('click',e=>{if(e.target===$('modalBackdrop'))closeModal()});
 function doAction(label,fn){return{title:label,detail:'Make this choice now.',action:fn}}
-function action(msg,{money=0,energy=0,hunger=0,social=0,stress=0,skill=0,rep=0}={}){world.balance+=money;world.needs.energy=Math.max(0,Math.min(100,world.needs.energy+energy));world.needs.hunger=Math.max(0,Math.min(100,world.needs.hunger+hunger));world.needs.social=Math.max(0,Math.min(100,world.needs.social+social));world.needs.stress=Math.max(0,Math.min(100,world.needs.stress+stress));world.skill+=skill;world.reputation+=rep;world.minute+=15;log(msg);$('objectiveText').textContent=msg;updateUI();save()}
+let activityAnimation=null;
+const activityModes=[
+  [/eat|meal|toast|coffee|bite|lunch/i,'eat'],[/sleep|rested|nap/i,'sleep'],[/shower|wash|hygiene/i,'shower'],[/exercise|workout|sport|run|practice/i,'exercise'],[/clean|tidied|maintenance/i,'clean'],[/shop|grocer|picked up|belongings/i,'shopping'],[/computer|internet|social media|browse/i,'computer'],[/television|watch|game|entertainment/i,'entertainment'],[/study|class|course|learn|book/i,'study'],[/bus|travel|explor|ride|commut/i,'travel'],[/work|shift|delivery|volunteer/i,'work'],[/talk|conversation|meeting|gather|friend/i,'social']
+];
+function modeForAction(message){return activityModes.find(([pattern])=>pattern.test(message))?.[1]||'social'}
+function makeActivityProp(mode){
+  const group=new THREE.Group(),make=(geometry,color,x,y,z)=>{const mesh=new THREE.Mesh(geometry,new THREE.MeshStandardMaterial({color,roughness:.72}));mesh.position.set(x,y,z);group.add(mesh);return mesh};
+  if(mode==='eat'){make(new THREE.BoxGeometry(.16,.095,.15),0xd6a96d,0,-.55,-.19);make(new THREE.BoxGeometry(.17,.025,.16),0x6f9161,0,-.57,-.19)}
+  else if(mode==='exercise'){make(new THREE.CylinderGeometry(.055,.055,.12,10),0x56676a,0,-.55,-.18);for(const x of [-.11,.11]){const weight=make(new THREE.CylinderGeometry(.08,.08,.045,10),0x9b5b4b,x,-.55,-.18);weight.rotation.z=Math.PI/2}}
+  else if(mode==='study'||mode==='work'||mode==='computer'){make(new THREE.BoxGeometry(.2,.025,.15),0x527a78,0,-.56,-.18);make(new THREE.BoxGeometry(.17,.012,.12),0xe8dfc7,0,-.54,-.185)}
+  else if(mode==='clean'){const handle=make(new THREE.CylinderGeometry(.012,.012,.48,6),0x8a6c45,0,-.65,-.16);handle.rotation.x=-.5;make(new THREE.BoxGeometry(.17,.09,.07),0x9b765f,0,-.85,-.03)}
+  else if(mode==='shopping'||mode==='travel'){make(new THREE.BoxGeometry(.2,.2,.13),mode==='travel'?0x526d75:0x9b765f,0,-.59,-.18);make(new THREE.TorusGeometry(.045,.009,5,12),0xd1c4a8,0,-.46,-.18)}
+  else if(mode==='shower'){make(new THREE.SphereGeometry(.075,10,8),0x9dbab3,0,-.55,-.16)}
+  else if(mode==='entertainment'){make(new THREE.BoxGeometry(.16,.055,.09),0x424e4d,0,-.56,-.18);for(const x of [-.045,.045])make(new THREE.SphereGeometry(.012,6,5),0xe7c488,x,-.53,-.18)}
+  return group;
+}
+function startActivityAnimation(mode){
+  if(activityAnimation?.prop){activityAnimation.arm.remove(activityAnimation.prop);activityAnimation.prop.traverse(o=>{if(o.geometry)o.geometry.dispose();if(o.material)o.material.dispose()})}
+  const hand=hands.find(h=>h.side===1);const prop=makeActivityProp(mode);hand.arm.add(prop);
+  activityAnimation={mode,elapsed:0,duration:3.1,prop,arm:hand.arm};
+}
+function updateActivityAnimation(dt){
+  if(!activityAnimation)return;const a=activityAnimation;a.elapsed+=dt;const phase=Math.min(1,a.elapsed/a.duration),reach=THREE.MathUtils.smoothstep(phase,.06,.36)*(1-THREE.MathUtils.smoothstep(phase,.68,.98));
+  hands.forEach(({arm,rest,side})=>{
+    const active=side===1||['sleep','computer','study','work','shower'].includes(a.mode);const amount=reach*(active?1:.2);
+    let targetY=rest.y-.08,targetZ=rest.z-.12,rx=-.25,rz=side*-.12;
+    if(a.mode==='eat'){targetY=rest.y+.18;targetZ=rest.z+.04;rx=-1.05}
+    if(a.mode==='exercise'){const lift=.48+Math.sin(a.elapsed*7)*.09;targetY=rest.y+lift;targetZ=rest.z+.08;rx=-1.25+Math.sin(a.elapsed*7)*.12}
+    if(a.mode==='shower'){targetY=rest.y+.42;targetZ=rest.z+.02;rx=-1.2}
+    if(a.mode==='clean'){targetY=rest.y-.05+Math.sin(a.elapsed*9)*.08;targetZ=rest.z-.2;rx=-.65+Math.sin(a.elapsed*9)*.22}
+    if(a.mode==='sleep'){targetY=rest.y-.2;targetZ=rest.z+.18;rx=.35}
+    if(a.mode==='computer'||a.mode==='study'||a.mode==='work'){targetY=rest.y-.03;targetZ=rest.z-.32;rx=-.12}
+    if(a.mode==='shopping'||a.mode==='travel'){targetY=rest.y-.02;targetZ=rest.z-.18;rx=-.45}
+    if(a.mode==='entertainment'){targetY=rest.y+.03;targetZ=rest.z-.15;rx=-.55}
+    arm.position.set(rest.x,rest.y,rest.z).lerp(new THREE.Vector3(rest.x+side*.06,targetY,targetZ),amount);
+    arm.rotation.x=THREE.MathUtils.lerp(0,rx,amount);arm.rotation.z=THREE.MathUtils.lerp(side*-.08,rz,amount);
+  });
+  if(a.mode==='sleep')camera.position.y=THREE.MathUtils.lerp(1.67,1.42,reach);else camera.position.y=THREE.MathUtils.lerp(camera.position.y,1.67,Math.min(1,dt*5));
+  if(phase>=1){camera.position.y=1.67;a.arm.remove(a.prop);a.prop.traverse(o=>{if(o.geometry)o.geometry.dispose();if(o.material)o.material.dispose()});activityAnimation=null}
+}
+function advanceClock(minutes){
+  const total=world.minute+minutes,daysPassed=Math.floor(total/1440);
+  world.minute=total%1440;
+  for(let i=0;i<daysPassed;i++){
+    world.day++;world.city.prices=Math.max(.85,Math.min(1.35,world.city.prices+(rng()-.48)*.018));
+    world.city.mood=Math.max(20,Math.min(90,world.city.mood+(rng()-.48)*5));world.city.jobs=Math.max(2,Math.min(24,world.city.jobs+(rng()>.52?1:-1)));
+    if(world.day%4===0){world.weather=['Clear','Clear','Cloudy','Rain'][Math.floor(rng()*4)];world.temp=Math.round(13+rng()*13)}
+  }
+}
+function action(msg,{money=0,energy=0,hunger=0,social=0,stress=0,skill=0,rep=0,hygiene=0,homeCare=0,minutes=15}={}){startActivityAnimation(modeForAction(msg));world.balance+=money;world.needs.energy=Math.max(0,Math.min(100,world.needs.energy+energy));world.needs.hunger=Math.max(0,Math.min(100,world.needs.hunger+hunger));world.needs.social=Math.max(0,Math.min(100,world.needs.social+social));world.needs.stress=Math.max(0,Math.min(100,world.needs.stress+stress));world.needs.hygiene=Math.max(0,Math.min(100,world.needs.hygiene+hygiene));world.homeCare=Math.max(0,Math.min(100,world.homeCare+homeCare));world.skill+=skill;world.reputation+=rep;advanceClock(minutes);log(msg);$('objectiveText').textContent=msg;updateUI();save()}
+function purchase(item,cost,label){if(world.balance<cost){toast('Your balance is a little short.');return false}world.inventory[item]=(world.inventory[item]||0)+1;action(`You bought ${label} at Harbor Market.`,{money:-cost});return true}
+function consume(item,label){if((world.inventory[item]||0)<1){toast(`You need ${label.toLowerCase()} first. Try Harbor Market.`);return false}world.inventory[item]--;return true}
+function computerModal(){goModal('A LITTLE TIME ONLINE','Choose what to do on the computer.',`<p>Check in with friends, follow a curiosity, or simply let a screen fill a quiet moment.</p>`,[
+  {title:'Catch up with friends',detail:'Social +12, stress −4.',action:()=>action('You caught up with friends online.',{social:12,stress:-4,minutes:25})},
+  {title:'Study a short course',detail:'Skill +3, energy −5.',action:()=>action('You studied a short course on the computer.',{skill:3,energy:-5,minutes:45})},
+  {title:'Watch a show',detail:'Stress −10, energy +3.',action:()=>action('You watched a favorite show and relaxed.',{stress:-10,energy:3,minutes:40})}
+])}
 function talk(npc){
   const rel=world.relations[npc.id]||0;const greeting=rel>2?'It’s good to see you again.':npc.personality==='reserved'?'Oh—hi. I was just thinking.':'Morning. Funny how everyone’s on their own little schedule, isn’t it?';
   goModal('A MOMENT WITH '+npc.name.toUpperCase(),npc.name,`<p>Age ${npc.age} · ${npc.job}<br>They seem ${npc.personality}. Today they’re ${npc.routine}.<br><br><em>“${greeting} I’m hoping to ${npc.goal}.”</em></p><div class="modal-stats"><div class="modal-stat"><small>YOUR RAPPORT</small><strong>${rel<0?'Strained':rel>5?'Close':'Getting acquainted'}</strong></div><div class="modal-stat"><small>THEIR DAY</small><strong>${npc.energy<25?'Running low':npc.mood>72?'Good spirits':'In motion'}</strong></div></div>`,[
@@ -275,7 +337,9 @@ function interact(place){
       {title:'Sit by the window',detail:'Pause and watch the neighborhood. Stress −16.',action:()=>action('You let the morning unfold at your own pace.',{energy:4,stress:-16})}
     ]);break;
     case 'market':goModal('HARBOR MARKET · OPEN','A little care goes a long way.',`<p>Fresh bread, fruit, and everyday essentials. Prices move with the city’s supply and demand.</p>`,[
-      {title:`Buy groceries · $${Math.round(22*world.city.prices)}`,detail:'A proper meal. Hunger −48.',action:()=>{let cost=Math.round(22*world.city.prices);if(world.balance<cost){toast('Your balance is a little short.');return}action('You picked up groceries at Harbor Market.',{money:-cost,hunger:-48,stress:-2})}},
+      {title:`Buy groceries · $${Math.round(22*world.city.prices)}`,detail:'Stock your kitchen for a few meals.',action:()=>purchase('groceries',Math.round(22*world.city.prices),'groceries')},
+      {title:'Buy toiletries · $12',detail:'Keep up with everyday hygiene at home.',action:()=>purchase('toiletries',12,'toiletries')},
+      {title:'Buy cleaning supplies · $10',detail:'A little upkeep makes home feel better.',action:()=>purchase('cleaningSupplies',10,'cleaning supplies')},
       {title:'Take a paid delivery',detail:'Help move stock to the café. Earn $38, spend some energy.',action:()=>action('You helped deliver a market order across the district.',{money:38,energy:-9,skill:1,rep:1})}
     ]);break;
     case 'work':goModal('NORTHLINE WORKS · OPPORTUNITIES','A place to put your hands to something.',`<p>Small local teams make the city work. A notice by the entrance lists casual shifts and an open trainee position.</p>`,[
@@ -288,9 +352,12 @@ function interact(place){
       {title:'Routine check-in · $15',detail:'Rest, reassurance, and a little care.',action:()=>{if(world.balance<15){toast('You do not have enough for the clinic fee.');return}action('You checked in at Harborlight Clinic.',{money:-15,energy:8,stress:-19})}},
       {title:'Volunteer for an hour',detail:'Help people find their way. Social +, local reputation +.',action:()=>action('You helped out at the clinic for an hour.',{energy:-5,social:12,rep:3})}
     ]);break;
-    case 'home':goModal('A PLACE TO CALL YOUR OWN','The door is open.',`<p>A home base can make all the difference. You’re not tied to this place, but you can take a moment here.</p>`,[
-      {title:'Rest for a while',detail:'Recover energy and let stress settle.',action:()=>action('You rested at home and gathered yourself.',{energy:34,stress:-12,hunger:8})},
-      {title:'Review your life',detail:'See your current wellbeing and standing.',action:()=>statusModal()}
+    case 'home':goModal('A PLACE TO CALL YOUR OWN','The door is open.',`<p>Your everyday routine can start here. Groceries: ${world.inventory.groceries||0} · toiletries: ${world.inventory.toiletries||0} · cleaning supplies: ${world.inventory.cleaningSupplies||0}. Home care: ${Math.round(world.homeCare)}%.</p>`,[
+      {title:'Cook and eat a meal',detail:'Use groceries. Hunger −42, energy +5.',action:()=>{if(!consume('groceries','groceries'))return;action('You cooked a simple meal at home.',{hunger:-42,energy:5,stress:-4,minutes:35})}},
+      {title:'Sleep until morning',detail:'A full night’s rest. Energy +55, time advances 8 hours.',action:()=>action('You slept at home and woke feeling more restored.',{energy:55,hunger:14,hygiene:-8,minutes:480})},
+      {title:'Take a shower',detail:'Use toiletries. Hygiene +35, stress −5.',action:()=>{if(!consume('toiletries','toiletries'))return;action('You took a refreshing shower at home.',{hygiene:35,stress:-5,minutes:20})}},
+      {title:'Tidy your home',detail:'Use cleaning supplies. Home care +18, stress −4.',action:()=>{if(!consume('cleaningSupplies','cleaning supplies'))return;action('You tidied up and took care of your home.',{homeCare:18,stress:-4,minutes:30})}},
+      {title:'Use your computer',detail:'Browse, study, or unwind online.',action:()=>computerModal()}
     ]);break;
     case 'bench':goModal('NORTH DISTRICT · POCKET PARK','A quiet minute.',`<p>Leaves stir above the street. People come and go without needing anything from you.</p>`,[
       {title:'Sit and breathe',detail:'Energy +8, stress −14.',action:()=>action('You took a quiet break in the park.',{energy:8,stress:-14})},
@@ -304,9 +371,18 @@ function interact(place){
       {title:'Attend the public meeting',detail:'Build civic knowledge and meet neighbors.',action:()=>{world.city.mood=Math.min(100,world.city.mood+2);action('You attended a local public meeting.',{energy:-4,social:12,skill:1,rep:2})}},
       {title:'Check local outlook',detail:'See how the district is changing.',action:()=>cityModal()}
     ]);break;
-    case 'bus':goModal('HARBORLIGHT TRANSIT','The city is bigger than one block.',`<p>Local routes reach the waterfront, university, and southbank. A day pass costs $5.</p>`,[
-      {title:'Ride to the university · $5',detail:'Explore a new part of town. Meet new people.',action:()=>{if(world.balance<5){toast('Not enough for a transit fare.');return}world.balance-=5;player.position.set(67,0,25);world.minute+=25;action('You took the bus across town to the university.',{social:5,energy:-3})}},
+    case 'bus':goModal('HARBORLIGHT TRANSIT','The city is bigger than one block.',`<p>Local routes reach the waterfront, university, and southbank. A one-way fare costs $5.</p>`,[
+      {title:'Ride to the university · $5',detail:'Explore a new part of town. Meet new people.',action:()=>{if(world.balance<5){toast('Not enough for a transit fare.');return}player.position.set(67,0,25);yaw=Math.PI;setView();action('You took the bus across town to the university.',{money:-5,social:5,energy:-3,minutes:25})}},
       {title:'Stay in the neighborhood',detail:'There is plenty to discover on foot.',action:()=>{closeModal();toast('You decide to keep exploring nearby.')}}
+    ]);break;
+    case 'gym':goModal('HARBORLIGHT MOVEMENT STUDIO','Move in a way that feels good.',`<p>There are simple weights, open floor space, and room to practice at your own pace.</p>`,[
+      {title:'Take a gentle workout',detail:'Energy −14, stress −10, hygiene −5.',action:()=>action('You completed a gentle workout at the movement studio.',{energy:-14,stress:-10,hygiene:-5,minutes:40})},
+      {title:'Join a group class',detail:'Social +12, skill +2, energy −18.',action:()=>action('You joined a welcoming group movement class.',{social:12,skill:2,energy:-18,stress:-8,minutes:55})},
+      {title:'Practice a little longer',detail:'Build skill, using more energy.',action:()=>action('You practiced at the studio and built your fitness.',{energy:-22,skill:3,stress:-6,minutes:60})}
+    ]);break;
+    case 'cinema':goModal('NORTHLIGHT CINEMA','An evening away from the everyday.',`<p>A neighborhood screen is showing a few films. Tickets are $12.</p>`,[
+      {title:'See a film · $12',detail:'Stress −18, energy +4. The show takes two hours.',action:()=>{if(world.balance<12){toast('Your balance is a little short.');return}action('You watched a film at Northlight Cinema.',{money:-12,stress:-18,energy:4,minutes:120})}},
+      {title:'Check showtimes',detail:'No cost. Think about coming back later.',action:()=>{closeModal();toast('The next show starts this evening.')}}
     ]);break;
     case 'view':goModal('HARBORLIGHT · NORTH DISTRICT','There’s no rush to know what comes next.',`<p>From here you can see the park, the shops, and the people making their way through an ordinary day. The city keeps going.</p>`,[
       {title:'Take it all in',detail:'Stress −20, confidence +1.',action:()=>action('You took a moment to appreciate where you are.',{stress:-20,energy:3,rep:1})},
@@ -378,6 +454,7 @@ function move(dt){
     arm.rotation.z=side*-.08+side*reach*.2;
   });
   handReach=Math.max(0,handReach-dt*2.7);
+  updateActivityAnimation(dt);
 }
 function handleInteract(){if(!focus)return;handReach=1;handReachTime=clock.elapsedTime;interact(focus)}
 function setView(){camera.rotation.order='YXZ';camera.rotation.y=yaw;camera.rotation.x=pitch;}
