@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#101a27" />
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='16' fill='%231a2b3b'/%3E%3Ctext x='50%25' y='52%25' dominant-baseline='central' text-anchor='middle' font-family='sans-serif' font-size='46' font-weight='700' fill='%23f1c99b'%3Es%3C/text%3E%3C/svg%3E" />
+  <title>Solace — A computer that feels like yours</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <svg class="icon-library" aria-hidden="true" xmlns="http://www.w3.org/2000/svg">
+    <symbol id="i-grid" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="2"/><rect x="14" y="3" width="7" height="7" rx="2"/><rect x="3" y="14" width="7" height="7" rx="2"/><rect x="14" y="14" width="7" height="7" rx="2"/></symbol>
+    <symbol id="i-folder" viewBox="0 0 24 24"><path d="M3 7a2 2 0 0 1 2-2h5l2 2h7a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><path d="M3 10h18"/></symbol>
+    <symbol id="i-browser" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M3.6 9h16.8M9 3.5c2.4 2.5 3.4 5.4 3.4 8.5s-1 6-3.4 8.5M15 3.5c-1.6 2.5-2.4 5.4-2.4 8.5s.8 6 2.4 8.5"/></symbol>
+    <symbol id="i-mail" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="3"/><path d="m4 7 8 6 8-6"/></symbol>
+    <symbol id="i-note" viewBox="0 0 24 24"><path d="M6 3h9l4 4v14H6a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z"/><path d="M14 3v5h5M8 12h8M8 16h6"/></symbol>
+    <symbol id="i-settings" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="m19.4 15 .1.1 1.4 1.1-1.4 2.4-1.7-.7a8 8 0 0 1-1.7 1l-.3 1.8h-2.8l-.4-1.8a8 8 0 0 1-1.7-1l-1.7.7-1.4-2.4L5.2 15a8 8 0 0 1 0-2l-1.4-1.1 1.4-2.4 1.7.7a8 8 0 0 1 1.7-1L9 7.4h2.8l.4 1.8a8 8 0 0 1 1.7 1l1.7-.7 1.4 2.4-1.4 1.1a8 8 0 0 1 0 2Z" transform="translate(-1 -1)"/></symbol>
+    <symbol id="i-monitor" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="13" rx="2"/><path d="M8 21h8m-4-4v4M7 12l3-3 2 2 4-4"/></symbol>
+    <symbol id="i-trash" viewBox="0 0 24 24"><path d="M4 7h16M10 11v6m4-6v6M6 7l1 14h10l1-14M9 7V4h6v3"/></symbol>
+    <symbol id="i-wifi" viewBox="0 0 24 24"><path d="M3 9a14 14 0 0 1 18 0M6 12a9 9 0 0 1 12 0m-9 3a4 4 0 0 1 6 0m-3 4h.01"/></symbol>
+    <symbol id="i-battery" viewBox="0 0 24 24"><rect x="3" y="7" width="17" height="10" rx="2"/><path d="M22 10v4M6 10v4"/></symbol>
+    <symbol id="i-search" viewBox="0 0 24 24"><circle cx="10.8" cy="10.8" r="6.8"/><path d="m16 16 4.5 4.5"/></symbol>
+    <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
+    <symbol id="i-close" viewBox="0 0 24 24"><path d="m6 6 12 12M18 6 6 18"/></symbol>
+    <symbol id="i-chevron" viewBox="0 0 24 24"><path d="m9 18 6-6-6-6"/></symbol>
+    <symbol id="i-spark" viewBox="0 0 24 24"><path d="m12 3 1.8 6.2L20 11l-6.2 1.8L12 19l-1.8-6.2L4 11l6.2-1.8L12 3Z"/><path d="m19 16 .8 2.2L22 19l-2.2.8L19 22l-.8-2.2L16 19l2.2-.8L19 16Z"/></symbol>
+  </svg>
+  <main class="desktop" id="desktop">
+    <div class="wallpaper" id="wallpaper" aria-hidden="true">
+      <div class="wallpaper-glow"></div><div class="mountain mountain-back"></div><div class="mountain mountain-front"></div><div class="wallpaper-grain"></div>
+    </div>
+    <header class="menubar">
+      <div class="menu-left"><button class="brand-mark" id="launcher" title="Open app launcher"><span class="brand-glyph">s</span></button><span class="menu-app" id="active-app">Desktop</span><button class="menu-label" id="file-menu">File</button><button class="menu-label" id="view-menu">View</button><button class="menu-label" id="help-menu">Help</button></div>
+      <div class="menu-right"><span class="status-pill"><i class="status-dot"></i> All systems normal</span><svg class="icon"><use href="#i-wifi"/></svg><span class="battery-wrap"><svg class="icon"><use href="#i-battery"/></svg><span>86%</span></span><span class="menu-divider"></span><span class="clock" id="clock">9:41 AM</span></div>
+    </header>
+    <section class="desktop-icons" aria-label="Desktop shortcuts">
+      <button class="desktop-shortcut" data-app="files"><span class="shortcut-icon folder-icon"><svg class="icon"><use href="#i-folder"/></svg></span><span>My files</span></button>
+      <button class="desktop-shortcut" data-app="browser"><span class="shortcut-icon browser-icon"><svg class="icon"><use href="#i-browser"/></svg></span><span>Web</span></button>
+      <button class="desktop-shortcut" data-app="notes"><span class="shortcut-icon note-icon"><svg class="icon"><use href="#i-note"/></svg></span><span>Notes</span></button>
+      <button class="desktop-shortcut" data-app="trash"><span class="shortcut-icon trash-icon"><svg class="icon"><use href="#i-trash"/></svg></span><span>Recycle bin</span></button>
+    </section>
+    <section class="desktop-widgets">
+      <article class="hello-widget glass-card">
+        <div class="widget-eyebrow"><span class="eyebrow-line"></span> YOUR PERSONAL COMPUTER</div>
+        <h1>A little space<br>to make <em>your own.</em></h1>
+        <p>Your desktop is ready. Make a note, explore the web, or just settle in.</p>
+        <div class="widget-footer"><div class="avatar">A</div><div><strong>Alex Morgan</strong><small>Personal workspace</small></div><span class="widget-live"><i></i> ONLINE</span></div>
+      </article>
+      <article class="weather-widget glass-card">
+        <div class="weather-top"><span>YOUR LOCAL TIME</span><svg class="icon"><use href="#i-spark"/></svg></div>
+        <div class="weather-temp" id="widget-time">09:41</div>
+        <div class="weather-caption"><span class="sun-orb"></span><span><strong>Clear skies</strong><small>San Francisco · 18°</small></span></div>
+        <div class="weather-rule"></div><div class="weather-bottom"><span>MONDAY, OCTOBER 21</span><span>FALL · 2024</span></div>
+      </article>
+    </section>
+    <section class="window-layer" id="window-layer" aria-label="Open applications"></section>
+    <div class="toast" id="toast" role="status"></div>
+    <nav class="dock-wrap" aria-label="Application dock"><div class="dock" id="dock">
+      <button class="dock-app finder" data-app="files" aria-label="Files"><svg class="icon"><use href="#i-folder"/></svg><span class="dock-tip">Files</span></button>
+      <button class="dock-app browser" data-app="browser" aria-label="Browser"><svg class="icon"><use href="#i-browser"/></svg><span class="dock-tip">Browser</span></button>
+      <button class="dock-app mail" data-app="mail" aria-label="Mail"><svg class="icon"><use href="#i-mail"/></svg><span class="dock-badge" id="mail-badge">2</span><span class="dock-tip">Mail</span></button>
+      <button class="dock-app notes" data-app="notes" aria-label="Notes"><svg class="icon"><use href="#i-note"/></svg><span class="dock-tip">Notes</span></button>
+      <span class="dock-separator"></span>
+      <button class="dock-app activity" data-app="activity" aria-label="Activity monitor"><svg class="icon"><use href="#i-monitor"/></svg><span class="dock-tip">Activity</span></button>
+      <button class="dock-app settings" data-app="settings" aria-label="Settings"><svg class="icon"><use href="#i-settings"/></svg><span class="dock-tip">Settings</span></button>
+      <button class="dock-app launcher-app" id="dock-launcher" aria-label="App launcher"><svg class="icon"><use href="#i-grid"/></svg><span class="dock-tip">All apps</span></button>
+    </div></nav>
+    <div class="launcher-overlay" id="launcher-overlay"><div class="launcher-panel"><div class="launcher-search"><svg class="icon"><use href="#i-search"/></svg><input id="app-search" placeholder="Search apps and files" autocomplete="off"></div><div class="launcher-heading">YOUR APPS <span>6</span></div><div class="launcher-grid">
+      <button data-app="files"><span class="launcher-icon folder-icon"><svg class="icon"><use href="#i-folder"/></svg></span>Files</button><button data-app="browser"><span class="launcher-icon browser-icon"><svg class="icon"><use href="#i-browser"/></svg></span>Browser</button><button data-app="mail"><span class="launcher-icon mail-icon"><svg class="icon"><use href="#i-mail"/></svg></span>Mail</button><button data-app="notes"><span class="launcher-icon note-icon"><svg class="icon"><use href="#i-note"/></svg></span>Notes</button><button data-app="activity"><span class="launcher-icon activity-icon"><svg class="icon"><use href="#i-monitor"/></svg></span>Activity</button><button data-app="settings"><span class="launcher-icon settings-icon"><svg class="icon"><use href="#i-settings"/></svg></span>Settings</button>
+    </div><div class="launcher-bottom"><span class="avatar">A</span><span>Alex Morgan</span><button id="power-button">⏻</button></div></div></div>
+    <div class="context-menu" id="context-menu"><button data-action="new-note"><svg class="icon"><use href="#i-note"/></svg>New note</button><button data-action="change-wallpaper"><svg class="icon"><use href="#i-settings"/></svg>Change wallpaper</button><button data-action="refresh"><svg class="icon"><use href="#i-spark"/></svg>Refresh desktop</button></div>
+    <div class="boot-screen" id="boot-screen"><div class="boot-logo">s</div><div class="boot-name">SOLACE</div><div class="boot-progress"><span></span></div><small>Waking up your workspace</small></div>
+  </main>
+  <script src="app.js"></script>
+</body>
+</html>
