@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#101619">
+  <link rel="icon" href="data:,">
+  <title>Machine Room — Systems Programming Simulator</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=DM+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <main class="app-shell">
+    <header class="topbar">
+      <a class="brand" href="#" aria-label="Machine Room home"><span class="brand-mark">M<span>_</span></span><span class="brand-name">MACHINE<span>ROOM</span></span></a>
+      <div class="top-center"><span class="live-dot"></span> SYSTEMS SIMULATOR <span class="top-divider">/</span> BUILD 01.04</div>
+      <button class="help-button" id="helpBtn" aria-label="Open language guide"><span>?</span> <b>LANGUAGE GUIDE</b></button>
+    </header>
+
+    <section class="intro-row">
+      <div><div class="eyebrow"><span class="eyebrow-line"></span> FIELD OPERATIONS <span class="eyebrow-index">01 — 04</span></div><h1>Make the machine<br><em>think for itself.</em></h1></div>
+      <p class="intro-copy">Write a program. Watch your little machine<br class="desktop-only"> make it through the room.</p>
+    </section>
+
+    <section class="game-layout" aria-label="Programming simulator">
+      <aside class="mission-panel panel">
+        <div class="panel-kicker"><span>MISSION CONTROL</span><span class="status-pill" id="missionStatus">READY</span></div>
+        <div class="mission-heading"><span class="mission-number" id="missionNumber">01</span><div><h2 id="missionTitle">First Steps</h2><p id="missionSubtitle">The basics of movement</p></div></div>
+        <div class="objective-box"><div class="small-label">YOUR OBJECTIVE</div><p id="missionObjective">Collect the energy cell, then reach the exit.</p><div class="objective-progress"><span id="objectiveText">0 / 1 CELLS</span><span class="progress-track"><i id="progressFill"></i></span></div></div>
+        <div class="level-list" id="levelList" aria-label="Missions"></div>
+        <div class="mission-tip"><span class="tip-icon">✳</span><p id="missionTip">The machine starts facing east. One instruction runs per tick.</p></div>
+      </aside>
+
+      <section class="sim-panel panel">
+        <div class="sim-topline"><div><div class="panel-kicker">LIVE SIMULATION <span class="sim-coordinate" id="coordinate">X 01 · Y 04</span></div><div class="room-title">TEST CHAMBER <span>— A</span></div></div><div class="sim-actions"><button class="icon-btn" id="resetBtn" title="Reset machine (R)">↺ <span>RESET</span></button><button class="icon-btn" id="stepBtn" title="Run one instruction (Space)">▹ <span>STEP</span></button></div></div>
+        <div class="canvas-wrap"><canvas id="world" aria-label="Robot simulation grid"></canvas><div class="canvas-corner corner-tl"></div><div class="canvas-corner corner-br"></div><div class="canvas-overlay" id="canvasOverlay"><span class="overlay-icon">⌁</span><span id="overlayText">AWAITING PROGRAM</span></div></div>
+        <div class="world-legend"><span><i class="legend-robot">↗</i> UNIT-01</span><span><i class="legend-cell"></i> ENERGY CELL</span><span><i class="legend-exit">↗</i> EXIT</span><span class="legend-right" id="tickReadout">TICK 000</span></div>
+      </section>
+
+      <section class="code-panel panel">
+        <div class="code-heading"><div><div class="panel-kicker">PROGRAM EDITOR <span class="language-tag">SPARK / 1.0</span></div><div class="code-title">main.spark <span>●</span></div></div><button class="icon-btn clear-btn" id="clearBtn" title="Restore starter program">↻ <span>RELOAD</span></button></div>
+        <div class="editor-wrap"><div class="line-numbers" id="lineNumbers" aria-hidden="true">1</div><textarea id="codeEditor" spellcheck="false" autocapitalize="off" autocomplete="off" aria-label="SPARK program editor"></textarea></div>
+        <div class="editor-footer"><span id="editorMessage">SPARK is ready when you are.</span><span id="lineCount">07 LINES</span></div>
+        <div class="run-row"><button class="run-button" id="runBtn"><span class="play-icon">▶</span><span id="runLabel">RUN PROGRAM</span><kbd>⌘ ↵</kbd></button><button class="stop-button" id="stopBtn" disabled>■ STOP</button></div>
+        <div class="terminal" aria-live="polite"><div class="terminal-head"><span><i></i> SYSTEM LOG</span><span id="logCount">01</span></div><div class="terminal-lines" id="terminalLines"><p><time>00:00</time><span>Machine booted. Awaiting instructions.</span></p></div></div>
+      </section>
+    </section>
+
+    <footer class="bottom-bar"><span>BUILT FOR CURIOUS MINDS <span class="footer-dot">✳</span></span><span>NO WRONG MOVES. JUST DEBUGGING.</span><span>SPARK LANGUAGE <b>v1.0.4</b></span></footer>
+  </main>
+
+  <div class="modal-backdrop" id="guideModal" hidden><section class="guide-card" role="dialog" aria-modal="true" aria-labelledby="guideTitle"><button class="modal-close" id="closeGuide" aria-label="Close">×</button><div class="eyebrow"><span class="eyebrow-line"></span> QUICK REFERENCE</div><h2 id="guideTitle">Speak <em>SPARK.</em></h2><p>SPARK is the tiny language that runs this machine. One action takes one tick.</p><div class="command-list"><div><code>MOVE</code><span>Move one tile forward.</span></div><div><code>TURN LEFT</code><span>Turn 90° without moving.</span></div><div><code>TURN RIGHT</code><span>Turn 90° the other way.</span></div><div><code>TAKE</code><span>Pick up an energy cell on this tile.</span></div><div><code>IF BLOCKED … END</code><span>Run the block if a wall is ahead.</span></div><div><code>IF CELL … END</code><span>Run the block while on a cell.</span></div><div><code>REPEAT 3 … END</code><span>Repeat a block (1–20 times).</span></div></div><div class="guide-example"><span>EXAMPLE PROGRAM</span><pre>REPEAT 2
+  MOVE
+  TURN LEFT
+END</pre></div><button class="run-button guide-done" id="guideDone">GOT IT <span>→</span></button></section></div>
+  <div class="toast" id="toast" role="status"></div>
+  <script src="game.js"></script>
+</body>
+</html>
