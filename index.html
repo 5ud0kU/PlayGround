@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="theme-color" content="#101a20" />
+  <title>Reality Unbound — A Living World</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=DM+Sans:wght@400;500;600;700&family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div id="game" aria-label="Reality Unbound life simulation">
+    <canvas id="scene"></canvas>
+    <div class="vignette"></div>
+    <header class="topbar">
+      <div class="brand"><span class="brand-mark">R</span><div><strong>REALITY <i>UNBOUND</i></strong><small>EVERYDAY, UNWRITTEN</small></div></div>
+      <div class="world-label"><span class="live-dot"></span><span id="districtLabel">HARBORLIGHT · NORTH DISTRICT</span></div>
+      <button class="icon-button" id="saveButton" title="Save world">↧ <span>SAVE</span></button>
+    </header>
+    <aside class="left-rail">
+      <div class="rail-card profile-card"><div class="avatar">Y</div><div class="profile-copy"><span class="eyebrow">YOUR LIFE</span><strong id="playerName">YOU · AGE 24</strong><small id="occupation">Between chapters</small></div></div>
+      <div class="rail-card needs-card"><div class="section-title">WELLBEING <span id="moodLabel">STEADY</span></div>
+        <div class="need-row"><span>Energy</span><div class="meter"><i id="energyBar" class="energy"></i></div><b id="energyVal">78</b></div>
+        <div class="need-row"><span>Hunger</span><div class="meter"><i id="hungerBar" class="hunger"></i></div><b id="hungerVal">24</b></div>
+        <div class="need-row"><span>Social</span><div class="meter"><i id="socialBar" class="social"></i></div><b id="socialVal">56</b></div>
+        <div class="need-row"><span>Stress</span><div class="meter"><i id="stressBar" class="stress"></i></div><b id="stressVal">18</b></div>
+      </div>
+      <div class="rail-card wallet-card"><div class="section-title">AVAILABLE</div><div class="money"><span>$</span><strong id="money">420</strong></div><small>Personal balance</small></div>
+      <div class="rail-card journal-card"><div class="section-title">LIFE LOG <span class="log-count" id="logCount">01</span></div><div id="lifeLog" class="log-list"></div></div>
+    </aside>
+    <aside class="right-rail">
+      <div class="clock-card"><span class="eyebrow">TUESDAY · LATE SPRING</span><strong id="clock">08:15</strong><div class="weather"><span id="weatherIcon">☀</span><span id="weatherText">CLEAR · 19°C</span></div><div class="dayline"><i id="dayProgress"></i></div></div>
+      <div class="world-card"><div class="section-title">HARBORLIGHT <span class="signal">● SIM LIVE</span></div><p>A small city with no particular plan for you.</p><div class="statline"><span>People nearby</span><b id="nearbyCount">6</b></div><div class="statline"><span>City pulse</span><b id="pulseText">Unhurried</b></div><div class="statline"><span>Local outlook</span><b id="outlook">Stable</b></div></div>
+      <div class="controls-card"><div class="section-title">ON FOOT</div><div><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd><span>Move</span></div><div><kbd>SHIFT</kbd><span>Walk faster</span></div><div><kbd>SPACE</kbd><span>Step / jump</span></div><div><kbd>E</kbd><span>Interact</span></div><div><kbd>ESC</kbd><span>Release cursor</span></div></div>
+    </aside>
+    <div class="crosshair"><i></i><i></i></div>
+    <div class="interaction-hint" id="interactionHint"><kbd>E</kbd><span>INTERACT</span></div>
+    <div class="location-toast" id="locationToast"><span>⌖</span><div><small>YOU ARE IN</small><strong>North District</strong></div></div>
+    <div class="bottom-center"><div class="objective"><span class="objective-mark">✳</span><div><small>YOUR DAY, YOUR CALL</small><strong id="objectiveText">Take a moment. Find your footing.</strong></div><button id="objectivesButton">LIFE OPTIONS <span>↗</span></button></div><div class="interaction-panel" id="interactionPanel"></div></div>
+    <div class="toast" id="toast"></div>
+    <div class="start-screen" id="startScreen"><div class="start-backdrop"></div><div class="intro-card"><div class="brand intro-brand"><span class="brand-mark">R</span><div><strong>REALITY <i>UNBOUND</i></strong><small>A LIVING WORLD SIMULATOR</small></div></div><div class="intro-kicker"><span></span> A WORLD ALREADY IN MOTION</div><h1>Your life<br>starts <em>here.</em></h1><p>Harborlight is waking up. Its people have places to be, bills to pay, and lives unfolding with or without you. There is no quest waiting—just a day that belongs to you.</p><div class="intro-meta"><div><small>YOUR STARTING POINT</small><strong>North District · 08:15</strong></div><div><small>THE CITY</small><strong>Procedurally alive</strong></div></div><button class="begin-button" id="beginButton">STEP INTO HARBORLIGHT <span>→</span></button><div class="intro-foot"><span>WASD TO WALK</span><span>·</span><span>E TO ENGAGE</span><span>·</span><span>ESC TO PAUSE</span></div></div><div class="intro-caption"><span>01 / AN ORDINARY MORNING</span><span>HARBORLIGHT, POP. 18,420</span></div></div>
+    <div class="modal-backdrop" id="modalBackdrop"><section class="modal" id="modal"><button class="modal-close" id="modalClose">×</button><div id="modalContent"></div></section></div>
+  </div>
+  <script type="module" src="app.js"></script>
+</body>
+</html>
