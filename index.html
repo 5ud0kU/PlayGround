@@ -1,0 +1,94 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <link rel="icon" href="data:," />
+  <meta name="theme-color" content="#101c22" />
+  <title>Polygon Wild — Build your little world</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=DM+Sans:wght@400;500;600;700;800&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <main class="app-shell">
+    <header class="topbar">
+      <a class="brand" href="#" aria-label="Polygon Wild home">
+        <span class="brand-mark"><i></i><i></i><i></i></span>
+        <span>POLYGON<span class="brand-light">WILD</span></span>
+      </a>
+      <div class="world-title"><span class="live-dot"></span><span>THE LITTLE ISLES</span><span class="title-divider">/</span><span class="world-seed">WORLD 04</span></div>
+      <div class="top-actions">
+        <div class="day-pill"><span class="sun-icon">☀</span><span id="dayLabel">DAY 01</span><span class="weather">CLEAR</span></div>
+        <button class="icon-btn" id="soundBtn" aria-label="Toggle sound" title="Sound on/off">♫</button>
+        <button class="icon-btn help-trigger" id="helpBtn" aria-label="How to play">?</button>
+      </div>
+    </header>
+
+    <section class="game-layout">
+      <aside class="left-rail">
+        <div class="profile-card">
+          <div class="avatar"><span class="avatar-face">◡</span><span class="avatar-cap"></span></div>
+          <div class="profile-copy"><span class="eyebrow">ISLANDER</span><strong>Rookie Builder</strong></div>
+          <span class="rank">LVL 1</span>
+        </div>
+        <div class="rail-heading"><span>YOUR JOURNEY</span><span class="tiny-count">01 / 03</span></div>
+        <div class="quest-card active-quest">
+          <div class="quest-icon beacon-icon">✦</div>
+          <div class="quest-content"><div class="quest-kicker">MAIN QUEST</div><h2>Light the<br>way home</h2><p>Build a beacon on the island's old foundation.</p></div>
+          <div class="quest-progress"><div class="progress-line"><span id="questProgress"></span></div><span id="questCount">0 / 3</span></div>
+          <div class="quest-costs">
+            <div class="cost-chip"><span class="material wood-small"></span><span id="woodNeed">0/8</span></div>
+            <div class="cost-chip"><span class="material stone-small"></span><span id="stoneNeed">0/6</span></div>
+            <div class="cost-chip"><span class="material crystal-small"></span><span id="crystalNeed">0/3</span></div>
+          </div>
+        </div>
+        <div class="side-section resources-section">
+          <div class="section-heading"><span>BACKPACK</span><button class="text-action" id="sortBtn">SORT ↕</button></div>
+          <div class="resource-row"><span class="resource-symbol wood-symbol">▰</span><span>Softwood</span><strong id="woodTotal">0</strong><span class="resource-unit">pcs</span></div>
+          <div class="resource-row"><span class="resource-symbol stone-symbol">◆</span><span>Stone</span><strong id="stoneTotal">0</strong><span class="resource-unit">pcs</span></div>
+          <div class="resource-row"><span class="resource-symbol crystal-symbol">✦</span><span>Star crystal</span><strong id="crystalTotal">0</strong><span class="resource-unit">pcs</span></div>
+          <div class="resource-row"><span class="resource-symbol fiber-symbol">⌁</span><span>Wild fiber</span><strong id="fiberTotal">0</strong><span class="resource-unit">pcs</span></div>
+        </div>
+        <div class="tip-card"><span class="tip-spark">✳</span><div><span class="eyebrow">FIELD NOTE</span><p id="fieldNote">The island is quiet. Gather nearby materials to get started.</p></div></div>
+        <button class="journal-btn" id="journalBtn"><span>▤</span> Island journal <span class="journal-arrow">↗</span></button>
+      </aside>
+
+      <section class="play-area" aria-label="Game world">
+        <div class="scene-topline"><div class="location"><span class="pin">⌖</span><span id="locationLabel">SUNLIT CLEARING</span></div><div class="coordinates">X <span id="coordX">06</span> &nbsp; Y <span id="coordY">06</span></div></div>
+        <canvas id="world" aria-label="Isometric island game. Use WASD or arrow keys to move. Click resources to gather." tabindex="0"></canvas>
+        <div class="world-vignette"></div>
+        <div class="scene-hud"><div class="health"><span class="heart">♥</span><span class="heart">♥</span><span class="heart">♥</span><span class="heart">♥</span><span class="heart">♥</span><span class="health-label">100%</span></div><div class="world-clock"><span class="clock-dot"></span><span id="clockLabel">08:24 AM</span><span class="clock-sep">•</span><span id="weatherLabel">BREEZY</span></div></div>
+        <div class="toast" id="toast" role="status"></div>
+        <div class="hotbar-wrap"><div class="hotbar-label"><span>QUICK BAR</span><span class="hotbar-hint">PRESS 1—5 TO SELECT</span></div><div class="hotbar" id="hotbar">
+          <button class="slot selected" data-slot="0"><span class="slot-num">1</span><span class="slot-item pickaxe">⛏</span><span class="slot-name">TOOL</span></button>
+          <button class="slot" data-slot="1"><span class="slot-num">2</span><span class="slot-item wood-block"></span><span class="slot-count" id="slotWood">0</span><span class="slot-name">WOOD</span></button>
+          <button class="slot" data-slot="2"><span class="slot-num">3</span><span class="slot-item stone-block"></span><span class="slot-count" id="slotStone">0</span><span class="slot-name">STONE</span></button>
+          <button class="slot" data-slot="3"><span class="slot-num">4</span><span class="slot-item fiber-block">⌁</span><span class="slot-count" id="slotFiber">0</span><span class="slot-name">FIBER</span></button>
+          <button class="slot" data-slot="4"><span class="slot-num">5</span><span class="slot-item crystal-block">✦</span><span class="slot-count" id="slotCrystal">0</span><span class="slot-name">GEM</span></button>
+        </div></div>
+        <div class="control-hint"><span class="keycap">WASD</span><span>MOVE</span><span class="hint-dot">·</span><span class="keycap">CLICK</span><span>GATHER / BUILD</span><span class="hint-dot">·</span><span class="keycap">SPACE</span><span>INTERACT</span></div>
+        <button class="mobile-action" id="mobileAction">GATHER <span>↗</span></button>
+      </section>
+
+      <aside class="right-rail">
+        <div class="panel-title"><div><span class="eyebrow">WORKBENCH</span><h2>Make something</h2></div><span class="bench-icon">⌘</span></div>
+        <div class="recipe-tabs"><button class="recipe-tab active" data-tab="all">ALL <span>04</span></button><button class="recipe-tab" data-tab="build">BUILD <span>02</span></button><button class="recipe-tab" data-tab="tools">TOOLS <span>02</span></button></div>
+        <div class="recipe-list">
+          <article class="recipe-card" data-category="build" data-recipe="beacon">
+            <div class="recipe-visual beacon-visual"><span class="beacon-shape">✦</span></div><div class="recipe-info"><div class="recipe-name-row"><h3>Home beacon</h3><span class="new-tag">QUEST</span></div><p>Bring a little light back.</p><div class="recipe-needs"><span><i class="need-wood"></i><b>8</b></span><span><i class="need-stone"></i><b>6</b></span><span><i class="need-crystal"></i><b>3</b></span></div><button class="craft-btn primary-craft" id="beaconBtn" disabled>NEED MORE MATERIALS <span>↗</span></button></div>
+          </article>
+          <article class="recipe-card compact-recipe" data-category="tools" data-recipe="axe"><div class="recipe-visual axe-visual">⛏</div><div class="recipe-info"><div class="recipe-name-row"><h3>Stone hatchet</h3><span class="craft-level">TOOL</span></div><p>Gather wood a little faster.</p><div class="recipe-needs"><span><i class="need-wood"></i><b>3</b></span><span><i class="need-stone"></i><b>2</b></span></div><button class="craft-btn" id="axeBtn">CRAFT <span>↗</span></button></div></article>
+          <article class="recipe-card compact-recipe" data-category="build"><div class="recipe-visual camp-visual">⌂</div><div class="recipe-info"><div class="recipe-name-row"><h3>Camp marker</h3><span class="craft-level">DECOR</span></div><p>Mark a place to call yours.</p><div class="recipe-needs"><span><i class="need-wood"></i><b>2</b></span><span><i class="need-fiber"></i><b>2</b></span></div><button class="craft-btn" id="campBtn">CRAFT <span>↗</span></button></div></article>
+          <article class="recipe-card compact-recipe" data-category="tools"><div class="recipe-visual torch-visual">♨</div><div class="recipe-info"><div class="recipe-name-row"><h3>Pocket torch</h3><span class="craft-level">TOOL</span></div><p>Light for the long dusk.</p><div class="recipe-needs"><span><i class="need-wood"></i><b>1</b></span><span><i class="need-fiber"></i><b>2</b></span></div><button class="craft-btn" id="torchBtn">CRAFT <span>↗</span></button></div></article>
+        </div>
+        <div class="bench-footer"><span class="bench-star">✳</span><span>Good things take a little gathering.</span></div>
+      </aside>
+    </section>
+    <footer class="footer"><span>POLYGON WILD <span class="footer-muted">· A SMALL WORLD, ALL YOURS</span></span><span class="save-state"><span class="save-dot"></span> PROGRESS SAVED</span><span class="footer-version">V 0.4.1</span></footer>
+  </main>
+  <div class="modal-backdrop" id="modalBackdrop" hidden><section class="modal" role="dialog" aria-modal="true" aria-labelledby="modalTitle"><button class="modal-close" id="modalClose">×</button><span class="eyebrow">A NOTE FROM THE ISLAND</span><h2 id="modalTitle">A place to make your own.</h2><p id="modalText">Move around your little island, gather what you find, and bring the old beacon back to life.</p><div class="modal-controls"><div><span class="keycap">W A S D</span><small>MOVE</small></div><div><span class="keycap">CLICK</span><small>GATHER</small></div><div><span class="keycap">SPACE</span><small>INTERACT</small></div></div><button class="modal-play" id="modalPlay">GOT IT, LET'S GO <span>→</span></button></section></div>
+  <script src="game.js"></script>
+</body>
+</html>
