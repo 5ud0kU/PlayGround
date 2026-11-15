@@ -1,4 +1,26 @@
-# PlayGround
+# Devil's Curb
+
+A short first-person folk-horror game made with Three.js. Walk Devil's Curb, inspect the discoveries, get back to the top, then face the 3 AM visitation.
+
+## Run locally
+
+```sh
+npm install
+npm run dev
+```
+
+Open the local URL printed by Vite (by default, `http://localhost:3002`). Build with `npm run build`.
+
+## Controls
+
+- **WASD / arrow keys:** walk along the road and look around
+- **Mouse:** look around (click the scene to recapture the mouse)
+- **E:** inspect nearby discoveries
+- **S / Down:** retreat during the escape
+- **Space:** hold the covers over your head in the bedroom
+- **Sound** control in the HUD toggles the ambient audio
+- Touch devices have on-screen movement and interaction controls
+
 
 <!-- omgithub:readme:start -->
 ## 🚀 Build, play, and remix with OMGithub
