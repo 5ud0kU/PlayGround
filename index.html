@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+  <meta name="theme-color" content="#101513">
+  <title>District 09 — Signal Lost</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <main id="game-shell">
+    <canvas id="view" aria-label="First person city game"></canvas>
+    <div class="film-grain"></div>
+    <div class="vignette"></div>
+    <div id="damage-flash" class="damage-flash"></div>
+    <div id="pulse-flash" class="pulse-flash"></div>
+
+    <section id="title-screen" class="screen visible">
+      <div class="title-mark"><span class="mark-icon">09</span><span>FIELD TRANSMISSION <i> / 03:17 AM</i></span></div>
+      <div class="title-content">
+        <p class="eyebrow">NORTH QUARANTINE ZONE · DAY 184</p>
+        <h1>DISTRICT<br><em>09</em></h1>
+        <div class="title-rule"></div>
+        <p class="subtitle">SIGNAL LOST</p>
+        <p class="story">The relay towers have gone dark.<br>Find the three street-level junctions and bring the evacuation channel back online.</p>
+        <button id="start-button" class="primary-button" aria-label="Start">ENTER THE DISTRICT <span>↗</span></button>
+        <p class="controls-note">WASD MOVE <b>·</b> MOUSE LOOK <b>·</b> E INTERACT <b>·</b> Q PULSE</p>
+      </div>
+      <div class="title-footer"><span>AN ORIGINAL DYSTOPIAN CITY EXPERIENCE</span><span>NO WAY BACK / KEEP MOVING</span></div>
+    </section>
+
+    <section id="pause-screen" class="screen">
+      <div class="pause-card"><p class="eyebrow">FIELD TRANSMISSION / PAUSED</p><h2>TAKE A BREATH.</h2><p>The district is still out there.</p><button id="resume-button" class="primary-button">RESUME MISSION <span>↗</span></button><span class="small-hint">PRESS ESC TO RETURN</span></div>
+    </section>
+
+    <section id="complete-screen" class="screen">
+      <div class="pause-card"><p id="complete-eyebrow" class="eyebrow">EVACUATION CHANNEL RESTORED</p><h2 id="complete-title">YOU'RE NOT<br>ALONE.</h2><p id="final-stats">The signal is moving.</p><button id="replay-button" class="primary-button">WALK IT AGAIN <span>↗</span></button></div>
+    </section>
+
+    <header id="hud-top" class="hud hidden">
+      <div class="mission-tag"><span class="live-dot"></span><span id="clock">03:17 AM</span><i> / </i> DISTRICT 09</div>
+      <div class="objective-tag"><span class="tag-label">TASK</span><span id="objective-text">RESTORE THE STREET RELAYS</span></div>
+      <button id="map-toggle" aria-label="Toggle map">MAP <span> M </span></button>
+    </header>
+
+    <aside id="map-panel" class="map-panel hidden">
+      <div class="map-heading"><span>AREA SURVEY</span><span>N ↑</span></div>
+      <canvas id="minimap" width="180" height="180"></canvas>
+      <div class="map-legend"><span><i class="legend-player"></i> YOU</span><span><i class="legend-node"></i> RELAY</span></div>
+    </aside>
+
+    <div id="crosshair" class="crosshair hidden"><i></i><b></b></div>
+    <div id="interaction" class="interaction hidden"><span class="keycap">E</span><span id="interaction-label">RESTORE RELAY</span></div>
+    <div id="message" class="message"></div>
+    <div id="hint" class="hint hidden">CLICK TO CAPTURE MOUSE <span>ESC TO RELEASE</span></div>
+
+    <footer id="hud-bottom" class="hud hidden">
+      <div class="tool-readout"><span class="tool-icon">⌁</span><div><small>FIELD PULSE</small><strong id="pulse-status">READY</strong></div><kbd>Q</kbd></div>
+      <div class="vitals-readout"><div class="progress-label"><span>VITALS</span><span id="vitals-count">100</span></div><div class="vitals-track"><i id="vitals-fill"></i></div></div>
+      <div class="progress-readout"><div class="progress-label"><span>STREET RELAYS</span><span id="relay-count">0 / 3</span></div><div class="progress-track"><i id="progress-fill"></i><i id="progress-fill-two"></i><i id="progress-fill-three"></i></div></div>
+      <div class="coords-readout"><span>POSITION</span><strong id="coords">N 00 · E 00</strong></div>
+    </footer>
+
+    <div id="mobile-controls" class="mobile-controls hidden">
+      <div id="joystick" class="joystick"><i></i></div>
+      <button id="pulse-touch" class="touch-action">PULSE<small>Q</small></button>
+      <button id="interact-touch" class="touch-action interact-touch hidden">USE<small>E</small></button>
+      <div class="look-label">DRAG TO LOOK</div>
+    </div>
+  </main>
+  <script type="module" src="game.js"></script>
+</body>
+</html>
