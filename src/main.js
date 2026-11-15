@@ -159,9 +159,10 @@ const nightLady=makeLady();nightLady.visible=false;bedroom.add(nightLady);nightL
 const ui={hud:document.querySelector('#hud'),intro:document.querySelector('#intro-screen'),interlude:document.querySelector('#interlude'),ending:document.querySelector('#ending-screen'),loading:document.querySelector('#loading'),objective:document.querySelector('#objective'),chapter:document.querySelector('#chapter-label'),clock:document.querySelector('#clock'),prompt:document.querySelector('#prompt'),promptText:document.querySelector('#prompt-text'),subtitles:document.querySelector('#subtitles'),touchInteract:document.querySelector('#touch-interact'),soundState:document.querySelector('#sound-state'),sheet:document.querySelector('#sheet-shadow')};
 let mode='intro', progress=.005, yaw=0, pitch=0, lookYaw=0, lookPitch=0, unlocked=false, clueDeer=false, clueRitual=false, clueTarps=false, ladySeen=false, sleepTime=0, covered=0, subtitleTimer=0, time=0;
 const keys=new Set(), touchMove=new Set();const touchDevice=matchMedia('(pointer:coarse)').matches||navigator.maxTouchPoints>0;let actionReady=false;
+const joystickState={active:false,x:0,y:0,dx:0,dy:0};
 const hotspots=[{t:.215,range:.042,id:'deer'},{t:.39,range:.05,id:'altar'},{t:.652,range:.055,id:'tarps'}];
 function tell(text,duration=4){ui.subtitles.textContent=text;ui.subtitles.classList.add('show');subtitleTimer=duration;}
-function startWalk(){mode='walk';unlocked=true;ui.intro.hidden=true;ui.hud.hidden=false;ui.objective.textContent='Follow the road downhill.';ui.chapter.textContent="DEVIL'S CURB";document.querySelector('#control-hint').textContent=touchDevice?'DRAG TO LOOK · HOLD ▲ TO WALK · TAP USE NEAR CLUES':'WASD TO WALK · MOUSE TO LOOK';progress=.005;positionWalker();audioStart();if(matchMedia('(pointer:fine)').matches)canvas.requestPointerLock?.();tell('“So we should be safe.”',3.3)}
+function startWalk(){mode='walk';unlocked=true;ui.intro.hidden=true;ui.hud.hidden=false;ui.objective.textContent='Follow the road downhill.';ui.chapter.textContent="DEVIL'S CURB";document.querySelector('#control-hint').textContent=touchDevice?'JOYSTICK TO MOVE · DRAG TO LOOK · TAP USE NEAR CLUES':'WASD TO WALK · MOUSE TO LOOK';progress=.005;positionWalker();audioStart();if(matchMedia('(pointer:fine)').matches)canvas.requestPointerLock?.();tell('“So we should be safe.”',3.3)}
 function positionWalker(){const p=at(progress,0,0);camera.position.set(p.x,1.68,p.z);const tangent=route.getTangentAt(clamp(progress,0,1));const heading=Math.atan2(-tangent.x,-tangent.z);camera.rotation.order='YXZ';camera.rotation.set(pitch,heading+yaw,0)}
 function interact(){
  if(mode!=='walk')return;
@@ -169,7 +170,7 @@ function interact(){
  if(!h)return;
  if(h.id==='deer'&&!clueDeer){clueDeer=true;tell('A dead deer. Rope at its neck. And the other bodies scattered around it.');ui.objective.textContent='Keep going. The smell gets worse downhill.';return}
  if(h.id==='altar'&&!clueRitual){clueRitual=true;tell('A record player. Knives. Something like a pulpit. This isn’t just local gossip.');return}
- if(h.id==='tarps'&&!clueTarps){clueTarps=true;mode='escape';lady.visible=true;ladySeen=true;ui.objective.textContent='Run back up the hill. Hold S / ↓ to retreat.';document.querySelector('#control-hint').textContent=touchDevice?'HOLD ▼ TO RUN BACK · DRAG TO LOOK':'HOLD S / ↓ TO RUN BACK';ui.chapter.textContent='THE OVERLOOK';tell('The smell turns your stomach. Something is rolled up inside. You feel someone watching.',5);return}
+ if(h.id==='tarps'&&!clueTarps){clueTarps=true;mode='escape';lady.visible=true;ladySeen=true;ui.objective.textContent='Run back up the hill. Hold S / ↓ to retreat.';document.querySelector('#control-hint').textContent=touchDevice?'PULL JOYSTICK DOWN TO RUN BACK · DRAG TO LOOK':'HOLD S / ↓ TO RUN BACK';ui.chapter.textContent='THE OVERLOOK';tell('The smell turns your stomach. Something is rolled up inside. You feel someone watching.',5);return}
 }
 function advanceNight(){if(mode!=='interlude')return;mode='night';ui.interlude.hidden=true;bedroom.visible=true;scene.background=new THREE.Color('#161a22');scene.fog=new THREE.FogExp2('#161a22',.04);scene.add(new THREE.AmbientLight('#bac2d0',.18));camera.fov=65;camera.updateProjectionMatrix();camera.position.set(0,1.25,4.7);camera.rotation.order='YXZ';camera.rotation.set(-.04,0,0);nightLady.visible=true;nightLady.position.set(.35,-.2,-1.65);sleepTime=0;ui.chapter.textContent='3:07 AM';ui.objective.textContent='Something is at the foot of your bed.';ui.clock.textContent='3:07 AM';document.querySelector('#control-hint').textContent=touchDevice?'HOLD HIDE TO STAY UNDER THE COVERS':'HOLD SPACE TO HIDE UNDER THE COVERS';ui.touchInteract.textContent='HIDE';ui.touchInteract.setAttribute('aria-label','Hold to hide under the covers');tell('You wake with the feeling that someone is close.',4);}
 function finish(){mode='ending';ui.hud.hidden=true;ui.ending.hidden=false;}
@@ -195,13 +196,17 @@ function nearPrompt(){return mode==='walk'&&hotspots.some(o=>Math.abs(progress-o
 function update(dt){
  time+=dt;
  if(mode==='walk'||mode==='escape'){
+  const moveX=joystickState.active?joystickState.dx:0;
+  const moveY=joystickState.active?joystickState.dy:0;
   const forward=keys.has('w')||keys.has('arrowup')||touchMove.has('forward');
   const back=keys.has('s')||keys.has('arrowdown')||touchMove.has('back');
+  const turnLeft=keys.has('a')||keys.has('arrowleft')||touchMove.has('left');
+  const turnRight=keys.has('d')||keys.has('arrowright')||touchMove.has('right');
   const speed=mode==='escape'?8.1:4.7;
-  if(forward)progress+=dt*speed/roadLength;
-  if(back)progress-=dt*speed/roadLength;
-  if(keys.has('a')||keys.has('arrowleft')||touchMove.has('left'))yaw=clamp(yaw+dt*1.35,-1.15,1.15);
-  if(keys.has('d')||keys.has('arrowright')||touchMove.has('right'))yaw=clamp(yaw-dt*1.35,-1.15,1.15);
+  const verticalInput=forward?1:back?-1:Math.abs(moveY)>.12?-moveY:0;
+  const horizontalInput=turnLeft?1:turnRight?-1:Math.abs(moveX)>.12?-moveX:0;
+  progress+=verticalInput*dt*speed/roadLength;
+  yaw=clamp(yaw+horizontalInput*dt*1.35,-1.15,1.15);
   progress=clamp(progress,.005,clueTarps?1:.705);
   positionWalker();
   ui.clock.textContent=progress<.18?'4:32 PM':progress<.4?'4:26 PM':progress<.66?'4:21 PM':'4:18 PM';
@@ -258,16 +263,35 @@ window.addEventListener('keyup',e=>keys.delete(e.key.toLowerCase()));
 canvas.addEventListener('click',()=>{if(mode==='walk'&&matchMedia('(pointer:fine)').matches&&!document.pointerLockElement)canvas.requestPointerLock?.()});
 document.addEventListener('mousemove',e=>{if(document.pointerLockElement===canvas){yaw=clamp(yaw-e.movementX*.0022,-1.35,1.35);pitch=clamp(pitch-e.movementY*.0018,-.52,.52)}});
 let touchLook=null;
-document.querySelector('#game').addEventListener('pointerdown',e=>{if(e.pointerType==='touch'&&!e.target.closest('button'))touchLook={id:e.pointerId,x:e.clientX,y:e.clientY}});
+document.querySelector('#game').addEventListener('pointerdown',e=>{if(e.pointerType==='touch'&&!e.target.closest('button, #touch-controls'))touchLook={id:e.pointerId,x:e.clientX,y:e.clientY}});
 document.querySelector('#game').addEventListener('pointermove',e=>{if(touchLook?.id===e.pointerId){yaw=clamp(yaw-(e.clientX-touchLook.x)*.007,-1.3,1.3);pitch=clamp(pitch-(e.clientY-touchLook.y)*.006,-.5,.5);touchLook.x=e.clientX;touchLook.y=e.clientY}});
 window.addEventListener('pointerup',e=>{if(touchLook?.id===e.pointerId)touchLook=null});window.addEventListener('pointercancel',e=>{if(touchLook?.id===e.pointerId)touchLook=null});
-function releaseTouchControls(){touchMove.clear();keys.clear();touchLook=null}
-window.addEventListener('blur',releaseTouchControls);document.addEventListener('visibilitychange',()=>{if(document.hidden)releaseTouchControls()});
-for(const button of document.querySelectorAll('[data-move]')){
- const name=button.dataset.move;
- button.addEventListener('pointerdown',e=>{e.preventDefault();button.setPointerCapture(e.pointerId);touchMove.add(name)});
- for(const ev of ['pointerup','pointercancel','lostpointercapture'])button.addEventListener(ev,()=>touchMove.delete(name));
+const joystickBase=document.querySelector('#joystick-base');
+const joystickThumb=document.querySelector('#joystick-thumb');
+function resetJoystick(){
+ joystickState.active=false;joystickState.x=0;joystickState.y=0;joystickState.dx=0;joystickState.dy=0;
+ joystickThumb.style.transform='translate(0px, 0px)';
 }
+function releaseTouchControls(){touchMove.clear();keys.clear();touchLook=null;resetJoystick()}
+window.addEventListener('blur',releaseTouchControls);document.addEventListener('visibilitychange',()=>{if(document.hidden)releaseTouchControls()});
+function moveJoystick(e){
+ if(!joystickState.active)return;
+ const rect=joystickBase.getBoundingClientRect();
+ const radius=rect.width*.31;
+ const rawX=e.clientX-(rect.left+rect.width/2);
+ const rawY=e.clientY-(rect.top+rect.height/2);
+ const distance=Math.hypot(rawX,rawY);
+ const scale=distance>radius?radius/distance:1;
+ const x=rawX*scale,y=rawY*scale;
+ joystickState.x=x;joystickState.y=y;
+ joystickState.dx=x/radius;joystickState.dy=y/radius;
+ joystickThumb.style.transform=`translate(${x}px, ${y}px)`;
+}
+joystickBase.addEventListener('pointerdown',e=>{
+ e.preventDefault();joystickState.active=true;joystickBase.setPointerCapture(e.pointerId);moveJoystick(e);
+});
+joystickBase.addEventListener('pointermove',moveJoystick);
+for(const ev of ['pointerup','pointercancel','lostpointercapture'])joystickBase.addEventListener(ev,resetJoystick);
 const hideButton=ui.touchInteract;
 hideButton.addEventListener('pointerdown',e=>{e.preventDefault();hideButton.setPointerCapture(e.pointerId);if(mode==='night')touchMove.add('hide');else interact()});
 for(const ev of ['pointerup','pointercancel','lostpointercapture'])hideButton.addEventListener(ev,()=>touchMove.delete('hide'));

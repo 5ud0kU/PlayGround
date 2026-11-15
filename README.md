@@ -19,7 +19,7 @@ Open the local URL printed by Vite (by default, `http://localhost:3002`). Build 
 - **S / Down:** retreat during the escape
 - **Space:** hold the covers over your head in the bedroom
 - **Sound** control in the HUD toggles the ambient audio
-- Touch devices have on-screen movement and interaction controls
+- **Android / touch:** use the left virtual joystick to walk/turn, drag the scene to look, and tap **USE** near discoveries (hold **HIDE** in the bedroom)
 
 
 <!-- omgithub:readme:start -->

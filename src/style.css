@@ -3,21 +3,24 @@
 /* Android and other touch screens: keep the scene gesture-safe and controls easy to hit. */
 #game,#scene{touch-action:none;overscroll-behavior:none;-webkit-tap-highlight-color:transparent}
 #game{user-select:none;-webkit-user-select:none}
+
+.touch-controls{display:none;pointer-events:auto;position:absolute;left:0;right:0;bottom:12px;justify-content:space-between;align-items:flex-end;padding:0 18px calc(12px + env(safe-area-inset-bottom));z-index:20}
+.joystick-wrap{display:flex;align-items:center;justify-content:center;pointer-events:auto}
+.joystick-base{position:relative;width:140px;height:140px;border-radius:50%;background:radial-gradient(circle at 30% 30%, rgba(255,255,255,.18), rgba(16,19,17,.52) 48%, rgba(9,11,10,.82));border:1px solid rgba(233,225,209,.22);box-shadow:inset 0 0 0 1px rgba(255,255,255,.04), 0 10px 24px rgba(0,0,0,.28);touch-action:none;user-select:none;-webkit-user-select:none}
+.joystick-thumb{position:absolute;left:50%;top:50%;width:58px;height:58px;margin-left:-29px;margin-top:-29px;border-radius:50%;background:radial-gradient(circle at 35% 30%, rgba(255,255,255,.55), rgba(199,171,132,.9) 38%, rgba(117,89,59,.8));border:1px solid rgba(251,245,232,.25);box-shadow:0 8px 18px rgba(0,0,0,.35);transform:translate(0,0)}
+.touch-controls .touch-interact{display:flex;align-items:center;justify-content:center;width:96px;height:64px;padding:0 10px;border-radius:999px;border:1px solid rgba(233,225,209,.28);background:rgba(186,157,113,.85);color:#171713;font-size:11px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;box-shadow:0 8px 18px rgba(0,0,0,.3);touch-action:none;user-select:none;-webkit-user-select:none}
+
 @media(pointer:coarse){
- .touch-controls{bottom:calc(22px + env(safe-area-inset-bottom));left:calc(18px + env(safe-area-inset-left));right:calc(18px + env(safe-area-inset-right));}
- .touch-controls>div{grid-template-columns:repeat(3,58px);grid-template-rows:repeat(2,58px);gap:7px}
- .touch-controls button{width:58px;height:58px;border-radius:50%;font-size:21px;background:rgba(20,22,20,.62);border-color:rgba(233,225,209,.42);box-shadow:0 3px 14px rgba(0,0,0,.24);-webkit-user-select:none;user-select:none}
- .touch-controls button:active{background:rgba(194,164,119,.78);transform:scale(.96)}
- .touch-controls .touch-interact{width:88px;height:58px;padding:0 8px;border-radius:999px;font-size:10px!important;letter-spacing:.07em;background:rgba(186,157,113,.83);color:#171713}
- .bottomline{bottom:calc(166px + env(safe-area-inset-bottom));left:18px;right:18px;font-size:9px;letter-spacing:.04em}
- .subtitles{bottom:calc(184px + env(safe-area-inset-bottom));}
+ .touch-controls{display:flex}
+ .bottomline{bottom:calc(150px + env(safe-area-inset-bottom));left:18px;right:18px;font-size:9px;letter-spacing:.04em}
+ .subtitles{bottom:calc(178px + env(safe-area-inset-bottom));}
  .topline{top:calc(16px + env(safe-area-inset-top));}
 }
 @media(max-height:520px) and (pointer:coarse){
- .touch-controls{bottom:calc(10px + env(safe-area-inset-bottom))}
- .touch-controls>div{grid-template-columns:repeat(3,48px);grid-template-rows:repeat(2,48px);gap:5px}
- .touch-controls button{width:48px;height:48px;font-size:18px}
- .touch-controls .touch-interact{width:76px;height:50px}
- .bottomline{bottom:calc(118px + env(safe-area-inset-bottom))}
- .subtitles{bottom:calc(132px + env(safe-area-inset-bottom))}
+ .touch-controls{padding-bottom:calc(8px + env(safe-area-inset-bottom));}
+ .joystick-base{width:110px;height:110px}
+ .joystick-thumb{width:46px;height:46px;margin-left:-23px;margin-top:-23px}
+ .touch-controls .touch-interact{width:82px;height:54px}
+ .bottomline{bottom:calc(120px + env(safe-area-inset-bottom))}
+ .subtitles{bottom:calc(140px + env(safe-area-inset-bottom))}
 }
