@@ -158,10 +158,10 @@ const nightLady=makeLady();nightLady.visible=false;bedroom.add(nightLady);nightL
 // HUD and narrative progression.
 const ui={hud:document.querySelector('#hud'),intro:document.querySelector('#intro-screen'),interlude:document.querySelector('#interlude'),ending:document.querySelector('#ending-screen'),loading:document.querySelector('#loading'),objective:document.querySelector('#objective'),chapter:document.querySelector('#chapter-label'),clock:document.querySelector('#clock'),prompt:document.querySelector('#prompt'),promptText:document.querySelector('#prompt-text'),subtitles:document.querySelector('#subtitles'),touchInteract:document.querySelector('#touch-interact'),soundState:document.querySelector('#sound-state'),sheet:document.querySelector('#sheet-shadow')};
 let mode='intro', progress=.005, yaw=0, pitch=0, lookYaw=0, lookPitch=0, unlocked=false, clueDeer=false, clueRitual=false, clueTarps=false, ladySeen=false, sleepTime=0, covered=0, subtitleTimer=0, time=0;
-const keys=new Set(), touchMove=new Set();let actionReady=false;
+const keys=new Set(), touchMove=new Set();const touchDevice=matchMedia('(pointer:coarse)').matches||navigator.maxTouchPoints>0;let actionReady=false;
 const hotspots=[{t:.215,range:.042,id:'deer'},{t:.39,range:.05,id:'altar'},{t:.652,range:.055,id:'tarps'}];
 function tell(text,duration=4){ui.subtitles.textContent=text;ui.subtitles.classList.add('show');subtitleTimer=duration;}
-function startWalk(){mode='walk';unlocked=true;ui.intro.hidden=true;ui.hud.hidden=false;ui.objective.textContent='Follow the road downhill.';ui.chapter.textContent="DEVIL'S CURB";progress=.005;positionWalker();audioStart();if(matchMedia('(pointer:fine)').matches)canvas.requestPointerLock?.();tell('“So we should be safe.”',3.3)}
+function startWalk(){mode='walk';unlocked=true;ui.intro.hidden=true;ui.hud.hidden=false;ui.objective.textContent='Follow the road downhill.';ui.chapter.textContent="DEVIL'S CURB";document.querySelector('#control-hint').textContent=touchDevice?'DRAG TO LOOK · HOLD ▲ TO WALK · TAP USE NEAR CLUES':'WASD TO WALK · MOUSE TO LOOK';progress=.005;positionWalker();audioStart();if(matchMedia('(pointer:fine)').matches)canvas.requestPointerLock?.();tell('“So we should be safe.”',3.3)}
 function positionWalker(){const p=at(progress,0,0);camera.position.set(p.x,1.68,p.z);const tangent=route.getTangentAt(clamp(progress,0,1));const heading=Math.atan2(-tangent.x,-tangent.z);camera.rotation.order='YXZ';camera.rotation.set(pitch,heading+yaw,0)}
 function interact(){
  if(mode!=='walk')return;
@@ -169,9 +169,9 @@ function interact(){
  if(!h)return;
  if(h.id==='deer'&&!clueDeer){clueDeer=true;tell('A dead deer. Rope at its neck. And the other bodies scattered around it.');ui.objective.textContent='Keep going. The smell gets worse downhill.';return}
  if(h.id==='altar'&&!clueRitual){clueRitual=true;tell('A record player. Knives. Something like a pulpit. This isn’t just local gossip.');return}
- if(h.id==='tarps'&&!clueTarps){clueTarps=true;mode='escape';lady.visible=true;ladySeen=true;ui.objective.textContent='Run back up the hill. Hold S / ↓ to retreat.';ui.chapter.textContent='THE OVERLOOK';tell('The smell turns your stomach. Something is rolled up inside. You feel someone watching.',5);return}
+ if(h.id==='tarps'&&!clueTarps){clueTarps=true;mode='escape';lady.visible=true;ladySeen=true;ui.objective.textContent='Run back up the hill. Hold S / ↓ to retreat.';document.querySelector('#control-hint').textContent=touchDevice?'HOLD ▼ TO RUN BACK · DRAG TO LOOK':'HOLD S / ↓ TO RUN BACK';ui.chapter.textContent='THE OVERLOOK';tell('The smell turns your stomach. Something is rolled up inside. You feel someone watching.',5);return}
 }
-function advanceNight(){if(mode!=='interlude')return;mode='night';ui.interlude.hidden=true;bedroom.visible=true;scene.background=new THREE.Color('#161a22');scene.fog=new THREE.FogExp2('#161a22',.04);scene.add(new THREE.AmbientLight('#bac2d0',.18));camera.fov=65;camera.updateProjectionMatrix();camera.position.set(0,1.25,4.7);camera.rotation.order='YXZ';camera.rotation.set(-.04,0,0);nightLady.visible=true;nightLady.position.set(.35,-.2,-1.65);sleepTime=0;ui.chapter.textContent='3:07 AM';ui.objective.textContent='Something is at the foot of your bed.';ui.clock.textContent='3:07 AM';document.querySelector('#control-hint').textContent='HOLD SPACE TO HIDE UNDER THE COVERS';ui.touchInteract.textContent='HIDE';tell('You wake with the feeling that someone is close.',4);}
+function advanceNight(){if(mode!=='interlude')return;mode='night';ui.interlude.hidden=true;bedroom.visible=true;scene.background=new THREE.Color('#161a22');scene.fog=new THREE.FogExp2('#161a22',.04);scene.add(new THREE.AmbientLight('#bac2d0',.18));camera.fov=65;camera.updateProjectionMatrix();camera.position.set(0,1.25,4.7);camera.rotation.order='YXZ';camera.rotation.set(-.04,0,0);nightLady.visible=true;nightLady.position.set(.35,-.2,-1.65);sleepTime=0;ui.chapter.textContent='3:07 AM';ui.objective.textContent='Something is at the foot of your bed.';ui.clock.textContent='3:07 AM';document.querySelector('#control-hint').textContent=touchDevice?'HOLD HIDE TO STAY UNDER THE COVERS':'HOLD SPACE TO HIDE UNDER THE COVERS';ui.touchInteract.textContent='HIDE';ui.touchInteract.setAttribute('aria-label','Hold to hide under the covers');tell('You wake with the feeling that someone is close.',4);}
 function finish(){mode='ending';ui.hud.hidden=true;ui.ending.hidden=false;}
 
 // A narrow creek catches the late-afternoon light below the overlook.
@@ -214,7 +214,7 @@ function update(dt){
   const h=hotspots.find(o=>Math.abs(progress-o.t)<o.range);
   ui.prompt.hidden=!(h&&mode==='walk');
   if(h&&mode==='walk')ui.promptText.textContent=h.id==='deer'?'Examine the deer':h.id==='altar'?'Look closer':'Look at the tarps';
-  ui.touchInteract.textContent=h?'LOOK':'E';
+  ui.touchInteract.textContent=touchDevice?(h?'EXAMINE':'USE'):(h?'LOOK':'E');ui.touchInteract.setAttribute('aria-label',h?'Examine clue':'Use');
   if(mode==='escape'&&progress<.55&&progress>.44){const pulse=.5+.5*Math.sin(time*1.3);lady.children.forEach(c=>{if(c.material?.transparent)c.material.opacity=.5+pulse*.18})}
  } else ui.prompt.hidden=true;
  if(mode==='night'){
@@ -260,6 +260,9 @@ document.addEventListener('mousemove',e=>{if(document.pointerLockElement===canva
 let touchLook=null;
 document.querySelector('#game').addEventListener('pointerdown',e=>{if(e.pointerType==='touch'&&!e.target.closest('button'))touchLook={id:e.pointerId,x:e.clientX,y:e.clientY}});
 document.querySelector('#game').addEventListener('pointermove',e=>{if(touchLook?.id===e.pointerId){yaw=clamp(yaw-(e.clientX-touchLook.x)*.007,-1.3,1.3);pitch=clamp(pitch-(e.clientY-touchLook.y)*.006,-.5,.5);touchLook.x=e.clientX;touchLook.y=e.clientY}});
+window.addEventListener('pointerup',e=>{if(touchLook?.id===e.pointerId)touchLook=null});window.addEventListener('pointercancel',e=>{if(touchLook?.id===e.pointerId)touchLook=null});
+function releaseTouchControls(){touchMove.clear();keys.clear();touchLook=null}
+window.addEventListener('blur',releaseTouchControls);document.addEventListener('visibilitychange',()=>{if(document.hidden)releaseTouchControls()});
 for(const button of document.querySelectorAll('[data-move]')){
  const name=button.dataset.move;
  button.addEventListener('pointerdown',e=>{e.preventDefault();button.setPointerCapture(e.pointerId);touchMove.add(name)});
