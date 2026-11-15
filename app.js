@@ -141,7 +141,7 @@ function createNPC(i){
 }
 if(!world.people?.length){world.people=[];for(let i=0;i<18;i++)createNPC(i)} else {
   const savedPeople=[...world.people];world.people=[];
-  savedPeople.forEach((npc,i)=>{const copy=createNPC(i);Object.assign(copy,npc);copy.mesh.position.set(copy.x,0,copy.z);copy.mesh.traverse(o=>{if(o.isMesh&&o.geometry.type==='CapsuleGeometry')o.material=mats[copy.color]})});
+  savedPeople.forEach((npc,i)=>{const copy=createNPC(i);const {mesh,limbs,...state}=npc;Object.assign(copy,state);copy.mesh.position.set(copy.x,0,copy.z);copy.mesh.traverse(o=>{if(o.isMesh&&o.geometry.type==='CapsuleGeometry')o.material=mats[copy.color]})});
 }
 
 function displayTime(){const h=Math.floor(world.minute/60)%24,m=world.minute%60;return `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}`}
