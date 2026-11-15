@@ -76,7 +76,7 @@ function wall(parent,x,y,z,w,h,d,material=M.wall){return box(parent,x,y,z,w,h,d,
 function floor(parent,x,z,w,d,material=M.floor){box(parent,x,-.12,z,w,.24,d,material,{cast:false});box(parent,x,.015,z,w,.05,d,M.trim,{cast:false})}
 function ceiling(parent,x,z,w,d){box(parent,x,3.05,z,w,.14,d,M.ceiling,{cast:false})}
 function segmentWall(parent,axis,fixed,start,end,doorCenter=null,doorWidth=1.15,height=2.78,material=M.wall,windowCenters=[]){
-  const add=(a,b,h=height,base=0)=>{if(b<=a||h<=0)return;const length=b-a;if(axis==='x')box(parent,(a+b)/2,base+h/2,fixed,length,h,.18,material,{collider:true});else box(parent,fixed,base+h/2,(a+b)/2,.18,h,length,material,{collider:true})};
+  const add=(a,b,h=height,base=0)=>{if(b<=a||h<=0)return;const length=b-a;if(axis==='x')box(parent,(a+b)/2,base+h/2,fixed,length,h,.18,material,{collider:base<1.8});else box(parent,fixed,base+h/2,(a+b)/2,.18,h,length,material,{collider:base<1.8})};
   const doors=(Array.isArray(doorCenter)?doorCenter:doorCenter===null?[]:[doorCenter]).map(center=>({center,width:doorWidth,type:'door'}));
   const windows=(Array.isArray(windowCenters)?windowCenters:windowCenters===null?[]:[windowCenters]).map(center=>({center,width:1.55,type:'window'}));
   const openings=[...doors,...windows].sort((a,b)=>a.center-b.center);let cursor=start;
@@ -288,7 +288,7 @@ function findTarget(){raycaster.setFromCamera(new THREE.Vector2(0,0),camera);con
 function interact(){if(focused&&started&&!paused){focused.action();findTarget();audioTone(360,.07,.025)}}
 function overlaps(x,z,r=.22){return colliders.some(c=>x+r>c.x&&x-r<c.x+c.w&&z+r>c.z&&z-r<c.z+c.d)}
 function doorDistance(m,x,z){const c=Math.cos(m.group.rotation.y),s=Math.sin(m.group.rotation.y),ax=m.axis==='x'?0:.1,az=m.axis==='x'?.1:0,bx=m.axis==='x'?1.16:.1,bz=m.axis==='x'?.1:1.16,x1=m.hingeX+c*ax+s*az,z1=m.hingeZ-s*ax+c*az,x2=m.hingeX+c*bx+s*bz,z2=m.hingeZ-s*bx+c*bz,dx=x2-x1,dz=z2-z1,t=Math.max(0,Math.min(1,((x-x1)*dx+(z-z1)*dz)/(dx*dx+dz*dz)));return Math.hypot(x-(x1+t*dx),z-(z1+t*dz))}
-function blockedByDoor(x,z,fromX,fromZ,r){return animatedDoors.some(m=>{const distance=doorDistance(m,x,z),previous=doorDistance(m,fromX,fromZ);return distance<r+.06&&distance<=previous+.001})}
+function blockedByDoor(x,z,fromX,fromZ,r){return animatedDoors.some(m=>{if(Math.abs(m.target)>.1&&Math.abs(m.group.rotation.y)>1.05)return false;const distance=doorDistance(m,x,z),previous=doorDistance(m,fromX,fromZ);return distance<r+.06&&distance<=previous+.001})}
 let movementImpulse=0;
 function updateStamina(dt,moving){const wantsRun=(moveKeys.has('ShiftLeft')||moveKeys.has('ShiftRight'))&&!crouched&&moving;sprinting=wantsRun&&!exhausted&&stamina>0;if(sprinting){stamina=Math.max(0,stamina-dt*22);if(stamina===0)exhausted=true}else{stamina=Math.min(100,stamina+dt*(exhausted?11:17));if(stamina>24)exhausted=false}const bar=document.querySelector('#stamina-bar'),meter=document.querySelector('.stamina-meter');bar.style.width=`${stamina}%`;bar.style.background=stamina<25?'#b16d5a':'#c9ae79';meter.classList.toggle('active',sprinting||stamina<99);document.querySelector('#stance-label').textContent=crouched?'CROUCHING':sprinting?'RUNNING':moving?'WALKING':'RESTING'}
 function setCrouched(value){crouched=!!value;const button=document.querySelector('#touch-crouch');button?.setAttribute('aria-pressed',String(crouched))}
