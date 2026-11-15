@@ -130,6 +130,7 @@ function updateUI(){
   $('occupation').textContent=world.occupation;$('dayProgress').style.width=`${(world.minute/1440)*100}%`;
   const mood=world.needs.stress>70?'Overloaded':world.needs.energy<25?'Worn down':world.needs.social<20?'Isolated':world.needs.hunger>75?'Hungry':'Steady';$('moodLabel').textContent=mood.toUpperCase();
   $('weatherText').textContent=`${world.weather.toUpperCase()} · ${world.temp}°C`;$('weatherIcon').textContent=world.weather==='Rain'?'☂':world.weather==='Cloudy'?'☁':'☀';
+  $('mobileClock').textContent=displayTime();$('mobileWeather').textContent=`${world.weather==='Rain'?'☂':world.weather==='Cloudy'?'☁':'☀'} ${world.temp}°`;
   $('nearbyCount').textContent=world.people.filter(p=>Math.hypot(p.x-player.position.x,p.z-player.position.z)<28).length;
   $('pulseText').textContent=world.city.mood>70?'Hopeful':world.city.mood<35?'Tense':'Unhurried';$('outlook').textContent=world.city.outlook;
   $('playerName').textContent='YOU · AGE '+(world.age||24);
@@ -211,7 +212,16 @@ function objectivesModal(){goModal('NO QUEST MARKER · JUST POSSIBILITIES','What
   {title:'Get to know someone',detail:'A conversation can make this place feel smaller.',action:()=>{closeModal();$('objectiveText').textContent='Say hello to someone nearby.'}},
   {title:'See how the city is doing',detail:'Visit the noticeboard or city hall.',action:()=>{closeModal();$('objectiveText').textContent='The city is shaped by people who show up.'}}
 ])}
-$('objectivesButton').onclick=objectivesModal;$('saveButton').onclick=save;
+$('objectivesButton').onclick=objectivesModal;$('saveButton').onclick=save;$('statusButton').onclick=statusModal;
+$('touchInteract').addEventListener('click',handleInteract);
+$('touchJump').addEventListener('click',()=>{if(started&&player.position.y<=.01)verticalVelocity=4.5});
+const movePad=$('movePad'),moveStick=$('moveStick');let movePointer=null;
+function clearTouchMove(){touchMoveVector={x:0,y:0};moveStick.style.transform='translate(0,0)';movePointer=null}
+function updateTouchMove(e){const rect=movePad.getBoundingClientRect(),radius=Math.min(rect.width,rect.height)*.32;let dx=e.clientX-(rect.left+rect.width/2),dy=e.clientY-(rect.top+rect.height/2);const distance=Math.hypot(dx,dy),scale=distance>radius?radius/distance:1;dx*=scale;dy*=scale;moveStick.style.transform=`translate(${dx}px,${dy}px)`;const strength=Math.max(0,(Math.min(distance/radius,1)-.12)/.88);touchMoveVector={x:dx/radius*strength,y:dy/radius*strength}}
+movePad.addEventListener('pointerdown',e=>{if(e.pointerType==='mouse')return;e.preventDefault();movePointer=e.pointerId;movePad.setPointerCapture(e.pointerId);updateTouchMove(e)});
+movePad.addEventListener('pointermove',e=>{if(e.pointerId===movePointer)updateTouchMove(e)});
+movePad.addEventListener('pointerup',e=>{if(e.pointerId===movePointer)clearTouchMove()});
+movePad.addEventListener('pointercancel',clearTouchMove);
 
 function nearestNPC(max=3){let best=null,dist=max;for(const p of world.people){const d=Math.hypot(p.x-player.position.x,p.z-player.position.z);if(d<dist){dist=d;best=p}}return best}
 let focus=null;
@@ -219,11 +229,12 @@ function findFocus(){let nearest=null,dist=4.2;const dir=new THREE.Vector3(),eye
   // Prefer people in the crosshair, otherwise use nearest contextual object.
   let candidate=nearest;
   if(!candidate){for(const o of interactables){const d=Math.hypot(o.x-player.position.x,o.z-player.position.z);if(d<o.radius+1.2&&d<dist){candidate=o;dist=d}}}
-  focus=candidate;$('interactionHint').classList.toggle('visible',!!focus);if(focus){$('interactionHint').innerHTML=`<kbd>E</kbd><span>${focus.kind==='npc'?focus.label:focus.label.toUpperCase()}</span>`}
+  focus=candidate;$('interactionHint').classList.toggle('visible',!!focus);$('touchInteract').classList.toggle('available',!!focus);$('touchInteract').setAttribute('aria-disabled',String(!focus));if(focus){$('interactionHint').innerHTML=`<kbd>E</kbd><span>${focus.kind==='npc'?focus.label:focus.label.toUpperCase()}</span>`}
 }
 // Collider-aware walking keeps the player on streets and sidewalks rather than through buildings.
 function blocked(x,z){if(Math.abs(x)>112||Math.abs(z)>93)return true;for(const c of colliders){if(Math.abs(x-c.x)<c.sx/2+.42&&Math.abs(z-c.z)<c.sz/2+.42)return true}return false}
-function move(dt){const forward=(keys.has('KeyW')?1:0)-(keys.has('KeyS')?1:0),side=(keys.has('KeyD')?1:0)-(keys.has('KeyA')?1:0);if(forward||side){const speed=(keys.has('ShiftLeft')||keys.has('ShiftRight'))?7.2:4.15;const v=new THREE.Vector3(side,0,-forward).normalize().applyAxisAngle(new THREE.Vector3(0,1,0),yaw).multiplyScalar(speed*dt);const nx=player.position.x+v.x,nz=player.position.z+v.z;if(!blocked(nx,player.position.z))player.position.x=nx;if(!blocked(player.position.x,nz))player.position.z=nz;}player.position.y+=verticalVelocity*dt;verticalVelocity-=12*dt;if(player.position.y<0){player.position.y=0;verticalVelocity=0;}}
+let touchMoveVector={x:0,y:0};
+function move(dt){const forward=(keys.has('KeyW')?1:0)-(keys.has('KeyS')?1:0)-touchMoveVector.y,side=(keys.has('KeyD')?1:0)-(keys.has('KeyA')?1:0)+touchMoveVector.x;const inputLength=Math.hypot(forward,side);if(inputLength>.05){const speed=(keys.has('ShiftLeft')||keys.has('ShiftRight'))?7.2:4.15;const v=new THREE.Vector3(side,0,-forward).multiplyScalar(speed*dt/Math.max(1,inputLength)).applyAxisAngle(new THREE.Vector3(0,1,0),yaw);const nx=player.position.x+v.x,nz=player.position.z+v.z;if(!blocked(nx,player.position.z))player.position.x=nx;if(!blocked(player.position.x,nz))player.position.z=nz;}player.position.y+=verticalVelocity*dt;verticalVelocity-=12*dt;if(player.position.y<0){player.position.y=0;verticalVelocity=0;}}
 function handleInteract(){if(focus)interact(focus)}
 function setView(){camera.rotation.order='YXZ';camera.rotation.y=yaw;camera.rotation.x=pitch;}
 
@@ -243,13 +254,13 @@ function applyLight(){const h=world.minute/60;const warm=Math.max(0,1-Math.abs(h
 function frame(){requestAnimationFrame(frame);const dt=Math.min(clock.getDelta(),.05),t=clock.elapsedTime;if(started){move(dt);animateNPCs(t);simAccumulator+=dt;if(simAccumulator>=1){simAccumulator-=1;simMinute();updateUI()}findFocus();applyLight();}renderer.render(scene,camera)}
 frame();
 
-$('beginButton').onclick=()=>{started=true;$('startScreen').classList.add('hidden');canvas.requestPointerLock?.();toast('Welcome to Harborlight. Take the day at your pace.');log('You stepped into Harborlight on a clear spring morning.');updateUI()};
+$('beginButton').onclick=()=>{started=true;$('startScreen').classList.add('hidden');if(matchMedia('(pointer:fine)').matches)canvas.requestPointerLock?.();toast(matchMedia('(pointer:coarse)').matches?'Drag the right side to look. Use the pad to move.':'Welcome to Harborlight. Take the day at your pace.');log('You stepped into Harborlight on a clear spring morning.');updateUI()};
 document.addEventListener('pointerlockchange',()=>{locked=document.pointerLockElement===canvas});
 document.addEventListener('mousemove',e=>{if(!locked||!started)return;yaw-=e.movementX*.0022;pitch-=e.movementY*.0019;pitch=Math.max(-1.35,Math.min(1.35,pitch));setView()});
 document.addEventListener('keydown',e=>{if($('modalBackdrop').classList.contains('open')){if(e.code==='Escape')closeModal();return}keys.add(e.code);if(e.code==='Space'){e.preventDefault();if(started&&player.position.y<=.01)verticalVelocity=4.5}if(e.code==='KeyE'&&!e.repeat&&started)handleInteract();if(e.code==='KeyJ'&&!e.repeat&&started)cityModal();if(e.code==='KeyI'&&!e.repeat&&started)statusModal()});document.addEventListener('keyup',e=>keys.delete(e.code));
-canvas.addEventListener('click',()=>{if(started&&!locked&&!$('modalBackdrop').classList.contains('open'))canvas.requestPointerLock?.()});
-// Drag-look and a simple left-side touch walk region for tablets/phones.
-let touchStart=null,touchId=null;canvas.addEventListener('pointerdown',e=>{if(e.pointerType==='touch'){touchStart={x:e.clientX,y:e.clientY,lastX:e.clientX,lastY:e.clientY};touchId=e.pointerId;canvas.setPointerCapture(e.pointerId)}});canvas.addEventListener('pointermove',e=>{if(e.pointerType!=='touch'||!touchStart||e.pointerId!==touchId||!started)return;const dx=e.clientX-touchStart.lastX,dy=e.clientY-touchStart.lastY;touchStart.lastX=e.clientX;touchStart.lastY=e.clientY;if(touchStart.x>innerWidth*.45){yaw-=dx*.006;pitch=Math.max(-1.25,Math.min(1.25,pitch-dy*.005));setView()}else{keys.delete('KeyW');keys.delete('KeyS');keys.delete('KeyA');keys.delete('KeyD');if(Math.abs(dy)>18)keys.add(dy<0?'KeyW':'KeyS');if(Math.abs(dx)>24)keys.add(dx>0?'KeyD':'KeyA')}});canvas.addEventListener('pointerup',e=>{if(e.pointerType==='touch'){touchStart=null;touchId=null;for(const k of ['KeyW','KeyS','KeyA','KeyD'])keys.delete(k)}});
+canvas.addEventListener('click',e=>{if(e.pointerType==='mouse'&&started&&!locked&&!$('modalBackdrop').classList.contains('open'))canvas.requestPointerLock?.()});
+// Right-side drags look around; the on-screen joystick handles movement.
+const lookPointers=new Map();canvas.addEventListener('pointerdown',e=>{if(e.pointerType!=='touch'||!started||e.clientX<innerWidth*.42)return;e.preventDefault();lookPointers.set(e.pointerId,{x:e.clientX,y:e.clientY});canvas.setPointerCapture(e.pointerId)});canvas.addEventListener('pointermove',e=>{const prev=lookPointers.get(e.pointerId);if(!prev||!started)return;const dx=e.clientX-prev.x,dy=e.clientY-prev.y;prev.x=e.clientX;prev.y=e.clientY;yaw-=dx*.005; pitch=Math.max(-1.25,Math.min(1.25,pitch-dy*.004));setView()});function endLook(e){lookPointers.delete(e.pointerId)}canvas.addEventListener('pointerup',endLook);canvas.addEventListener('pointercancel',endLook);
 $('objectivesButton').title='Choose what matters to you';window.addEventListener('resize',()=>{camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix();renderer.setSize(innerWidth,innerHeight);renderer.setPixelRatio(Math.min(devicePixelRatio,1.7))});
 if(saved?.world){world.log=saved.world.log||[];world.minute=saved.world.minute??495;world.day=saved.world.day??1;world.needs=saved.world.needs||world.needs;world.balance=saved.world.balance??420;world.occupation=saved.world.occupation||'Between chapters';world.city=saved.world.city||world.city;world.relations=saved.world.relations||world.relations;world.skill=saved.world.skill||0;world.reputation=saved.world.reputation||0;world.age=saved.world.age||24;world.events=saved.world.events||[];if(saved.world.playerPosition)player.position.set(saved.world.playerPosition.x,0,saved.world.playerPosition.z);renderLog();updateUI()}
 updateUI();
