@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#080b12">
+  <title>BYTEBOUND — The Luma Engine</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=DM+Sans:wght@400;500;600;700&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="app-shell">
+    <aside class="rail">
+      <div class="brand-mark" aria-label="Bytebound"><span class="brand-glyph">b<span>.</span></span></div>
+      <div class="rail-rule"></div>
+      <button class="rail-button active" aria-label="Workspace"><span>⌘</span><i></i></button>
+      <button class="rail-button" aria-label="Map"><span>⌗</span></button>
+      <button class="rail-button" aria-label="Notebook"><span>▤</span></button>
+      <div class="rail-spacer"></div>
+      <div class="rail-avatar">N</div>
+    </aside>
+
+    <main class="workspace">
+      <header class="topbar">
+        <div class="breadcrumbs"><span class="crumb-muted">CAMPAIGN</span><span class="crumb-slash">/</span><span>THE FIRST SPARK</span><span class="crumb-slash">/</span><span class="crumb-current" id="crumb-level">01 — BOOT SEQUENCE</span></div>
+        <div class="topbar-right"><div class="runtime-pill"><span class="live-dot"></span> ENGINE ONLINE <span class="runtime-version">v0.9.4</span></div><button class="icon-button" id="sound-toggle" title="Toggle sound" aria-label="Toggle sound">♫</button><button class="help-button" id="help-button">? <span>GUIDE</span></button></div>
+      </header>
+
+      <section class="mission-strip">
+        <div class="mission-copy"><div class="eyebrow"><span class="eyebrow-line"></span> RECOVERY MISSION <span class="mission-id" id="mission-id">01 / 03</span></div><h1 id="mission-title">Wake the relay.</h1><p id="mission-description">Guide your little machine through the relay chamber. Collect every memory shard, then reach the uplink.</p></div>
+        <div class="mission-stats"><div class="stat"><span class="stat-label">SHARDS</span><strong id="shard-stat">0 <span>/ 3</span></strong></div><div class="stat"><span class="stat-label">CYCLES</span><strong id="cycle-stat">000</strong></div><div class="stat"><span class="stat-label">BEST</span><strong id="best-stat">—</strong></div><div class="mission-progress"><div class="progress-track"><i id="progress-fill"></i></div><span id="progress-label">0% RESTORED</span></div></div>
+      </section>
+
+      <section class="studio-grid">
+        <section class="editor-panel panel">
+          <div class="panel-heading"><div class="panel-title"><span class="panel-icon code-icon">&lt;/&gt;</span><div><h2>Program</h2><span class="panel-subtitle">LUMA SCRIPT <span class="file-name">· relay.luma</span></span></div></div><div class="editor-heading-actions"><span class="unsaved-dot" id="unsaved-dot"></span><button class="small-icon" id="format-button" title="Format code">↵</button><button class="small-icon" id="editor-menu" title="Editor options">···</button></div></div>
+          <div class="editor-wrap"><div class="line-gutter" id="line-gutter"></div><textarea id="code-editor" spellcheck="false" autocapitalize="off" autocomplete="off" aria-label="Luma program editor"></textarea><div class="editor-overlay" id="editor-overlay" aria-hidden="true"></div><div class="cursor-label">LUMA</div></div>
+          <div class="editor-footer"><div class="editor-status"><span class="status-check" id="compile-indicator">●</span><span id="compile-status">READY TO COMPILE</span><span class="footer-divider">|</span><span id="line-count">10 LINES</span></div><button class="text-action" id="clear-button">CLEAR <span>⌫</span></button></div>
+          <div class="runbar"><button class="run-button" id="run-button"><span class="play-icon">▶</span><span>RUN PROGRAM</span><kbd>⌘ ↵</kbd></button><button class="step-button" id="step-button" title="Run one instruction">STEP <span>↦</span></button><button class="reset-button" id="reset-button" title="Reset machine">↺</button></div>
+          <div class="editor-lower"><div class="tip-card"><span class="tip-spark">✳</span><div><b>UPLINK TIP</b><p id="hint-text">You're nearly there. After the third shard, turn north and move two more tiles.</p></div><button id="hint-button" aria-label="Next hint">↗</button></div><div class="command-row"><span class="command-label">INSERT</span><button class="command-chip" data-insert="move">MOVE</button><button class="command-chip" data-insert="turn left">TURN LEFT</button><button class="command-chip" data-insert="repeat 2 {\n  move\n}">REPEAT</button><button class="command-chip" data-insert="if front == wall {\n  turn right\n}">IF</button></div></div>
+        </section>
+
+        <section class="world-panel panel">
+          <div class="panel-heading world-heading"><div class="panel-title"><span class="panel-icon world-icon">⌖</span><div><h2>Relay chamber</h2><span class="panel-subtitle">SECTOR <span class="sector-code" id="sector-code">A-01</span> <span class="world-separator">·</span> <span id="world-coords">GRID 7 × 7</span></span></div></div><div class="world-actions"><span class="world-live"><span></span> LIVE VIEW</span><button class="small-icon expand-button" id="zoom-button" title="Toggle map size">⛶</button></div></div>
+          <div class="board-stage"><div class="board-frame"><div class="board-grid" id="board-grid" role="img" aria-label="Relay chamber map"></div><div class="scan-line"></div><div class="corner corner-tl"></div><div class="corner corner-tr"></div><div class="corner corner-bl"></div><div class="corner corner-br"></div></div><div class="board-overlay-label top-left">SIMULATION <span>●</span></div><div class="board-overlay-label bottom-right" id="position-label">X 01 · Y 05</div><div class="board-overlay-label bottom-left">LUMA UNIT <span class="unit-id">#07</span></div></div>
+          <div class="world-footer"><div class="legend"><span><i class="legend-bot">↑</i> UNIT</span><span><i class="legend-shard">✦</i> MEMORY</span><span><i class="legend-exit">⌂</i> UPLINK</span></div><div class="world-controls"><span class="speed-label">SPEED</span><button class="speed-button" data-speed="slow">−</button><div class="speed-track"><i id="speed-fill"></i></div><button class="speed-button" data-speed="fast">+</button></div></div>
+        </section>
+      </section>
+
+      <section class="bottom-grid">
+        <section class="terminal-panel panel"><div class="terminal-heading"><div class="panel-title"><span class="terminal-prompt">›_</span><div><h2>Compiler output</h2><span class="panel-subtitle">DIAGNOSTICS &amp; RUNTIME LOG</span></div></div><div class="terminal-actions"><span id="log-count">0 EVENTS</span><button id="clear-log">CLEAR LOG</button></div></div><div class="terminal-body" id="terminal-body"><div class="terminal-empty"><span class="terminal-empty-glyph">↳</span><span>Compile your program to inspect execution output.</span></div></div></section>
+        <aside class="reference-panel panel"><div class="reference-heading"><div><span class="eyebrow">LANGUAGE REFERENCE</span><h2>Luma, in a minute.</h2></div><button id="reference-toggle" aria-label="Toggle language reference">⌄</button></div><div class="reference-content" id="reference-content"><div class="reference-block"><span class="ref-num">01</span><code><b>move</b></code><span>Step forward one tile</span></div><div class="reference-block"><span class="ref-num">02</span><code><b>turn</b> left | right</code><span>Rotate 90° in place</span></div><div class="reference-block"><span class="ref-num">03</span><code><b>repeat</b> 3 { ... }</code><span>Loop over a block of code</span></div><div class="reference-block"><span class="ref-num">04</span><code><b>if</b> front == wall { ... }</code><span>Branch on the world state</span></div><div class="reference-block"><span class="ref-num">05</span><code><b>let</b> n = 2</code><span>Store a number for reuse</span></div></div></aside>
+      </section>
+      <footer class="page-footer"><span>BYTEBOUND <span class="footer-dot">·</span> A TINY MACHINE, A BIG WORLD</span><span>BUILD 0094 <span class="footer-dot">·</span> <span id="save-state">ALL CHANGES SAVED</span></span></footer>
+    </main>
+  </div>
+
+  <div class="modal-backdrop" id="win-modal" aria-hidden="true"><div class="modal-card win-card"><div class="win-orbit">✳</div><span class="eyebrow">SECTOR RESTORED</span><h2>Signal found.</h2><p id="win-copy">A piece of the old network flickers back to life.</p><div class="win-stats"><span>CYCLES<strong id="win-cycles">000</strong></span><span>SHARDS<strong id="win-shards">03 / 03</strong></span></div><button class="run-button next-button" id="next-button">NEXT SECTOR <span>→</span></button></div></div>
+  <div class="modal-backdrop" id="guide-modal" aria-hidden="true"><div class="modal-card guide-card"><button class="modal-close" id="close-guide">×</button><span class="eyebrow">FIELD NOTES / 001</span><h2>Teach the machine.</h2><p>Luma is a small language with real rules. Write instructions in the editor, compile them, then watch the unit execute each one.</p><div class="guide-example"><code><span>let</span> steps = 2<br><span>repeat</span> steps {<br>&nbsp;&nbsp;move<br>}<br><span>turn</span> left</code></div><ul><li><b>Collect</b> every glowing memory shard by stepping onto it.</li><li><b>Reach</b> the uplink after the chamber is fully restored.</li><li><b>Watch</b> compiler output for syntax errors and runtime feedback.</li></ul><button class="run-button" id="guide-done">GOT IT <span>→</span></button></div></div>
+  <script src="game.js"></script>
+</body>
+</html>
