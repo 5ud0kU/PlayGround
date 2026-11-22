@@ -1,0 +1,150 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#080a0c">
+<title>INTERNET — Persistent World</title>
+<meta name="description" content="A persistent terminal-based internet life simulation. Fictional network. Real commands. A world that keeps running.">
+<link rel="stylesheet" href="./styles.css">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%23080a0c'/%3E%3Cpath d='M8 11l4 4-4 4M15 20h9' stroke='%2363c8e8' stroke-width='2.4' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
+</head>
+<body>
+<svg class="svg-sprite" aria-hidden="true" xmlns="http://www.w3.org/2000/svg">
+  <symbol id="i-term" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="m7 9 3 3-3 3M12.5 15H17"/></symbol>
+  <symbol id="i-files" viewBox="0 0 24 24"><path d="M3 7a2 2 0 0 1 2-2h5l2 2h7a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z"/><path d="M3 10h18"/></symbol>
+  <symbol id="i-code" viewBox="0 0 24 24"><path d="m8 8-4 4 4 4M16 8l4 4-4 4M13 5l-2 14"/></symbol>
+  <symbol id="i-net" viewBox="0 0 24 24"><circle cx="12" cy="5" r="2.2"/><circle cx="5" cy="18" r="2.2"/><circle cx="19" cy="18" r="2.2"/><path d="M12 7.2v4.3M10.4 12.2 6.4 16M13.6 12.2l4 3.8"/></symbol>
+  <symbol id="i-globe" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c3 3.2 3 14.8 0 18M12 3c-3 3.2-3 14.8 0 18"/></symbol>
+  <symbol id="i-mail" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="m4 7 8 6 8-6"/></symbol>
+  <symbol id="i-work" viewBox="0 0 24 24"><rect x="3" y="7" width="18" height="13" rx="2"/><path d="M8 7V5a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M3 12h18"/></symbol>
+  <symbol id="i-server" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="7" rx="1.5"/><rect x="3" y="13" width="18" height="7" rx="1.5"/><path d="M7 7.5h.01M7 16.5h.01M11 7.5h6M11 16.5h6"/></symbol>
+  <symbol id="i-user" viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 3.6-6.5 8-6.5s8 2.5 8 6.5"/></symbol>
+  <symbol id="i-help" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M9.5 9a2.5 2.5 0 1 1 4 2c-.9.7-1.5 1.2-1.5 2.5M12 17.5h.01"/></symbol>
+  <symbol id="i-chart" viewBox="0 0 24 24"><path d="M4 20V4M4 20h16M8 16v-4M12 16V8M16 16v-7M20 16V6"/></symbol>
+  <symbol id="i-bell" viewBox="0 0 24 24"><path d="M18 9a6 6 0 1 0-12 0c0 7-3 7-3 8h18c0-1-3-1-3-8M10 21h4"/></symbol>
+  <symbol id="i-save" viewBox="0 0 24 24"><path d="M5 3h12l3 3v15H4V3Z"/><path d="M8 3v6h8V3M8 21v-7h8v7"/></symbol>
+  <symbol id="i-search" viewBox="0 0 24 24"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m15.5 15.5 5 5"/></symbol>
+  <symbol id="i-shield" viewBox="0 0 24 24"><path d="M12 3 4.5 6v6c0 5 3.4 7.8 7.5 9 4.1-1.2 7.5-4 7.5-9V6Z"/><path d="m9 12 2 2 4-4"/></symbol>
+  <symbol id="i-cpu" viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12" rx="2"/><path d="M9 1v3M15 1v3M9 20v3M15 20v3M1 9h3M1 15h3M20 9h3M20 15h3"/></symbol>
+  <symbol id="i-power" viewBox="0 0 24 24"><path d="M12 3v8M6.3 6.3a8 8 0 1 0 11.4 0"/></symbol>
+  <symbol id="i-close" viewBox="0 0 24 24"><path d="m6 6 12 12M18 6 6 18"/></symbol>
+  <symbol id="i-min" viewBox="0 0 24 24"><path d="M5 12h14"/></symbol>
+  <symbol id="i-max" viewBox="0 0 24 24"><rect x="5" y="5" width="14" height="14" rx="1"/></symbol>
+  <symbol id="i-arrow" viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6"/></symbol>
+  <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
+  <symbol id="i-db" viewBox="0 0 24 24"><ellipse cx="12" cy="5.5" rx="8" ry="3"/><path d="M4 5.5v13c0 1.7 3.6 3 8 3s8-1.3 8-3v-13M4 12c0 1.7 3.6 3 8 3s8-1.3 8-3"/></symbol>
+</svg>
+
+<div id="app">
+  <header id="topbar">
+    <div class="tb-left">
+      <div class="brand" id="brandHome" title="Persistent world">
+        <span class="brand-mark">◈</span>
+        <span class="brand-text">INTERNET</span>
+        <span class="brand-sub">PERSISTENT WORLD</span>
+      </div>
+      <nav class="tb-menu" aria-label="Main">
+        <button data-open="map" title="Network topology">Network</button>
+        <button data-open="mail" title="Mail client">Mail<span class="menu-badge" id="menuMailBadge"></span></button>
+        <button data-open="market" title="Marketplace">Market</button>
+        <button data-open="servers" title="Server administration">Servers</button>
+        <button data-open="help" title="Manual">Manual</button>
+      </nav>
+    </div>
+    <div class="tb-center">
+      <span class="live-dot" id="liveDot"></span>
+      <span id="worldCycle">CYCLE 000</span>
+      <span class="tb-sep">/</span>
+      <span id="worldClock">00:00:00</span>
+      <span class="tb-sep">·</span>
+      <span id="worldDate">—</span>
+      <span class="tb-sep">·</span>
+      <span id="worldLoad" class="dim">LOAD 0.00</span>
+    </div>
+    <div class="tb-right">
+      <button class="tb-chip" id="btnNetwork" title="Network status"><span class="sig"><i></i><i></i><i></i><i></i></span><span id="netLabel">ONLINE</span></button>
+      <button class="tb-chip money" id="btnBalance" title="Bank balance">$—</button>
+      <button class="tb-chip icon-only" id="btnNotif" title="Notifications"><svg class="ico"><use href="#i-bell"/></svg><span class="notif-badge" id="notifCount">0</span></button>
+      <div class="user-chip" id="userChip" title="Operator profile">
+        <span class="avatar">op</span>
+        <span class="user-meta"><b id="userHandle">operator</b><small id="userHost">voidbox</small></span>
+      </div>
+    </div>
+  </header>
+
+  <main id="workspace">
+    <div id="windowLayer" aria-live="polite"></div>
+    <aside id="monitor">
+      <div class="mon-head">
+        <div>
+          <span class="eyebrow">WORLD PULSE</span>
+          <h2>Live telemetry</h2>
+        </div>
+        <span class="mon-live"><span class="live-dot"></span>LIVE</span>
+      </div>
+      <div class="mon-stats">
+        <div class="mstat"><span>NODES</span><b id="statNodes">—</b><small id="statNodesSub">indexed</small></div>
+        <div class="mstat"><span>OPERATORS</span><b id="statUsers">—</b><small>online</small></div>
+        <div class="mstat"><span>MARKET</span><b id="statMarket">—</b><small id="statMarketSub">index</small></div>
+        <div class="mstat"><span>THREAT</span><b id="statThreat" class="warn">—</b><small id="statThreatSub">elevated</small></div>
+      </div>
+      <div class="spark-wrap">
+        <div class="spark-head"><span>NETWORK ACTIVITY</span><span id="sparkNow" class="dim">—</span></div>
+        <canvas id="sparkline" height="58"></canvas>
+      </div>
+      <div class="mon-section">
+        <div class="mon-section-head"><span>LIVE FEED</span><button class="link-btn" data-open="news">all</button></div>
+        <div id="feedList" class="feed-list"></div>
+      </div>
+      <div class="mon-section operator-card">
+        <div class="mon-section-head"><span>OPERATOR</span><button class="link-btn" data-open="profile">profile</button></div>
+        <div class="op-row">
+          <div class="op-id"><span class="op-avatar">op</span><div><b id="opHandle">operator</b><small id="opTitle">unproven</small></div></div>
+          <div class="op-rep"><b id="opRep">0</b><small>REP</small></div>
+        </div>
+        <div class="meter-row"><span>HEAT</span><div class="meter"><i id="heatBar"></i></div><b id="heatVal">0%</b></div>
+        <div class="op-grid">
+          <div><span>BALANCE</span><b id="opMoney">$—</b></div>
+          <div><span>CONTRACTS</span><b id="opContracts">0</b></div>
+          <div><span>UNREAD</span><b id="opMail">0</b></div>
+        </div>
+      </div>
+      <div class="mon-section">
+        <div class="mon-section-head"><span>CONTRACT BOARD</span><button class="link-btn" data-open="market">open</button></div>
+        <div id="miniContracts" class="mini-contracts"></div>
+      </div>
+      <div class="mon-foot">
+        <span id="monFooter">simulation stable</span>
+        <span id="saveState" class="dim">saved</span>
+      </div>
+    </aside>
+  </main>
+
+  <footer id="dock">
+    <div class="dock-left">
+      <button class="dock-item active" data-open="terminal" title="Terminal (Alt+1)"><svg class="ico"><use href="#i-term"/></svg><span>Terminal</span></button>
+      <button class="dock-item" data-open="files" title="Files"><svg class="ico"><use href="#i-files"/></svg><span>Files</span></button>
+      <button class="dock-item" data-open="editor" title="Editor"><svg class="ico"><use href="#i-code"/></svg><span>Editor</span></button>
+      <button class="dock-item" data-open="map" title="Network"><svg class="ico"><use href="#i-net"/></svg><span>Network</span></button>
+      <button class="dock-item" data-open="browser" title="Browser"><svg class="ico"><use href="#i-globe"/></svg><span>Browser</span></button>
+      <button class="dock-item" data-open="mail" title="Mail"><svg class="ico"><use href="#i-mail"/></svg><span>Mail</span><span class="dock-badge" id="dockMailBadge">0</span></button>
+      <button class="dock-item" data-open="market" title="Market"><svg class="ico"><use href="#i-work"/></svg><span>Market</span></button>
+      <button class="dock-item" data-open="servers" title="Servers"><svg class="ico"><use href="#i-server"/></svg><span>Servers</span></button>
+      <button class="dock-item" data-open="processes" title="Processes"><svg class="ico"><use href="#i-cpu"/></svg><span>System</span></button>
+      <button class="dock-item" data-open="profile" title="Profile"><svg class="ico"><use href="#i-user"/></svg><span>Profile</span></button>
+      <button class="dock-item" data-open="help" title="Help"><svg class="ico"><use href="#i-help"/></svg><span>Help</span></button>
+    </div>
+    <div class="dock-right">
+      <span class="dock-stat"><svg class="ico"><use href="#i-shield"/></svg><span id="dockHeat">heat 0%</span></span>
+      <button class="dock-save" id="btnSave" title="Save world"><svg class="ico"><use href="#i-save"/></svg><span>Save</span></button>
+    </div>
+  </footer>
+
+  <div id="toastRoot" class="toast-root"></div>
+  <div id="modalRoot" class="modal-root"></div>
+</div>
+
+<script type="module" src="./src/main.js"></script>
+</body>
+</html>
