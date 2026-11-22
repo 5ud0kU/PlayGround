@@ -27,6 +27,11 @@ import {
   SHOP_ITEMS, ACHIEVEMENTS, CLOUD_PROVIDERS, CLOUD_PLANS, CONTAINER_IMAGES, AGENT_MODELS,
   AGENT_ROLES, PRODUCT_TEMPLATES
 } from './data.js';
+import {
+  civilizationSummary, civEventList, civHistory, educationFields, researchFields,
+  playerProperties, playerCredentials, playerCompliance, playerCountry, playerCity,
+  civKnowledge, validateLedger
+} from './civilization.js';
 import { execute, commandNames } from './shell.js';
 
 const $ = (sel, root = document) => root.querySelector(sel);

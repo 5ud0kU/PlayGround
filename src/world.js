@@ -11,6 +11,9 @@ import {
   allFiles, HOME
 } from './vfs.js';
 import { buildSystems, ensureSystems, tickSystems } from './systems.js';
+import {
+  buildCivilization, ensureCivilization, tickCivilization, legalPenaltyMultiplier, playerCountry
+} from './civilization.js';
 
 export const SAVE_KEY = 'internet-persistent-world.v1';
 export const WORLD_VERSION = 4;
@@ -133,14 +136,19 @@ function buildServerFS(server) {
   });
 }
 
-export function reviveGame(game) {
-  ensureSystems(game);
+function ensureGrowth(game) {
   if (!game.growth) game.growth = { companyCycle: 0, npcCycle: 0, serverCycle: 0, siteCycle: 0, contractCycle: 0, eventCycle: 0, lastWorldMinute: 0 };
   else {
     const growthDefaults = { companyCycle: 0, npcCycle: 0, serverCycle: 0, siteCycle: 0, contractCycle: 0, eventCycle: 0, lastWorldMinute: game.worldMinutes || 0 };
     for (const [key, value] of Object.entries(growthDefaults)) if (typeof game.growth[key] !== 'number') game.growth[key] = value;
   }
   if (typeof game.lastRentDay !== 'number') game.lastRentDay = Math.floor((game.worldMinutes || 0) / MINUTES_PER_DAY);
+}
+
+export function reviveGame(game) {
+  ensureSystems(game);
+  ensureCivilization(game);
+  ensureGrowth(game);
   for (const s of game.servers || []) {
     if (!s.fsMeta) {
       s.fsMeta = {
@@ -246,6 +254,7 @@ export function createGame(seed = randomSeed()) {
   buildNews(game, rng);
   buildProcesses(game, rng);
   buildRepos(game, rng);
+  buildCivilization(game, rng);
 
   game.feed = [
     { id: game.seq.feed++, time: now - 90000, world: game.worldMinutes - 3, text: 'NullNet Collective restarted the public shell after maintenance.', kind: 'info' },
@@ -1176,7 +1185,11 @@ export function netWorth(game) {
 }
 export function getPlayerSkill(game) {
   const s = game.stats;
-  return clamp(1 + Math.floor(s.scans * .10 + s.audits * .65 + s.exploits * .9 + s.patches * .45 + s.contracts * 1.15 + s.deploys * .35 + s.codeLines * .004 + (game.player.bonusSkill || 0)), 1, 10);
+  const knowledge = game.civ?.education?.player?.knowledge;
+  const knowledgeAvg = knowledge && Object.keys(knowledge).length
+    ? Object.values(knowledge).reduce((sum, value) => sum + (Number(value) || 0), 0) / Object.keys(knowledge).length
+    : 0;
+  return clamp(1 + Math.floor(s.scans * .10 + s.audits * .65 + s.exploits * .9 + s.patches * .45 + s.contracts * 1.15 + s.deploys * .35 + s.codeLines * .004 + (game.player.bonusSkill || 0) + knowledgeAvg / 70), 1, 10);
 }
 export const SKILL_TITLES = ['', 'novice', 'apprentice', 'practitioner', 'operator', 'specialist', 'senior operator', 'expert', 'veteran', 'master', 'architect'];
 export function skillTitle(game) { return SKILL_TITLES[getPlayerSkill(game)] || 'operator'; }
@@ -1292,11 +1305,13 @@ export function reduceHeat(game, amount) {
 }
 export function investigate(game, reason = 'anomalous activity') {
   const rng = makeRng((game.seed ^ game.worldMinutes ^ 0x9e37) >>> 0);
-  const fine = Math.min(Math.max(120, Math.round(game.player.money * .18)), 4200);
+  const country = playerCountry(game);
+  const multiplier = legalPenaltyMultiplier(game, country?.id);
+  const fine = Math.min(Math.max(Math.round(120 * multiplier), Math.round(game.player.money * .18 * multiplier)), Math.round(4200 * multiplier));
   game.player.money = Math.max(0, game.player.money - fine);
   game.player.heat = clamp(game.player.heat - 42, 0, 100);
   game.player.reputation = clamp(game.player.reputation - rng.int(3, 9), 0, 100);
-  const event = { time: Date.now(), fine, reason, authority: 'CyberNet Authority' };
+  const event = { time: Date.now(), fine, reason, authority: 'CyberNet Authority', jurisdiction: country?.name || 'Novaria', multiplier: Math.round(multiplier * 10) / 10 };
   game.legal.push(event);
   addMail(game, {
     from: 'notice', subject: 'Enforcement notice / trace resolution',
@@ -1424,11 +1439,18 @@ export function generateContract(game, rng = null) {
 /* ============================================================
    ECONOMY / INFRASTRUCTURE / SECURITY
    ============================================================ */
+export function shopPrice(game, item) {
+  if (!item) return 0;
+  const hardware = game.civ?.supply?.hardwareIndex || 100;
+  const multiplier = item.kind === 'infra' ? clamp(hardware / 100, .82, 2.35) : 1;
+  return Math.max(1, Math.round(item.price * multiplier));
+}
 export function buyShopItem(game, item) {
   if (!item) return { ok: false, error: 'Unknown item.' };
-  if (game.player.money < item.price) return { ok: false, error: `Insufficient funds. Need ${fmtMoney(item.price)}.` };
+  const price = shopPrice(game, item);
+  if (game.player.money < price) return { ok: false, error: `Insufficient funds. Need ${fmtMoney(price)}.` };
   if (item.id === 'domain') return { ok: false, error: 'Register a domain with: buy domain <name>' };
-  addMoney(game, -item.price, `purchase ${item.name}`);
+  addMoney(game, -price, `purchase ${item.name}`);
   game.stats.purchases++;
   if (item.kind === 'infra' && item.server) {
     const server = createOwnedServer(game, item);
@@ -1615,7 +1637,8 @@ export function sendMailReply(game, pending, rng) {
    ============================================================ */
 export function tickWorld(game, minutes = 1, opts = {}) {
   ensureSystems(game);
-  reviveGame(game);
+  ensureCivilization(game);
+  ensureGrowth(game);
   const rng = makeRng((game.seed ^ Math.floor(game.worldMinutes * 2654435761) ^ (game.tickCount * 97)) >>> 0);
   minutes = Math.max(1, Math.round(minutes));
   game.worldMinutes += minutes;
@@ -1623,8 +1646,8 @@ export function tickWorld(game, minutes = 1, opts = {}) {
   const events = [];
   const before = { money: game.player.money, mail: game.mail.length, contracts: game.contracts.length, sites: game.sites.length, heat: game.player.heat };
 
-  // market random walk
-  const drift = (rng.next() - .5) * .006 + .00015;
+  // market random walk, with civilization pressure layered on top
+  const drift = (rng.next() - .5) * .006 + .00015 + (game.civ?.metrics?.marketBias || 0);
   game.market.index = clamp(game.market.index * (1 + drift), 720, 1480);
   game.market.history.push(Math.round(game.market.index * 10) / 10);
   if (game.market.history.length > 80) game.market.history.shift();
@@ -1699,6 +1722,25 @@ export function tickWorld(game, minutes = 1, opts = {}) {
   // bounded procedural growth across the persistent world
   for (const growthEvent of growWorldEntities(game, growthRng(game, 0x9a17))) {
     events.push(growthEvent);
+  }
+
+  // countries, law, research, media, infrastructure, property, supply and history
+  try {
+    const civEvents = tickCivilization(game, minutes, rng);
+    for (const e of civEvents) {
+      if (e.type === 'feed') addFeed(game, e.text, e.kind || 'info');
+      else if (e.type === 'news') {
+        addNews(game, rng, { headline: e.text, body: e.body, source: e.source, silent: true });
+        events.push({ type: 'news', text: e.text });
+      } else if (e.type === 'mail') {
+        addMail(game, { from: e.from || 'notice', subject: e.subject || 'World notice', body: e.body || e.text });
+        events.push(e);
+      } else {
+        events.push(e);
+      }
+    }
+  } catch (err) {
+    console.error('civilization tick failed', err);
   }
 
   // news + forum life
