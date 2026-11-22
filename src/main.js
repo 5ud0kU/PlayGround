@@ -13,10 +13,20 @@ import {
   mailPartners, randomEventLine, MINUTES_PER_DAY
 } from './world.js';
 import {
+  findProvider, findPlan, cloudPrice, cloudLaunchItem, attachCloudInstance, findCloudInstance,
+  removeCloudInstance, playerCloudServers, imageInfo, findContainer, runContainer, stopContainer,
+  startContainer, removeContainer, createCluster, findCluster, applyWorkload, scaleWorkload,
+  clusterPods, agentModel, agentRole, findAgent, deployAgent, setAgentStatus, assignAgent,
+  agentDailyRevenue, agentDailyCost, playerCompany, registerCompany, launchProduct, companyValuation
+} from './systems.js';
+import {
   HOME, resolvePath, getNode, listDir, readFile, writeFile, ensureDir, removeNode,
   allFiles, sizeOf, modeString, basename, dirname, joinPath, isDir, exists
 } from './vfs.js';
-import { SHOP_ITEMS, ACHIEVEMENTS } from './data.js';
+import {
+  SHOP_ITEMS, ACHIEVEMENTS, CLOUD_PROVIDERS, CLOUD_PLANS, CONTAINER_IMAGES, AGENT_MODELS,
+  AGENT_ROLES, PRODUCT_TEMPLATES
+} from './data.js';
 import { execute, commandNames } from './shell.js';
 
 const $ = (sel, root = document) => root.querySelector(sel);
@@ -525,7 +535,7 @@ function tickLoop() {
 function softRefresh() {
   updateClock();
   updateMonitor();
-  for (const kind of ['market', 'servers', 'processes', 'profile', 'map']) {
+  for (const kind of ['market', 'servers', 'cloud', 'agents', 'processes', 'profile', 'map']) {
     const win = app.windows.get(kind);
     if (win && !win.minimized && win.render) safe(() => win.render());
   }
@@ -541,6 +551,8 @@ const WINDOW_META = {
   mail: { title: 'Mail', sub: 'inbox', w: 850, h: 530 },
   market: { title: 'Market', sub: 'contracts + infrastructure', w: 850, h: 550 },
   servers: { title: 'Servers', sub: 'network inventory', w: 850, h: 550 },
+  cloud: { title: 'Cloud', sub: 'instances + orchestration', w: 880, h: 570 },
+  agents: { title: 'Agents', sub: 'AI operations', w: 860, h: 570 },
   processes: { title: 'System', sub: 'processes', w: 770, h: 490 },
   profile: { title: 'Profile', sub: 'operator', w: 750, h: 570 },
   help: { title: 'Manual', sub: 'field guide', w: 810, h: 550 }
@@ -1661,6 +1673,8 @@ MOUNTS.browser = function mountBrowser(win) {
     if (thread) { showThread(thread.dataset.thread); return; }
     const clone = e.target.closest('[data-clone]');
     if (clone) { runCommand(`git clone https://git.nullnet/${clone.dataset.clone}`); return; }
+    const run = e.target.closest('[data-run]');
+    if (run) { runCommand(run.dataset.run); return; }
     const go = e.target.closest('[data-search-go]');
     if (go) {
       const q = win.body.querySelector('[data-search-input]')?.value || '';
@@ -1740,6 +1754,9 @@ function browserHome() {
     ['market.nullnet', 'Contract board', 'Work, rates, and reputation.'],
     ['search.nullnet', 'NullSearch', 'A small index of the public network.'],
     ['git.nullnet', 'git.nullnet', 'Public repositories and abandoned projects.'],
+    ['orbital.cloud', 'Orbital Cloud', 'Compute, storage, and a pricing page that rewards patience.'],
+    ['kestrel.ai', 'Kestrel Inference', 'Hosted models, agent runtimes, and usage dashboards.'],
+    ['agents.nullnet', 'Agent Directory', 'A public register of autonomous agents.'],
     ['blackmarket.onion', '0x00', 'Access, data, and things better left buried.']
   ];
   return `<div class="site-page">
@@ -1777,6 +1794,34 @@ function browserWidget(win, site) {
   }
   if (site.domain === 'git.nullnet' || site.kind === 'git') {
     return `<div class="site-list">${g.repos.map((r, i) => `<div class="site-list-item"><span class="n">${pad2(i + 1)}</span><div style="flex:1"><b>${esc(r.name)} <span style="font-weight:400;color:#6b767c">· ${esc(r.lang)} · ★ ${r.stars}</span></b><small>${esc(r.desc)}</small></div><button class="tbtn small" data-clone="${esc(r.name)}">clone</button></div>`).join('')}</div>`;
+  }
+  if (site.domain === 'orbital.cloud' || site.kind === 'cloud') {
+    const owned = playerCloudServers(g);
+    return `<div class="site-list">
+      ${g.cloud.providers.slice(0, 4).map((p, i) => `<div class="site-list-item"><span class="n">${pad2(i + 1)}</span><div style="flex:1"><b>${esc(p.name)} <span style="font-weight:400;color:#6b767c">· ${p.factor}× base · ${p.reliability}%</span></b><small>${esc(p.desc)} · ${p.regions.join(', ')}</small></div><button class="tbtn small" data-run="cloud plans ${esc(p.id)}">pricing</button></div>`).join('')}
+    </div>
+    <div style="margin-top:12px;display:flex;gap:6px;flex-wrap:wrap">
+      <button class="tbtn" data-run="cloud plans">View plans</button>
+      <button class="tbtn" data-run="cloud instances">My instances (${owned.length})</button>
+      <button class="tbtn" data-open="cloud">Open cloud console</button>
+    </div>`;
+  }
+  if (site.domain === 'kestrel.ai' || site.kind === 'ai') {
+    return `<div class="site-list">
+      ${AGENT_MODELS.map((m, i) => `<div class="site-list-item"><span class="n">${pad2(i + 1)}</span><div style="flex:1"><b>${esc(m.name)} <span style="font-weight:400;color:#6b767c">· ${esc(m.vendor)} · $${m.cost}/mo</span></b><small>${esc(m.desc)} · skill ${m.skill} · ${m.context}k context</small></div><button class="tbtn small" data-run="agent models">inspect</button></div>`).join('')}
+    </div>
+    <div style="margin-top:12px;display:flex;gap:6px;flex-wrap:wrap">
+      <button class="tbtn" data-run="agent roles">Agent roles</button>
+      <button class="tbtn" data-run="agent list">My agents</button>
+      <button class="tbtn" data-open="agents">Open agent console</button>
+    </div>`;
+  }
+  if (site.domain === 'agents.nullnet' || site.kind === 'agents') {
+    const agents = g.agents.slice(0, 12);
+    return `<div class="site-list">
+      ${agents.map((a, i) => `<div class="site-list-item"><span class="n">${pad2(i + 1)}</span><div style="flex:1"><b>${esc(a.name)} <span style="font-weight:400;color:#6b767c">· ${esc(agentRole(a.roleId).name)} · ${esc(agentModel(a.modelId).name)}</span></b><small>${esc(a.ownerName)} · ${a.status} · ${fmtNum(a.tasksDone)} tasks</small></div><button class="tbtn small" data-run="agent inspect ${esc(a.name)}">inspect</button></div>`).join('')}
+    </div>
+    <div style="margin-top:12px;display:flex;gap:6px;flex-wrap:wrap"><button class="tbtn" data-run="agent list --all">Full register</button><button class="tbtn" data-open="agents">Open agent console</button></div>`;
   }
   return '';
 }
@@ -2225,6 +2270,242 @@ function renderServerCards(win) {
 }
 
 /* ============================================================
+   CLOUD
+   ============================================================ */
+MOUNTS.cloud = function mountCloud(win) {
+  win.state = { tab: 'overview', plan: 'cloud-small', provider: 'orbital', region: 'us-east' };
+  win.render = () => renderCloud(win);
+  renderCloud(win);
+};
+
+function renderCloud(win) {
+  const g = app.game;
+  const st = win.state;
+  const tabs = [['overview','Overview'],['instances','Instances'],['containers','Containers'],['clusters','Clusters'],['providers','Providers']];
+  const monthly = g.cloud.instances.reduce((s, i) => s + i.monthly, 0);
+  win.body.innerHTML = `<div class="market-layout">
+    <div class="market-tabs">${tabs.map(([id, label]) => `<button class="market-tab ${st.tab === id ? 'on' : ''}" data-cloud-tab="${id}">${label}</button>`).join('')}<span style="margin-left:auto;font-family:var(--mono);font-size:9px;color:var(--green);padding:5px 8px">${fmtMoney(monthly)}/mo</span></div>
+    <div class="market-note"><span><b>${g.cloud.instances.length}</b> instances · <b>${g.cloud.containers.filter(c => c.status === 'running').length}</b> containers running · <b>${g.cloud.clusters.length}</b> clusters</span><span>${g.cloud.containers.length} total containers</span></div>
+    <div class="market-scroll" data-cloud-body></div>
+  </div>`;
+  for (const b of $$('[data-cloud-tab]', win.body)) b.addEventListener('click', () => { st.tab = b.dataset.cloudTab; renderCloud(win); });
+  const body = win.body.querySelector('[data-cloud-body]');
+  if (st.tab === 'overview') renderCloudOverview(win, body);
+  else if (st.tab === 'instances') renderCloudInstances(win, body);
+  else if (st.tab === 'containers') renderCloudContainers(win, body);
+  else if (st.tab === 'clusters') renderCloudClusters(win, body);
+  else renderCloudProviders(win, body);
+  win.status.innerHTML = `<span>cloud</span><span>${g.cloud.instances.length} instances</span><span class="st-right"><b>${fmtMoney(monthly)}/mo</b><span>${g.cloud.containers.filter(c => c.status === 'running').length} running</span></span>`;
+}
+
+function renderCloudOverview(win, body) {
+  const g = app.game;
+  const owned = playerCloudServers(g);
+  const agents = g.agents.filter(a => a.ownerType === 'player');
+  const sites = playerSites(g);
+  body.innerHTML = `<div class="section-label" style="margin:2px 0 8px">PROVISION <b>new capacity</b></div>
+    <div class="cloud-launch">
+      <select data-cloud-plan>${CLOUD_PLANS.map(p => `<option value="${p.id}" ${win.state.plan === p.id ? 'selected' : ''}>${p.name} · ${p.cpu} vCPU · ${p.ram} GB · ${p.disk} GB${p.gpu ? ' · GPU' : ''}</option>`).join('')}</select>
+      <select data-cloud-provider>${g.cloud.providers.map(p => `<option value="${p.id}" ${win.state.provider === p.id ? 'selected' : ''}>${p.name} (${p.factor}×)</option>`).join('')}</select>
+      <input class="input" data-cloud-region value="${esc(win.state.region)}" placeholder="region">
+      <button class="tbtn primary" data-cloud-launch>Launch instance</button>
+    </div>
+    <div class="cloud-grid">
+      <div class="scard"><div class="top"><h3>Instances</h3>${tag(String(g.cloud.instances.length), 'b')}</div><div style="font-size:9px;color:var(--dim)">${owned.length} server(s) provisioned through a provider.</div><button class="tbtn small" data-cloud-tab="instances">Inspect</button></div>
+      <div class="scard"><div class="top"><h3>Containers</h3>${tag(String(g.cloud.containers.length), 'b')}</div><div style="font-size:9px;color:var(--dim)">${g.cloud.containers.filter(c => c.status === 'running').length} running on your hosts.</div><button class="tbtn small" data-cloud-tab="containers">Inspect</button></div>
+      <div class="scard"><div class="top"><h3>Clusters</h3>${tag(String(g.cloud.clusters.length), 'b')}</div><div style="font-size:9px;color:var(--dim)">${g.cloud.clusters.reduce((s, c) => s + c.workloads.length, 0)} workloads scheduled.</div><button class="tbtn small" data-cloud-tab="clusters">Inspect</button></div>
+      <div class="scard"><div class="top"><h3>Agents</h3>${tag(String(agents.length), 'b')}</div><div style="font-size:9px;color:var(--dim)">${agents.filter(a => a.status === 'active').length} active on your infrastructure.</div><button class="tbtn small" data-open="agents">Inspect</button></div>
+    </div>
+    <div class="section-label" style="margin:16px 0 8px">OPERATIONS <b>quick commands</b></div>
+    <div class="cmd-chips">
+      <button class="tbtn small" data-run="cloud providers">cloud providers</button>
+      <button class="tbtn small" data-run="cloud plans">cloud plans</button>
+      <button class="tbtn small" data-run="docker ps -a">docker ps -a</button>
+      <button class="tbtn small" data-run="kubectl get pods">kubectl get pods</button>
+      <button class="tbtn small" data-run="agent list">agent list</button>
+    </div>
+    <div class="section-label" style="margin:16px 0 8px">RECENT <b>cloud activity</b></div>
+    <div class="site-list">${g.feed.filter(f => /cloud|container|cluster|agent|instance/i.test(f.text)).slice(0, 6).map(f => `<div class="site-list-item"><span class="n">${worldHHMM(f.world)}</span><div><b>${esc(f.text)}</b><small>${f.kind}</small></div></div>`).join('') || '<div class="site-list-item"><span class="n">—</span><div><b>Quiet</b><small>No cloud events yet.</small></div></div>'}</div>`;
+  const planSel = body.querySelector('[data-cloud-plan]');
+  const provSel = body.querySelector('[data-cloud-provider]');
+  const regionIn = body.querySelector('[data-cloud-region]');
+  planSel.addEventListener('change', () => { win.state.plan = planSel.value; });
+  provSel.addEventListener('change', () => { win.state.provider = provSel.value; const p = findProvider(g, provSel.value); if (p) { win.state.region = p.regions[0]; regionIn.value = p.regions[0]; } });
+  body.querySelector('[data-cloud-launch]').addEventListener('click', () => {
+    win.state.plan = planSel.value; win.state.provider = provSel.value; win.state.region = regionIn.value.trim() || 'us-east';
+    runCommand(`cloud launch ${win.state.plan} ${win.state.provider} ${win.state.region}`);
+    setTimeout(() => renderCloud(win), 120);
+  });
+  for (const b of $$('[data-cloud-tab]', body)) b.addEventListener('click', () => { win.state.tab = b.dataset.cloudTab; renderCloud(win); });
+  for (const b of $$('[data-run]', body)) b.addEventListener('click', () => runCommand(b.dataset.run));
+}
+
+function renderCloudInstances(win, body) {
+  const g = app.game;
+  const list = g.cloud.instances;
+  body.innerHTML = `<div style="display:flex;gap:4px;margin-bottom:10px"><button class="tbtn small" data-run="cloud launch cloud-small">Launch</button><button class="tbtn small" data-run="cloud instances">Refresh</button></div>
+    <div class="server-grid">${list.map(i => {
+      const s = g.servers.find(x => x.id === i.serverId);
+      const p = findProvider(g, i.providerId);
+      const plan = CLOUD_PLANS.find(x => x.id === i.planId);
+      return `<div class="scard"><div class="top"><div><h3>${esc(s?.host || i.serverId)}</h3><div class="ip">${esc(s?.ip || '—')} · ${esc(i.region)}</div></div>${statusTag(s?.status || 'offline')}</div>
+        <div style="font-size:9px;color:var(--dim)">${esc(p?.name || i.providerId)} · ${esc(plan?.name || i.planId)}<br>${plan ? `${plan.cpu} vCPU · ${plan.ram} GB RAM · ${plan.disk} GB disk` : ''}</div>
+        <div class="stats"><div class="stat"><span>MONTHLY</span><b>${fmtMoney(i.monthly)}</b></div><div class="stat"><span>CONTAINERS</span><b>${g.cloud.containers.filter(c => c.serverId === i.serverId).length}</b></div><div class="stat"><span>CREATED</span><b>${worldHHMM(i.createdAt)}</b></div><div class="stat"><span>GPU</span><b>${i.gpu ? 'yes' : 'no'}</b></div></div>
+        <div class="actions"><button class="tbtn small" data-run="ssh ${esc(s?.host || i.serverId)}">ssh</button><button class="tbtn small" data-run="docker ps">docker ps</button><button class="tbtn small danger" data-cloud-destroy="${esc(i.id)}">destroy</button></div>
+      </div>`;
+    }).join('') || '<div class="empty-state"><b>No cloud instances</b>Launch one from the Overview tab or with: cloud launch cloud-small</div>'}</div>`;
+  for (const b of $$('[data-run]', body)) b.addEventListener('click', () => runCommand(b.dataset.run));
+  for (const b of $$('[data-cloud-destroy]', body)) b.addEventListener('click', () => { runCommand(`cloud destroy ${b.dataset.cloudDestroy}`); setTimeout(() => renderCloud(win), 120); });
+}
+
+function renderCloudContainers(win, body) {
+  const g = app.game;
+  const list = g.cloud.containers;
+  body.innerHTML = `<div style="display:flex;gap:4px;margin-bottom:10px"><button class="tbtn small" data-run="docker run -d nginx:alpine">Run nginx</button><button class="tbtn small" data-run="docker ps -a">Refresh</button><button class="tbtn small" data-run="cloud images">Images</button></div>
+    <div class="cloud-table">
+      <div class="cloud-row head"><span>NAME</span><span>IMAGE</span><span>HOST</span><span>STATUS</span><span>PORT</span><span></span></div>
+      ${list.map(c => `<div class="cloud-row"><span><b>${esc(c.name)}</b><small>${esc(c.id)}</small></span><span>${esc(c.image)}</span><span>${esc(g.servers.find(s => s.id === c.serverId)?.host || 'gone')}</span><span>${c.status === 'running' ? tag('running','g') : tag(c.status,'r')}<small>${c.restarts} restarts</small></span><span>${c.port}/tcp</span><span class="row-actions"><button class="tbtn small" data-run="docker ${c.status === 'running' ? 'stop' : 'start'} ${esc(c.id)}">${c.status === 'running' ? 'stop' : 'start'}</button><button class="tbtn small" data-run="docker logs ${esc(c.id)}">logs</button><button class="tbtn small danger" data-run="docker rm ${esc(c.id)}">rm</button></span></div>`).join('') || '<div class="empty-state"><b>No containers</b>Run one with: docker run -d nginx:alpine</div>'}
+    </div>`;
+  for (const b of $$('[data-run]', body)) b.addEventListener('click', () => { runCommand(b.dataset.run); setTimeout(() => renderCloud(win), 120); });
+}
+
+function renderCloudClusters(win, body) {
+  const g = app.game;
+  body.innerHTML = `<div style="display:flex;gap:4px;margin-bottom:10px"><button class="tbtn small" data-run="kubectl create cluster edge">Create cluster</button><button class="tbtn small" data-run="kubectl get pods">Pods</button><button class="tbtn small" data-run="kubectl get nodes">Nodes</button></div>
+    <div class="server-grid">${g.cloud.clusters.map(c => `<div class="scard"><div class="top"><div><h3>${esc(c.name)}</h3><div class="ip">${esc(c.id)} · ${esc(c.version)}</div></div>${statusTag(c.status === 'healthy' ? 'online' : c.status === 'offline' ? 'offline' : 'degraded')}</div>
+      <div class="stats"><div class="stat"><span>NODES</span><b>${c.nodeIds.length}</b></div><div class="stat"><span>WORKLOADS</span><b>${c.workloads.length}</b></div><div class="stat"><span>READY</span><b>${c.workloads.reduce((s, w) => s + (w.running || 0), 0)}/${c.workloads.reduce((s, w) => s + w.replicas, 0)}</b></div><div class="stat"><span>STATUS</span><b>${esc(c.status)}</b></div></div>
+      <div class="svc-list">${c.workloads.map(w => tag(`${w.name} ${w.running || 0}/${w.replicas}`, 'b')).join('') || tag('no workloads')}</div>
+      <div class="actions"><button class="tbtn small" data-run="kubectl get pods ${esc(c.name)}">pods</button><button class="tbtn small" data-run="kubectl describe cluster ${esc(c.name)}">describe</button></div></div>`).join('') || '<div class="empty-state"><b>No clusters</b>Create one with: kubectl create cluster edge</div>'}</div>
+    <div class="section-label" style="margin:16px 0 8px">MANIFEST <b>example</b></div>
+    <pre class="mini-code">apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: web
+spec:
+  replicas: 2
+  template:
+    spec:
+      containers:
+        - name: web
+          image: nginx:alpine</pre>
+    <div class="dim" style="font-size:9px">Write it to deploy.yaml, then run: kubectl apply -f deploy.yaml</div>`;
+  for (const b of $$('[data-run]', body)) b.addEventListener('click', () => { runCommand(b.dataset.run); setTimeout(() => renderCloud(win), 120); });
+}
+
+function renderCloudProviders(win, body) {
+  const g = app.game;
+  body.innerHTML = `<div class="cloud-table">
+    <div class="cloud-row head"><span>PROVIDER</span><span>REGIONS</span><span>FACTOR</span><span>RELIABILITY</span><span>STATUS</span><span></span></div>
+    ${g.cloud.providers.map(p => `<div class="cloud-row"><span><b>${esc(p.name)}</b><small>${esc(p.id)} · ${esc(p.asn)}</small></span><span>${p.regions.join(', ')}</span><span>${p.factor}×</span><span>${p.reliability}%</span><span>${p.status === 'operational' ? tag('operational','g') : tag('degraded','a')}</span><span class="row-actions"><button class="tbtn small" data-run="cloud plans ${esc(p.id)}">plans</button></span></div>`).join('')}
+  </div>
+  <div class="section-label" style="margin:16px 0 8px">PLAN <b>pricing at base factor</b></div>
+  <div class="cloud-table">
+    <div class="cloud-row head"><span>PLAN</span><span>CPU</span><span>RAM</span><span>DISK</span><span>BASE</span><span>NOTE</span></div>
+    ${CLOUD_PLANS.map(p => `<div class="cloud-row"><span><b>${esc(p.name)}</b><small>${esc(p.id)}</small></span><span>${p.cpu} vCPU</span><span>${p.ram} GB</span><span>${p.disk} GB</span><span>${fmtMoney(p.price)}/mo</span><span>${esc(p.desc)}</span></div>`).join('')}
+  </div>`;
+  for (const b of $$('[data-run]', body)) b.addEventListener('click', () => runCommand(b.dataset.run));
+}
+
+/* ============================================================
+   AI AGENTS
+   ============================================================ */
+MOUNTS.agents = function mountAgents(win) {
+  win.state = { tab: 'roster', showAll: false };
+  win.render = () => renderAgents(win);
+  renderAgents(win);
+};
+
+function renderAgents(win) {
+  const g = app.game;
+  const st = win.state;
+  const mine = g.agents.filter(a => a.ownerType === 'player');
+  const tabs = [['roster','Roster'],['models','Models'],['orgs','Organizations'],['register','Public register']];
+  win.body.innerHTML = `<div class="market-layout">
+    <div class="market-tabs">${tabs.map(([id, label]) => `<button class="market-tab ${st.tab === id ? 'on' : ''}" data-agent-tab="${id}">${label}</button>`).join('')}<span style="margin-left:auto;font-family:var(--mono);font-size:9px;color:var(--green);padding:5px 8px">${mine.length} yours · ${g.agents.length} known</span></div>
+    <div class="market-note"><span><b>${mine.filter(a => a.status === 'active').length}</b> active · <b>${mine.reduce((s, a) => s + a.tasksDone, 0)}</b> tasks completed · daily net <b>${fmtMoney(mine.reduce((s, a) => s + agentDailyRevenue(a) - agentDailyCost(a), 0))}</b></span><span>agents are bounded by permissions</span></div>
+    <div class="market-scroll" data-agent-body></div>
+  </div>`;
+  for (const b of $$('[data-agent-tab]', win.body)) b.addEventListener('click', () => { st.tab = b.dataset.agentTab; renderAgents(win); });
+  const body = win.body.querySelector('[data-agent-body]');
+  if (st.tab === 'roster') renderAgentRoster(win, body);
+  else if (st.tab === 'models') renderAgentModels(win, body);
+  else if (st.tab === 'orgs') renderAgentOrgs(win, body);
+  else renderAgentRegister(win, body);
+  win.status.innerHTML = `<span>agents</span><span>${mine.length} deployed</span><span class="st-right"><b>${mine.filter(a => a.status === 'active').length} active</b><span>${fmtMoney(mine.reduce((s, a) => s + agentDailyRevenue(a), 0))}/day gross</span></span>`;
+}
+
+function renderAgentRoster(win, body) {
+  const g = app.game;
+  const mine = g.agents.filter(a => a.ownerType === 'player');
+  const servers = ownedServers(g).filter(s => s.status === 'online');
+  body.innerHTML = `<div class="section-label" style="margin:2px 0 8px">DEPLOY <b>a new agent</b></div>
+    <div class="cloud-launch">
+      <input class="input" data-agent-name placeholder="agent name" value="assistant">
+      <select data-agent-role>${AGENT_ROLES.map(r => `<option value="${r.id}">${r.name}</option>`).join('')}</select>
+      <select data-agent-model>${AGENT_MODELS.map(m => `<option value="${m.id}">${m.name} · $${m.cost}/mo</option>`).join('')}</select>
+      <select data-agent-server>${servers.map(s => `<option value="${s.id}">${s.host}</option>`).join('') || '<option value="">no online server</option>'}</select>
+      <button class="tbtn primary" data-agent-deploy>Deploy</button>
+    </div>
+    <div class="section-label" style="margin:14px 0 8px">YOUR AGENTS <b>${mine.length}</b></div>
+    <div class="server-grid">${mine.map(a => {
+      const model = agentModel(a.modelId), role = agentRole(a.roleId);
+      const server = g.servers.find(s => s.id === a.serverId);
+      return `<div class="scard"><div class="top"><div><h3>${esc(a.name)}</h3><div class="ip">${esc(role.name)} · ${esc(model.name)}</div></div>${a.status === 'active' ? tag('active','g') : a.status === 'paused' ? tag('paused','a') : tag(a.status,'r')}</div>
+        <div style="font-size:9px;color:var(--dim)">${esc(server?.host || 'no host')} · ${fmtNum(a.tasksDone)} tasks<br>${esc(a.memory[a.memory.length - 1]?.text || '')}</div>
+        <div class="stats"><div class="stat"><span>GROSS</span><b>${fmtMoney(agentDailyRevenue(a))}/day</b></div><div class="stat"><span>MODEL</span><b>${fmtMoney(agentDailyCost(a))}/day</b></div><div class="stat"><span>SPENT</span><b>${fmtMoney(a.spend)}</b></div><div class="stat"><span>EFF</span><b>${(a.efficiency * 100).toFixed(0)}%</b></div></div>
+        <div class="actions"><button class="tbtn small" data-run="agent inspect ${esc(a.name)}">inspect</button>${a.status === 'active' ? `<button class="tbtn small" data-run="agent pause ${esc(a.name)}">pause</button>` : `<button class="tbtn small" data-run="agent start ${esc(a.name)}">start</button>`}<button class="tbtn small danger" data-run="agent stop ${esc(a.name)}">stop</button></div>
+      </div>`;
+    }).join('') || '<div class="empty-state"><b>No agents deployed</b>Choose a role, a model, and an online host above. Deployment costs $45.</div>'}</div>`;
+  const nameIn = body.querySelector('[data-agent-name]');
+  const roleSel = body.querySelector('[data-agent-role]');
+  const modelSel = body.querySelector('[data-agent-model]');
+  const serverSel = body.querySelector('[data-agent-server]');
+  body.querySelector('[data-agent-deploy]').addEventListener('click', () => {
+    const name = nameIn.value.trim() || 'assistant';
+    if (!serverSel.value) { toast('No host', 'Provision a server before deploying an agent.', 'a'); return; }
+    runCommand(`agent deploy ${name} --role ${roleSel.value} --model ${modelSel.value} --server ${serverSel.value}`);
+    setTimeout(() => renderAgents(win), 160);
+  });
+  for (const b of $$('[data-run]', body)) b.addEventListener('click', () => { runCommand(b.dataset.run); setTimeout(() => renderAgents(win), 140); });
+}
+
+function renderAgentModels(win, body) {
+  body.innerHTML = `<div class="cloud-table">
+    <div class="cloud-row head"><span>MODEL</span><span>VENDOR</span><span>COST</span><span>SKILL</span><span>CONTEXT</span><span>NOTE</span></div>
+    ${AGENT_MODELS.map(m => `<div class="cloud-row"><span><b>${esc(m.name)}</b><small>${esc(m.id)}</small></span><span>${esc(m.vendor)}</span><span>$${m.cost}/mo</span><span>${m.skill}</span><span>${m.context}k</span><span>${esc(m.desc)}</span></div>`).join('')}
+  </div>
+  <div class="section-label" style="margin:16px 0 8px">ROLES <b>expected output</b></div>
+  <div class="cloud-table">
+    <div class="cloud-row head"><span>ROLE</span><span>GROSS</span><span>RISK</span><span>PERMISSIONS</span><span></span><span>NOTE</span></div>
+    ${AGENT_ROLES.map(r => `<div class="cloud-row"><span><b>${esc(r.name)}</b><small>${esc(r.id)}</small></span><span>~$${r.revenue}/day</span><span>${(r.risk * 100).toFixed(0)}%</span><span>human review</span><span></span><span>${esc(r.desc)}</span></div>`).join('')}
+  </div>`;
+}
+
+function renderAgentOrgs(win, body) {
+  const g = app.game;
+  const mine = playerCompany(g);
+  const list = [...g.companies].sort((a, b) => (b.revenue || 0) - (a.revenue || 0));
+  body.innerHTML = `<div style="display:flex;gap:4px;margin-bottom:10px"><button class="tbtn small" data-run="company list">Refresh</button>${mine ? `<button class="tbtn small" data-run="company mine">My company</button>` : `<button class="tbtn small" data-run="company register">Register company</button>`}</div>
+    <div class="cloud-table">
+      <div class="cloud-row head"><span>ORGANIZATION</span><span>SECTOR</span><span>REVENUE</span><span>FUNDS</span><span>STATUS</span><span></span></div>
+      ${list.map(co => `<div class="cloud-row"><span><b>${esc(co.name)}</b><small>${esc(co.domain)} · ${fmtNum(co.employees)} staff</small></span><span>${esc(co.sector)}</span><span>${fmtMoney(co.revenue)}/mo</span><span>${fmtMoney(co.funds)}</span><span>${co.status === 'operating' ? tag('operating','g') : co.status === 'failed' ? tag('failed','r') : tag(co.status,'a')}</span><span class="row-actions"><button class="tbtn small" data-run="company inspect ${esc(co.name)}">inspect</button></span></div>`).join('')}
+    </div>
+    <div class="section-label" style="margin:16px 0 8px">YOUR COMPANY <b>${mine ? esc(mine.name) : 'none'}</b></div>
+    ${mine ? `<div class="scard"><div class="top"><div><h3>${esc(mine.name)}</h3><div class="ip">${esc(mine.status)} · ${fmtMoney(mine.revenue)}/mo</div></div>${tag('operator','b')}</div><div class="stats"><div class="stat"><span>FUNDS</span><b>${fmtMoney(mine.funds)}</b></div><div class="stat"><span>BURN</span><b>${fmtMoney(mine.burn)}/mo</b></div><div class="stat"><span>PRODUCTS</span><b>${mine.products.length}</b></div><div class="stat"><span>VALUATION</span><b>${fmtMoney(companyValuation(mine))}</b></div></div><div class="actions"><button class="tbtn small" data-run="company launch">Launch product</button><button class="tbtn small" data-run="company products">Products</button></div></div>` : '<div class="empty-state"><b>No company</b>Register one for $250, then launch products that earn recurring revenue.</div>'}`;
+  for (const b of $$('[data-run]', body)) b.addEventListener('click', () => { runCommand(b.dataset.run); setTimeout(() => renderAgents(win), 160); });
+}
+
+function renderAgentRegister(win, body) {
+  const g = app.game;
+  const list = g.agents.slice(0, 40);
+  body.innerHTML = `<div class="cloud-table">
+    <div class="cloud-row head"><span>AGENT</span><span>OWNER</span><span>ROLE</span><span>MODEL</span><span>STATUS</span><span>TASKS</span></div>
+    ${list.map(a => `<div class="cloud-row"><span><b>${esc(a.name)}</b><small>${esc(a.id)}</small></span><span>${esc(a.ownerName)}</span><span>${esc(agentRole(a.roleId).name)}</span><span>${esc(agentModel(a.modelId).name)}</span><span>${a.status === 'active' ? tag('active','g') : tag(a.status,'a')}</span><span>${fmtNum(a.tasksDone)}</span></div>`).join('')}
+  </div>
+  <div class="dim" style="font-size:9px;margin-top:8px">The register lists known public agents. Private agents and agent memory are not exposed.</div>`;
+}
+
+/* ============================================================
    PROCESSES
    ============================================================ */
 MOUNTS.processes = function mountProcesses(win) {
@@ -2382,6 +2663,7 @@ const CMD_HELP = {
   date: 'Current simulated date and time.',
   uptime: 'System uptime and load.',
   echo: 'Print arguments. Supports $VARS.',
+  printf: 'Print with escapes. Use \\n for newlines and redirect to write files.',
   env: 'Show environment variables.',
   export: 'Set an environment variable.',
   history: 'Show command history.',
@@ -2459,6 +2741,11 @@ const CMD_HELP = {
   npm: 'Manage Node packages.',
   git: 'Clone, inspect, or initialize repositories.',
   sqlite3: 'Query a simulated SQLite database.',
+  cloud: 'Provision and inspect cloud infrastructure.',
+  docker: 'Run and manage containers on your servers.',
+  kubectl: 'Operate a Kubernetes-style cluster.',
+  agent: 'Deploy and manage autonomous AI agents.',
+  company: 'Operate a company and launch products.',
   contracts: 'List the contract board.',
   accept: 'Accept a contract by id.',
   submit: 'Submit a completed contract.',
@@ -2492,6 +2779,7 @@ const HELP_SECTIONS = [
   ['network', 'Network'],
   ['security', 'Security & heat'],
   ['economy', 'Economy'],
+  ['cloud', 'Cloud & AI'],
   ['persistence', 'Persistence']
 ];
 
@@ -2579,6 +2867,22 @@ function helpContent(section) {
       </div>
       <p style="margin-top:14px">Read the objective before accepting. Code contracts check the requested file and minimum line count. Deploy contracts require a live site on infrastructure you own.</p>`;
   }
+  if (section === 'cloud') {
+    return `<h2>Cloud infrastructure and autonomous agents</h2>
+      <p>Cloud providers sell capacity at different prices and reliability. An instance becomes an owned server: SSH into it, deploy sites, run containers, and build a cluster.</p>
+      <div class="cmd-ref">
+        <code>cloud providers</code><span>Compare providers, regions, and price factors.</span>
+        <code>cloud plans</code><span>See compute plans and monthly costs.</span>
+        <code>cloud launch cloud-small redwood us-west</code><span>Provision an instance. Billing starts immediately.</span>
+        <code>docker run -d nginx:alpine</code><span>Run a container on your first owned server.</span>
+        <code>kubectl create cluster edge</code><span>Create a cluster from your owned nodes.</span>
+        <code>kubectl apply -f deploy.yaml</code><span>Schedule a deployment from a manifest.</span>
+        <code>agent deploy support-1 --role support --model nimbus-3</code><span>Deploy a bounded AI agent. Costs $45 plus model usage.</span>
+        <code>agent inspect support-1</code><span>Read its role, permissions, budget, and memory.</span>
+        <code>company register &lt;name&gt;</code><span>Register a company, then launch products for recurring revenue.</span>
+      </div>
+      <p style="margin-top:14px">Agents are not omniscient. They act inside permissions, consume a model budget, remember recent tasks, and pause when an action needs human review. Organizations hire, launch products, lose money, and fail while you are offline.</p>`;
+  }
   if (section === 'persistence') {
     return `<h2>The world keeps running</h2>
       <p>State is stored locally under <code>internet-persistent-world.v1</code>. Autosave runs while you play and when the page is hidden. When you return, the simulation advances and produces an activity report.</p>
@@ -2611,7 +2915,7 @@ function helpContent(section) {
    ============================================================ */
 function init() {
   const loaded = readSave();
-  app.game = loaded.game;
+  app.game = reviveGame(loaded.game);
   const elapsed = Date.now() - (app.game.lastSaved || app.game.lastActive || Date.now());
   if (loaded.loaded && elapsed > 120000) {
     try {

@@ -361,3 +361,100 @@ export const MAINT_NOTES = [
   'Firewall rule tightened after an unexpected scan.',
   'A decommissioned service was finally removed from DNS.'
 ];
+
+/* ---------------- cloud, containers, AI agents, organizations ---------------- */
+export const CLOUD_PROVIDERS = [
+  {
+    id: 'orbital', name: 'Orbital Cloud', domain: 'orbital.cloud', asn: 'AS64511',
+    regions: ['us-east', 'us-west', 'eu-west', 'ap-south'], factor: 1.0, reliability: 99.98,
+    desc: 'Global compute with an opaque pricing page and a support queue measured in days.'
+  },
+  {
+    id: 'redwood', name: 'Redwood Hosting', domain: 'redwood.host', asn: 'AS64544',
+    regions: ['us-west', 'eu-west'], factor: 0.68, reliability: 99.72,
+    desc: 'Cheap VPS capacity, honest support, and maintenance windows that arrive without warning.'
+  },
+  {
+    id: 'staticwave', name: 'StaticWave Edge', domain: 'staticwave.net', asn: 'AS64555',
+    regions: ['us-east', 'eu-west', 'ap-south', 'sa-east'], factor: 0.86, reliability: 99.9,
+    desc: 'Edge-first hosting. Fast at the edges, thin in the middle, strict about egress.'
+  },
+  {
+    id: 'basalt', name: 'Basalt Infrastructure', domain: 'basalt.net', asn: 'AS64566',
+    regions: ['eu-west', 'eu-north', 'af-south'], factor: 0.92, reliability: 99.95,
+    desc: 'Fiber, transit, and rack space for people who read the SLA before signing it.'
+  },
+  {
+    id: 'nullnet', name: 'NullNet Community Cloud', domain: 'portal.nullnet', asn: 'AS64500',
+    regions: ['eu-west'], factor: 0.42, reliability: 99.31,
+    desc: 'Volunteer capacity. No promises, no invoice, and a mailing list you cannot leave.'
+  }
+];
+
+export const CLOUD_PLANS = [
+  { id: 'cloud-nano', name: 'Nano', cpu: 1, ram: 1, disk: 20, price: 12, transfer: 1, desc: 'A single small process and a lot of hope.' },
+  { id: 'cloud-small', name: 'Small', cpu: 2, ram: 4, disk: 80, price: 34, transfer: 3, desc: 'A real service, a database, and room to breathe.' },
+  { id: 'cloud-pro', name: 'Pro', cpu: 4, ram: 8, disk: 200, price: 96, transfer: 8, desc: 'Comfortable for teams and small production loads.' },
+  { id: 'cloud-gpu', name: 'GPU Node', cpu: 8, ram: 32, disk: 500, price: 420, transfer: 12, gpu: true, desc: 'One shared accelerator. Enough for local inference and training runs.' }
+];
+
+export const CONTAINER_IMAGES = [
+  { name: 'nginx:alpine', size: 23, service: 'web', port: 80, ram: 0.05, cpu: 0.1, desc: 'Static web server and reverse proxy.' },
+  { name: 'caddy:2-alpine', size: 41, service: 'web', port: 80, ram: 0.08, cpu: 0.1, desc: 'Automatic TLS and a friendly config file.' },
+  { name: 'node:22-alpine', size: 132, service: 'app', port: 3000, ram: 0.3, cpu: 0.5, desc: 'JavaScript application runtime.' },
+  { name: 'python:3.12-slim', size: 128, service: 'app', port: 8000, ram: 0.25, cpu: 0.4, desc: 'Python application runtime.' },
+  { name: 'postgres:16', size: 412, service: 'db', port: 5432, ram: 0.5, cpu: 0.5, desc: 'Relational database with opinions about durability.' },
+  { name: 'redis:7-alpine', size: 38, service: 'cache', port: 6379, ram: 0.15, cpu: 0.2, desc: 'In-memory cache and queue.' },
+  { name: 'prometheus:v2', size: 248, service: 'monitor', port: 9090, ram: 0.4, cpu: 0.3, desc: 'Metrics collection and alerting.' },
+  { name: 'grafana/grafana:11', size: 386, service: 'monitor', port: 3000, ram: 0.35, cpu: 0.3, desc: 'Dashboards for things you already knew were broken.' },
+  { name: 'minio/minio:latest', size: 214, service: 'storage', port: 9000, ram: 0.3, cpu: 0.3, desc: 'S3-compatible object storage.' },
+  { name: 'ollama/ollama:latest', size: 920, service: 'ai', port: 11434, ram: 4, cpu: 2, desc: 'Local model inference. Needs RAM and patience.' }
+];
+
+export const AGENT_MODELS = [
+  { id: 'kestrel-mini', name: 'Kestrel Mini', vendor: 'Kestrel Analytics', cost: 4, skill: 52, context: 32, desc: 'Small, cheap, fast. Good at classification and routine replies.' },
+  { id: 'nimbus-3', name: 'Nimbus 3', vendor: 'Orbital Cloud', cost: 14, skill: 70, context: 128, desc: 'General-purpose hosted model. The default for support and operations.' },
+  { id: 'atlas-reason', name: 'Atlas Reason', vendor: 'Helix Labs', cost: 32, skill: 86, context: 256, desc: 'Deliberate reasoning model. Expensive, slow, and occasionally right about hard things.' },
+  { id: 'vanta-guard', name: 'Vanta Guard', vendor: 'Vanta Security', cost: 24, skill: 78, context: 96, desc: 'Security-tuned model with strict tool permissions and good incident hygiene.' },
+  { id: 'local-7b', name: 'Local 7B', vendor: 'community', cost: 0, skill: 58, context: 16, desc: 'Self-hosted weights. No API bill, no vendor, and you own every failure.' }
+];
+
+export const AGENT_ROLES = [
+  { id: 'support', name: 'customer support', revenue: 9, risk: 0.05, desc: 'Answers tickets, drafts replies, and escalates what it cannot verify.' },
+  { id: 'monitor', name: 'infrastructure monitor', revenue: 6, risk: 0.03, desc: 'Watches uptime, correlates alerts, and writes incident notes.' },
+  { id: 'research', name: 'research assistant', revenue: 7, risk: 0.04, desc: 'Reads documentation, summarizes findings, and cites sources when asked.' },
+  { id: 'developer', name: 'software agent', revenue: 12, risk: 0.07, desc: 'Writes small patches, runs tests, and opens pull requests for review.' },
+  { id: 'analyst', name: 'data analyst', revenue: 10, risk: 0.05, desc: 'Builds reports, checks pipelines, and notices when a number stops moving.' },
+  { id: 'sales', name: 'outreach agent', revenue: 11, risk: 0.09, desc: 'Finds leads, drafts messages, and is one prompt away from embarrassment.' },
+  { id: 'security', name: 'security analyst', revenue: 8, risk: 0.06, desc: 'Triages findings, checks access policy, and refuses to guess.' }
+];
+
+export const AGENT_TASKS = [
+  'triaged 14 support tickets', 'summarized an incident timeline', 'opened a pull request with tests',
+  'correlated three alerts into one root cause', 'rewrote a stale runbook', 'classified a backlog of logs',
+  'drafted a customer response and flagged it for review', 'found a broken link in the documentation',
+  'reconciled two conflicting dashboards', 'refused a request that exceeded its permissions',
+  'proposed a cheaper instance size', 'detected an expiring certificate', 'translated a policy into access rules'
+];
+
+export const PRODUCT_TEMPLATES = [
+  { name: 'Statuspage', category: 'monitoring', price: 29, desc: 'Hosted status pages for small teams.' },
+  { name: 'Relay', category: 'messaging', price: 12, desc: 'A quiet messaging layer for infrastructure teams.' },
+  { name: 'Basalt DNS', category: 'dns', price: 8, desc: 'Authoritative DNS with a readable control plane.' },
+  { name: 'Packet Lens', category: 'observability', price: 44, desc: 'Capture, search, and explain network traffic.' },
+  { name: 'Foundry CI', category: 'devtools', price: 36, desc: 'Build pipelines without a dedicated platform team.' },
+  { name: 'Vaultline', category: 'security', price: 58, desc: 'Secret rotation and access review.' },
+  { name: 'Moth Sites', category: 'hosting', price: 15, desc: 'Small, fast websites for people who dislike dashboards.' },
+  { name: 'Signal API', category: 'data', price: 22, desc: 'Structured news and infrastructure signals.' },
+  { name: 'Kestrel Forecast', category: 'data', price: 64, desc: 'Forecasting for operations and capacity planning.' },
+  { name: 'Helix Inference', category: 'ai', price: 90, desc: 'Managed model endpoints with usage-based billing.' }
+];
+
+export const ORG_EVENTS = [
+  'announced a new regional deployment', 'raised prices for the first time in three years',
+  'published a postmortem for last week\'s outage', 'opened a small office near a transit exchange',
+  'quietly deprecated an API that customers still depend on', 'hired a new head of infrastructure',
+  'renewed its transit contract after a tense negotiation', 'started a public bug bounty',
+  'migrated a legacy service without telling anyone', 'lost a customer to a cheaper competitor',
+  'launched a status page after an incident', 'cut its support staff and called it automation'
+];

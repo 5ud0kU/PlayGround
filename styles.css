@@ -582,3 +582,24 @@ textarea.input{height:auto;padding:7px 8px;line-height:1.55;resize:none}
   .term-input-row{padding:5px 9px 9px}
   .toast-root{width:calc(100% - 20px);right:10px}
 }
+
+/* ---------------- cloud + agents ---------------- */
+.cloud-launch{display:flex;gap:5px;flex-wrap:wrap;align-items:center;margin-bottom:12px;padding:8px;border:1px solid #1d262d;border-radius:4px;background:#0a0e11}
+.cloud-launch select,.cloud-launch input{background:#0c1216;border:1px solid #243039;border-radius:3px;color:var(--text2);font-family:var(--mono);font-size:9px;padding:5px 6px;min-width:0;height:26px}
+.cloud-launch input{flex:1;min-width:90px}
+.cloud-launch select:focus,.cloud-launch input:focus{outline:none;border-color:#2f6a5a}
+.cloud-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:8px}
+.cloud-table{border:1px solid #1d262d;border-radius:4px;overflow:hidden;background:#0b1013}
+.cloud-row{display:grid;grid-template-columns:1.5fr 1fr .75fr .85fr .75fr 1.25fr;gap:8px;padding:7px 10px;border-bottom:1px solid #141b21;font-family:var(--mono);font-size:8.5px;color:var(--text2);align-items:center;min-height:30px}
+.cloud-row:last-child{border-bottom:0}
+.cloud-row:hover{background:#10171c}
+.cloud-row.head{font-size:7px;letter-spacing:.1em;color:var(--faint);background:#0a0e11;position:sticky;top:0;z-index:1}
+.cloud-row b{font-weight:500;color:#dbe6ec;display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.cloud-row small{display:block;color:var(--faint);font-size:7.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.cloud-row .row-actions{display:flex;gap:3px;justify-content:flex-end;flex-wrap:wrap}
+.cmd-chips{display:flex;gap:5px;flex-wrap:wrap}
+.mini-code{font-family:var(--mono);font-size:8.5px;line-height:1.6;color:var(--text2);background:#0a0e11;border:1px solid #1d262d;border-radius:4px;padding:9px 11px;overflow:auto;margin:0 0 6px}
+@media (max-width:860px){
+  .cloud-row{grid-template-columns:1.4fr 1fr .8fr auto;gap:5px}
+  .cloud-row span:nth-child(3),.cloud-row span:nth-child(5){display:none}
+}

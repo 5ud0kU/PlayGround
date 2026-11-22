@@ -10,6 +10,7 @@ import {
   makeLocalFS, makeRemoteFS, writeFile, ensureDir, readFile, getNode, resolvePath, listDir,
   allFiles, HOME
 } from './vfs.js';
+import { buildSystems, ensureSystems, tickSystems } from './systems.js';
 
 export const SAVE_KEY = 'internet-persistent-world.v1';
 export const WORLD_VERSION = 4;
@@ -133,6 +134,7 @@ function buildServerFS(server) {
 }
 
 export function reviveGame(game) {
+  ensureSystems(game);
   for (const s of game.servers || []) {
     if (!s.fsMeta) {
       s.fsMeta = {
@@ -214,18 +216,20 @@ export function createGame(seed = randomSeed()) {
     fs: makeLocalFS(),
     companies: [], npcs: [], servers: [], sites: [], forums: [], contracts: [], mail: [],
     news: [], feed: [], pendingReplies: [], legal: [], repos: [], processes: [],
+    cloud: null, agents: [], products: [],
     packages: ['bash','coreutils','procps','openssh-client','openssh-server','curl','wget','git','python3','python3-pip','gcc','g++','make','sqlite3','vim','nano','nmap','dnsutils','whois','traceroute','net-tools','iproute2','file','less','grep','sed','awk','htop','tree'],
     installed: ['nmap','curl','wget','git','python3','gcc','g++','sqlite3','vim','nano','bash','openssh-client','dnsutils','whois','traceroute','net-tools','htop','tree','file'],
     stats: { scans: 0, audits: 0, exploits: 0, patches: 0, deploys: 0, contracts: 0, earned: 0, spent: 0, mailsSent: 0, newsRead: 0, logins: 0, codeLines: 0, sites: 0, purchases: 0 },
     flags: { scanned: {}, audited: {}, patched: {}, exploited: {}, discovered: {}, visited: {}, hacked: {} },
     market: { index: 1000, history: [1000], volume: 0, sentiment: 'neutral' },
-    seq: { mail: 100, contract: 1000, news: 1, feed: 1, forum: 1, server: 1, site: 1, npc: 1, company: 1 },
+    seq: { mail: 100, contract: 1000, news: 1, feed: 1, forum: 1, server: 1, site: 1, npc: 1, company: 1, agent: 1, product: 1, container: 1, cluster: 1, bucket: 1, cloud: 1 },
     achievements: {}, settings: { reducedMotion: false, sound: false },
-    offline: null, versionTag: 'sim/4.1'
+    offline: null, versionTag: 'sim/4.2'
   };
 
   buildCompanies(game, rng);
   buildNpcs(game, rng);
+  buildSystems(game, rng);
   buildServers(game, rng);
   buildSites(game, rng);
   buildForums(game, rng);
@@ -707,6 +711,43 @@ function buildSites(game, rng) {
     links: ['portal.nullnet']
   });
 
+  const orbital = game.companies.find(c => c.name === 'Orbital Cloud');
+  add({
+    domain: 'orbital.cloud', title: 'Orbital Cloud', kind: 'cloud', category: 'company',
+    companyId: orbital?.id || null, ownerType: 'company',
+    serverId: game.servers.find(s => s.companyId === orbital?.id)?.id || portal?.id || null,
+    desc: 'Compute, storage, and managed services with a global footprint and an opaque pricing page.',
+    sections: [
+      { h: 'Compute', p: 'Nano, Small, Pro, and GPU nodes. Per-month billing. Egress billed separately.' },
+      { h: 'Reliability', p: 'Multi-region capacity with a published SLA and a support queue measured in business days.' },
+      { h: 'Developers', p: 'A CLI, an HTTP API, and documentation that is mostly accurate.' }
+    ],
+    links: ['status.nullnet', 'kestrel.ai', 'basalt.net']
+  });
+  const kestrel = game.companies.find(c => c.name === 'Kestrel Analytics');
+  add({
+    domain: 'kestrel.ai', title: 'Kestrel Inference', kind: 'ai', category: 'company',
+    companyId: kestrel?.id || null, ownerType: 'company',
+    serverId: game.servers.find(s => s.companyId === kestrel?.id)?.id || portal?.id || null,
+    desc: 'Hosted model endpoints, agent runtimes, and a very serious usage dashboard.',
+    sections: [
+      { h: 'Models', p: 'Kestrel Mini, Nimbus 3, Atlas Reason, and Vanta Guard. Context limits vary. So does the bill.' },
+      { h: 'Agents', p: 'Run an agent against your own tools and permissions. Human review is strongly recommended.' },
+      { h: 'Local inference', p: 'Self-hosted weights are available for operators with GPU capacity and patience.' }
+    ],
+    links: ['orbital.cloud', 'agents.nullnet', 'portal.nullnet']
+  });
+  add({
+    domain: 'agents.nullnet', title: 'Agent Directory', kind: 'agents', category: 'directory',
+    ownerType: 'community', serverId: portal?.id || null,
+    desc: 'A public register of autonomous agents, their owners, roles, and current status.',
+    sections: [
+      { h: 'What this is', p: 'A partial directory of agents operating on the public network. Private agents are not listed.' },
+      { h: 'Caveat', p: 'An agent is only as reliable as its permissions, its data, and the person who deployed it.' }
+    ],
+    links: ['kestrel.ai', 'portal.nullnet', 'news.nullnet']
+  });
+
   const blogOwners = ['hex','mirage','pixel','fable','relay','n0va','onyx','kernel','kestrel'];
   for (const handle of blogOwners) {
     const npc = game.npcs.find(n => n.handle === handle);
@@ -1063,7 +1104,7 @@ export function addNews(game, rng = null, opts = {}) {
   const domain = rng.pick(game.sites)?.domain || server.domain;
   const topic = rng.pick(TOPICS);
   const template = rng.pick(NEWS_TEMPLATES);
-  const headline = template
+  const headline = opts.headline || template
     .replace('{company}', company.name)
     .replace('{npc}', npc.name)
     .replace('{domain}', domain)
@@ -1076,7 +1117,7 @@ export function addNews(game, rng = null, opts = {}) {
   const item = {
     id: game.seq.news++, time: opts.time || Date.now(), world: opts.world ?? game.worldMinutes,
     source: opts.source || rng.pick(NEWS_SOURCES), headline,
-    body: `${headline} ${rng.pick([
+    body: opts.body || `${headline} ${rng.pick([
       'The details are sparse and the people involved prefer it that way.',
       'A spokesperson described the situation as "contained."',
       'No customer data has been confirmed exposed.',
@@ -1084,7 +1125,7 @@ export function addNews(game, rng = null, opts = {}) {
       'Independent observers have not verified the claim.',
       'The organization says a full review is underway.'
     ])}`,
-    tags: rng.picks(['infrastructure','security','market','community','labor','policy'], 2)
+    tags: opts.tags || rng.picks(['infrastructure','security','market','community','labor','policy'], 2)
   };
   game.news.unshift(item);
   if (game.news.length > 70) game.news.length = 70;
@@ -1452,6 +1493,7 @@ export function sendMailReply(game, pending, rng) {
    TICK + OFFLINE SIMULATION
    ============================================================ */
 export function tickWorld(game, minutes = 1, opts = {}) {
+  ensureSystems(game);
   const rng = makeRng((game.seed ^ Math.floor(game.worldMinutes * 2654435761) ^ (game.tickCount * 97)) >>> 0);
   minutes = Math.max(1, Math.round(minutes));
   game.worldMinutes += minutes;
@@ -1642,6 +1684,19 @@ export function tickWorld(game, minutes = 1, opts = {}) {
       s.status = rng.chance(.5) ? 'offline' : 'live';
       if (s.status === 'offline') addFeed(game, `${s.domain} stopped responding.`, 'info');
     }
+  }
+
+  // cloud, containers, agents and organizations
+  try {
+    const sysEvents = tickSystems(game, minutes, rng);
+    for (const e of sysEvents) {
+      if (e.type === 'money') addMoney(game, e.amount, e.memo);
+      else if (e.type === 'feed') addFeed(game, e.text, e.kind || 'info');
+      else if (e.type === 'news') addNews(game, rng, { headline: e.headline, body: e.body, source: e.source, silent: true });
+      else if (e.type === 'mail') addMail(game, { from: e.from, subject: e.subject, body: e.body });
+    }
+  } catch (err) {
+    console.error('systems tick failed', err);
   }
 
   updateDerived(game);

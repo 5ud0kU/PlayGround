@@ -13,7 +13,18 @@ import {
   marketIndex, netWorth, worldClock, threatInfo, unreadMail,
   contractStatusClass, mailPartners, sitesForServer, generateContract, addNews, updateDerived
 } from './world.js';
-import { SHOP_ITEMS, ACHIEVEMENTS } from './data.js';
+import {
+  findProvider, findPlan, cloudPrice, cloudLaunchItem, attachCloudInstance, findCloudInstance,
+  removeCloudInstance, playerCloudServers, imageInfo, findContainer, runContainer, stopContainer,
+  startContainer, removeContainer, containerLogs, createCluster, findCluster, applyWorkload,
+  scaleWorkload, clusterPods, agentModel, agentRole, findAgent, deployAgent, setAgentStatus,
+  assignAgent, agentDailyRevenue, agentDailyCost, playerCompany, registerCompany, launchProduct,
+  companyValuation
+} from './systems.js';
+import {
+  SHOP_ITEMS, ACHIEVEMENTS, CLOUD_PROVIDERS, CLOUD_PLANS, CONTAINER_IMAGES, AGENT_MODELS,
+  AGENT_ROLES, PRODUCT_TEMPLATES
+} from './data.js';
 
 const CMD_ALIASES = {
   ll: 'ls -la', la: 'ls -a', l: 'ls', ports: 'ss -tulnp', dir: 'ls',
@@ -24,6 +35,11 @@ const CMD_ALIASES = {
 };
 
 const COMMANDS = {};
+
+function hhmm(minutes) {
+  const m = ((Math.floor(Number(minutes) || 0) % 1440) + 1440) % 1440;
+  return `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`;
+}
 
 function rootOf(term) { return term.remote ? term.remote.server.fs : term.remoteRoot || null; }
 function getFS(term) { return term.remote ? term.remote.server.fs : term.localFS; }
@@ -307,8 +323,10 @@ COMMANDS.help = (ctx) => {
     ['PACKAGES', 'apt update  apt install <pkg>  apt list --installed'],
     ['NETWORK', 'ip  ifconfig  ping  traceroute  dig  whois  curl  wget  ssh  scp  nc  netstat  ss'],
     ['SECURITY', 'nmap  vulnscan  audit  exploit  patch  hydra  heat  legal'],
-    ['DEVELOP', 'python3  bash  gcc  make  git  sqlite3  node'],
-    ['ECONOMY', 'bank  contracts  accept  submit  market  buy  deploy  domains  site  servers'],
+    ['DEVELOP', 'python3  bash  gcc  make  git  sqlite3  node  docker  kubectl'],
+    ['CLOUD', 'cloud  docker  kubectl'],
+    ['AI', 'agent  agent models  agent deploy  company'],
+    ['ECONOMY', 'bank  contracts  accept  submit  market  buy  deploy  domains  site  servers  company'],
     ['SOCIAL', 'mail  send  read  forum  thread  post  news  profile  search  whois'],
     ['WORLD', 'map  status  world  achievements  save  reset  neofetch  history  clear'],
   ];
@@ -335,6 +353,12 @@ function manPage(ctx, name) {
     git: ['git — version control', 'git init|status|add|commit -m|log|clone <url>', 'Repositories live inside the virtual filesystem.'],
     python3: ['python3 — simulated runtime', 'python3 <file.py> | python3 -c "code"', 'A small Python subset: print, variables, arithmetic, for/range, if.'],
     gcc: ['gcc — C compiler', 'gcc <file.c> -o <binary>', 'Compiles a C source file into a runnable simulated binary.'],
+    printf: ['printf — formatted output', "printf 'line one\\nline two\\n' > file.txt", 'Interprets \\n, \\t and %s placeholders. Useful for writing manifests and small config files.'],
+    cloud: ['cloud — provision infrastructure', 'cloud providers | plans [provider] | launch <plan> [provider] [region] | instances | destroy <id>', 'Rents cloud instances with real monthly costs. Instances become owned servers you can SSH into.'],
+    docker: ['docker — containers', 'docker ps [-a] | images | pull <image> | run -d <image> | stop <id> | start <id> | rm <id> | logs <id> | build -t <tag>', 'Runs containers on servers you own. Container state persists and consumes host memory.'],
+    kubectl: ['kubectl — orchestration', 'kubectl create cluster <name> [node...] | get pods|nodes|deploy | apply -f <manifest> | scale deployment/<name> --replicas N', 'A small Kubernetes-style control plane over your own nodes. Manifests are read from the virtual filesystem.'],
+    agent: ['agent — autonomous AI agents', 'agent list [--all] | models | roles | deploy <name> --role <role> --model <model> | inspect <name> | start|stop|pause <name> | assign <name> <domain>', 'Agents perform bounded work on your infrastructure. They cost money, remember what they did, and pause when something looks wrong.'],
+    company: ['company — organizations', 'company list | inspect <name> | register <name> | launch <product> | products | mine', 'Register and operate your own technology company. Products generate recurring revenue based on subscribers and reputation.'],
   };
   const p = pages[name];
   if (!p) { ctx.print(`No manual entry for ${name}`, 'err'); ctx.dim('Try: help'); return; }
@@ -377,6 +401,19 @@ COMMANDS.echo = (ctx) => {
   if (args[0] === '-n') { newline = false; args = args.slice(1); }
   ctx.print(args.join(' ') + (newline ? '' : ''), '');
   if (!newline) { /* terminal renderer already adds a line */ }
+};
+COMMANDS.printf = (ctx) => {
+  let args = ctx.args.slice();
+  if (!args.length) { ctx.err('usage: printf <format> [arguments]'); return; }
+  let fmt = args.shift();
+  let ai = 0;
+  fmt = fmt.replace(/%s/g, () => args[ai++] ?? '');
+  const out = fmt
+    .replace(/\\n/g, '\n')
+    .replace(/\\t/g, '\t')
+    .replace(/\\r/g, '\r')
+    .replace(/\\\\/g, '\\');
+  ctx.print(out);
 };
 COMMANDS.env = (ctx) => {
   const vars = { HOME: homeOf(ctx.term), USER: userOf(ctx.term), HOSTNAME: hostOf(ctx.term), PWD: ctx.term.cwd, SHELL: '/bin/bash', TERM: 'xterm-256color', EDITOR: 'nano', LANG: 'en_US.UTF-8', ...(ctx.term.env || {}) };
@@ -1466,6 +1503,13 @@ COMMANDS.gcc = (ctx) => compileC(ctx, 'gcc');
 COMMANDS['g++'] = (ctx) => compileC(ctx, 'g++');
 function compileC(ctx, compiler) {
   if (!checkInstalled(ctx, compiler === 'g++' ? 'g++' : 'gcc')) return;
+  if (ctx.args.includes('--version') || (ctx.args.includes('-v') && ctx.args.length === 1)) {
+    ctx.print(compiler === 'g++' ? 'g++ (Debian 12.2.0-14) 12.2.0' : 'gcc (Debian 12.2.0-14) 12.2.0');
+    ctx.print('Copyright (C) 2022 Free Software Foundation, Inc.');
+    ctx.print('This is free software; see the source for copying conditions.  There is NO');
+    ctx.print('warranty; not even for MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.');
+    return;
+  }
   const files = ctx.args.filter(a => !a.startsWith('-'));
   const src = files[0];
   if (!src) { ctx.err(`${compiler}: fatal error: no input files`); return; }
@@ -2660,6 +2704,578 @@ COMMANDS.search = (ctx) => {
   if (contracts.length) { ctx.print('CONTRACTS', 'head'); for (const c of contracts) { n++; ctx.print(`  ${contractLine(c)}`, 'accent'); } }
   if (!n) ctx.dim('No matches in the indexed network.');
   else ctx.dim(`${n} result(s). Use whois, nmap, or forum for deeper inspection.`);
+};
+
+/* ---------------- cloud, containers, agents, organizations ---------------- */
+function parseLongFlags(args, start = 0) {
+  const flags = {}, rest = [];
+  for (let i = start; i < args.length; i++) {
+    const a = args[i];
+    if (a.startsWith('--')) {
+      const key = a.slice(2);
+      if (i + 1 < args.length && !args[i + 1].startsWith('--')) flags[key] = args[++i];
+      else flags[key] = true;
+    } else rest.push(a);
+  }
+  return { flags, rest };
+}
+
+COMMANDS.cloud = (ctx) => {
+  const g = ctx.game;
+  const sub = (ctx.args[0] || 'status').toLowerCase();
+  const { flags, rest } = parseLongFlags(ctx.args, 1);
+
+  if (sub === 'providers' || sub === 'provider') {
+    ctx.head('CLOUD PROVIDERS');
+    for (const p of g.cloud.providers) {
+      ctx.print(`${pad(p.id, 12)} ${pad(p.name, 26)} ${pad(p.asn, 8)} ${pad(p.factor.toFixed(2) + '×', 7)} ${p.status === 'operational' ? 'operational' : 'degraded'}`, p.status === 'operational' ? 'accent' : 'warn');
+      ctx.dim(`  ${p.desc}`);
+      ctx.dim(`  regions: ${p.regions.join(', ')} · reliability ${p.reliability}%`);
+    }
+    ctx.dim('cloud plans [provider]   ·   cloud launch <plan> <provider> [region]');
+    return;
+  }
+
+  if (sub === 'plans' || sub === 'plan') {
+    const requested = rest[0] ? findProvider(g, rest[0]) : null;
+    if (rest[0] && !requested) { ctx.err(`Unknown provider '${rest[0]}'.`); return; }
+    const provider = requested || findProvider(g, 'orbital');
+    ctx.head(`CLOUD PLANS — ${provider.name}`);
+    for (const plan of CLOUD_PLANS) {
+      const price = cloudPrice(plan, provider);
+      ctx.print(`${pad(plan.id, 14)} ${pad(fmtMoney(price) + '/mo', 11)} ${pad(plan.cpu + ' vCPU', 9)} ${pad(plan.ram + ' GB', 7)} ${pad(plan.disk + ' GB', 8)} ${plan.name}`, 'accent');
+      ctx.dim(`  ${plan.desc}`);
+    }
+    ctx.dim(`Provider factor ${provider.factor}× · ${provider.reliability}% reliability · regions ${provider.regions.join(', ')}`);
+    return;
+  }
+
+  if (sub === 'launch' || sub === 'create' || sub === 'provision') {
+    const plan = findPlan(rest[0]);
+    if (!plan) { ctx.err('usage: cloud launch <plan> [provider] [region]'); ctx.dim('Plans: ' + CLOUD_PLANS.map(p => p.id).join(', ')); return; }
+    const requested = rest[1] ? findProvider(g, rest[1]) : null;
+    if (rest[1] && !requested) { ctx.err(`Unknown provider '${rest[1]}'.`); return; }
+    const provider = requested || findProvider(g, 'orbital');
+    const region = rest[2] || provider.regions[0];
+    if (!provider.regions.includes(region)) { ctx.err(`${provider.name} does not operate in ${region}.`); ctx.dim('Regions: ' + provider.regions.join(', ')); return; }
+    const item = cloudLaunchItem(plan, provider);
+    const r = buyShopItem(g, item);
+    if (!r.ok) { ctx.err(r.error); return; }
+    const inst = attachCloudInstance(g, r.server, plan, provider, region);
+    ctx.ok(`Launched ${provider.name} ${plan.name} in ${region}.`);
+    ctx.print(`  instance  ${inst.id}`);
+    ctx.print(`  host      ${r.server.host} (${r.server.ip})`);
+    ctx.print(`  specs     ${plan.cpu} vCPU · ${plan.ram} GB RAM · ${plan.disk} GB disk${plan.gpu ? ' · GPU' : ''}`);
+    ctx.print(`  billing   ${fmtMoney(inst.monthly)}/mo`);
+    ctx.dim(`ssh operator@${r.server.host}   ·   docker run -d nginx:alpine`);
+    ctx.app.refreshUI?.();
+    return;
+  }
+
+  if (sub === 'instances' || sub === 'ls' || sub === 'list') {
+    const insts = g.cloud.instances;
+    ctx.head('CLOUD INSTANCES');
+    if (!insts.length) { ctx.dim('No cloud instances. Launch one with: cloud launch cloud-small'); return; }
+    for (const i of insts) {
+      const s = g.servers.find(x => x.id === i.serverId);
+      const p = findProvider(g, i.providerId);
+      ctx.print(`${pad(i.id, 12)} ${pad(s?.host || i.serverId, 24)} ${pad(p?.name || i.providerId, 20)} ${pad(i.region, 10)} ${pad(fmtMoney(i.monthly) + '/mo', 9)} ${s?.status || 'gone'}`, s?.status === 'online' ? 'accent' : 'warn');
+    }
+    ctx.dim('cloud destroy <instance-id>');
+    return;
+  }
+
+  if (sub === 'destroy' || sub === 'rm') {
+    const inst = findCloudInstance(g, rest[0] || flags.id);
+    if (!inst) { ctx.err(`No cloud instance matching '${rest[0] || flags.id || ''}'.`); return; }
+    const sites = sitesForServer(g, inst.serverId);
+    if (sites.length) { ctx.err(`Instance still hosts ${sites.length} site(s). Move or remove them first.`); return; }
+    if (g.cloud.containers.some(c => c.serverId === inst.serverId)) { ctx.err('Instance still has containers. Remove them first.'); return; }
+    removeCloudInstance(g, inst);
+    ctx.ok(`Destroyed ${inst.id}. Billing stopped.`);
+    addFeed(g, `Destroyed cloud instance ${inst.id}.`, 'info');
+    ctx.app.refreshUI?.();
+    return;
+  }
+
+  if (sub === 'images') {
+    ctx.head('LOCAL CONTAINER IMAGES');
+    for (const name of g.cloud.images) {
+      const info = CONTAINER_IMAGES.find(i => i.name === name);
+      ctx.print(`${pad(name, 30)} ${pad(info ? info.size + ' MB' : 'custom', 10)} ${info?.service || 'app'}`, 'accent');
+    }
+    ctx.dim('docker pull <image>   ·   docker run -d <image>');
+    return;
+  }
+
+  // status
+  const monthly = g.cloud.instances.reduce((s, i) => s + i.monthly, 0);
+  ctx.head('CLOUD STATUS');
+  ctx.print(`Instances     ${g.cloud.instances.length}`, 'accent');
+  ctx.print(`Containers    ${g.cloud.containers.filter(c => c.status === 'running').length} running / ${g.cloud.containers.length} total`);
+  ctx.print(`Clusters      ${g.cloud.clusters.length}`);
+  ctx.print(`Agents        ${g.agents.filter(a => a.ownerType === 'player').length} yours / ${g.agents.length} visible`);
+  ctx.print(`Monthly       ${fmtMoney(monthly)}`, monthly ? 'accent' : 'dim');
+  ctx.print('');
+  ctx.dim('cloud providers   cloud plans   cloud instances   cloud launch <plan> [provider] [region]');
+  ctx.dim('docker ps   kubectl get pods   agent list');
+};
+
+COMMANDS.docker = (ctx) => {
+  const g = ctx.game;
+  const sub = (ctx.args[0] || 'ps').toLowerCase();
+  const owned = ownedServers(g);
+  const remote = ctx.term.remote?.server;
+  const defaultServer = remote && remote.owned ? remote : owned[0];
+  const mine = id => g.cloud.containers.filter(c => c.serverId === id);
+
+  if (sub === 'ps' || sub === 'list') {
+    const all = ctx.args.includes('-a') || ctx.args.includes('--all');
+    const list = (remote ? mine(remote.id) : g.cloud.containers).filter(c => all || c.status === 'running');
+    ctx.head('CONTAINERS');
+    if (!list.length) { ctx.dim('No running containers. Try: docker run -d nginx:alpine'); return; }
+    ctx.print('CONTAINER ID   NAME              IMAGE                    STATUS          PORTS                 HOST');
+    for (const c of list) {
+      const host = g.servers.find(s => s.id === c.serverId)?.host || '—';
+      ctx.print(`${pad(c.id, 15)}${pad(c.name, 18)}${pad(c.image, 25)}${pad(c.status, 16)}${pad(String(c.port) + '/tcp', 22)}${host}`, c.status === 'running' ? 'accent' : 'dim');
+    }
+    return;
+  }
+
+  if (sub === 'images') {
+    ctx.head('IMAGES');
+    for (const name of g.cloud.images) {
+      const info = CONTAINER_IMAGES.find(i => i.name === name);
+      ctx.print(`${pad(name, 32)} ${pad(info ? info.size + ' MB' : 'custom', 10)} ${info?.service || 'app'}`, 'accent');
+    }
+    return;
+  }
+
+  if (sub === 'pull') {
+    const name = ctx.args[1];
+    const info = imageInfo(name);
+    if (!info) { ctx.err(`Error response from daemon: pull access denied for ${name || 'image'}, repository does not exist.`); return; }
+    if (!g.cloud.images.includes(info.name)) g.cloud.images.push(info.name);
+    ctx.print(`Using default tag: latest`);
+    ctx.print(`${info.name}: Pulling from library/${info.name.split(':')[0]}`);
+    ctx.print(`Digest: sha256:${Math.random().toString(16).slice(2).padEnd(64, '0')}`);
+    ctx.ok(`Status: Downloaded newer image for ${info.name}`);
+    return;
+  }
+
+  if (sub === 'run') {
+    let imageName = null, name = null, port = null, restart = 'always', serverId = null;
+    for (let i = 1; i < ctx.args.length; i++) {
+      const a = ctx.args[i];
+      if (a === '-d' || a === '--detach') continue;
+      if (a === '--name') { name = ctx.args[++i]; continue; }
+      if (a === '-p' || a === '--publish') { port = Number((ctx.args[++i] || '').split(':').pop()); continue; }
+      if (a === '--restart') { restart = ctx.args[++i] || 'always'; continue; }
+      if (a === '--server') { serverId = ctx.args[++i]; continue; }
+      if (a === '-e' || a === '--env') { i++; continue; }
+      if (!a.startsWith('-') && !imageName) imageName = a;
+    }
+    if (!imageName) { ctx.err('"docker run" requires at least 1 argument.'); ctx.dim('usage: docker run -d [-p 8080:80] [--name web] <image>'); return; }
+    let server = serverId ? g.servers.find(s => s.id === serverId || s.host === serverId) : defaultServer;
+    if (!server) { ctx.err('No owned server available. Launch one with: cloud launch cloud-small'); return; }
+    const r = runContainer(g, { image: imageName, name, port, restart, serverId: server.id });
+    if (!r.ok) { ctx.err(`docker: ${r.error}`); return; }
+    ctx.print(r.container.id, 'accent');
+    ctx.dim(`${r.container.name} is running on ${server.host}:${r.container.port}`);
+    addFeed(g, `Started container ${r.container.name} on ${server.host}.`, 'info');
+    ctx.app.refreshUI?.();
+    return;
+  }
+
+  if (['stop','start','rm','remove','logs','inspect'].includes(sub)) {
+    const c = findContainer(g, ctx.args[1]);
+    if (!c) { ctx.err(`Error: No such container: ${ctx.args[1] || ''}`); return; }
+    if (sub === 'stop') {
+      const r = stopContainer(c);
+      if (!r.ok) { ctx.err(r.error); return; }
+      ctx.ok(`Stopped ${c.name}.`); ctx.app.refreshUI?.(); return;
+    }
+    if (sub === 'start') {
+      const r = startContainer(g, c);
+      if (!r.ok) { ctx.err(r.error); return; }
+      ctx.ok(`Started ${c.name}.`); ctx.app.refreshUI?.(); return;
+    }
+    if (sub === 'rm' || sub === 'remove') {
+      if (c.status === 'running') { ctx.err(`You cannot remove a running container ${c.name}. Stop it first.`); return; }
+      removeContainer(g, c); ctx.ok(`Removed ${c.name}.`); ctx.app.refreshUI?.(); return;
+    }
+    if (sub === 'logs') {
+      ctx.head(`${c.name} — logs`);
+      for (const line of containerLogs(c, 16)) ctx.print(line, 'dim');
+      return;
+    }
+    ctx.head(`${c.name} — inspect`);
+    ctx.print(`image      ${c.image}`);
+    ctx.print(`host       ${g.servers.find(s => s.id === c.serverId)?.host || 'gone'}`);
+    ctx.print(`status     ${c.status}`);
+    ctx.print(`restarts   ${c.restarts}`);
+    ctx.print(`uptime     ${c.uptime} world minutes`);
+    ctx.print(`requests   ${fmtNum(c.requests)}`);
+    ctx.print(`ports      ${c.port}/tcp`);
+    return;
+  }
+
+  if (sub === 'build') {
+    const tagIdx = ctx.args.indexOf('-t');
+    const tag = tagIdx >= 0 ? ctx.args[tagIdx + 1] : 'local/app:latest';
+    const file = getNode(ctx.fs(), pathFor(ctx.term, 'Dockerfile'));
+    if (!file || file.type !== 'file') { ctx.err('ERROR: Cannot locate specified Dockerfile: Dockerfile'); return; }
+    ctx.print(`[+] Building ${tag}`, 'accent');
+    for (const line of ['load build definition', 'resolve docker.io/library/alpine:latest', 'install build dependencies', 'copy source', 'export image']) {
+      ctx.dim(` => ${line}`);
+    }
+    const image = tag.includes(':') ? tag : tag + ':latest';
+    if (!g.cloud.images.includes(image)) g.cloud.images.push(image);
+    ctx.ok(`Built ${image}`);
+    return;
+  }
+
+  ctx.err(`docker: '${sub}' is not a docker command.`);
+};
+
+COMMANDS.kubectl = (ctx) => {
+  const g = ctx.game;
+  const sub = (ctx.args[0] || 'get').toLowerCase();
+  const clusters = g.cloud.clusters;
+
+  if (sub === 'version') {
+    ctx.print('Client Version: v1.31.2');
+    ctx.print('Kustomize Version: v5.5.0');
+    ctx.print('Server Version: v1.31.2');
+    return;
+  }
+
+  if (sub === 'create') {
+    if (ctx.args[1] !== 'cluster') { ctx.err('usage: kubectl create cluster <name> <node> [node...]'); return; }
+    const name = ctx.args[2];
+    let ids = ctx.args.slice(3).flatMap(a => a.split(',')).filter(Boolean);
+    if (!ids.length) ids = ownedServers(g).map(s => s.id);
+    if (!ids.length) { ctx.err('No nodes. Provision servers first: cloud launch cloud-small'); return; }
+    const r = createCluster(g, { name, nodeIds: ids });
+    if (!r.ok) { ctx.err(r.error); return; }
+    ctx.ok(`cluster/${r.cluster.name} created with ${r.nodes.length} node(s).`);
+    ctx.dim(`Version ${r.cluster.version} · control plane on ${r.nodes[0].host}`);
+    addFeed(g, `Created Kubernetes-style cluster ${r.cluster.name}.`, 'good');
+    ctx.app.refreshUI?.();
+    return;
+  }
+
+  if (sub === 'get') {
+    const what = (ctx.args[1] || 'pods').toLowerCase();
+    const cl = findCluster(g, ctx.args[2]) || clusters[0];
+    if (what === 'nodes' || what === 'node') {
+      ctx.head('NODES');
+      if (!clusters.length) { ctx.dim('No clusters. Create one with: kubectl create cluster edge'); return; }
+      for (const c of clusters) {
+        for (const id of c.nodeIds) {
+          const s = g.servers.find(x => x.id === id);
+          ctx.print(`${pad(s?.host || id, 26)} ${pad(s?.status || 'gone', 12)} ${pad(c.name, 14)} ${s?.ip || ''}`, s?.status === 'online' ? 'accent' : 'warn');
+        }
+      }
+      return;
+    }
+    if (!cl) { ctx.dim('No clusters. Create one with: kubectl create cluster edge'); return; }
+    if (what === 'pods' || what === 'po') {
+      const pods = clusterPods(g, cl);
+      ctx.head(`PODS — ${cl.name}`);
+      if (!pods.length) { ctx.dim('No workloads. Apply a deployment with: kubectl apply -f deploy.yaml'); return; }
+      ctx.print('NAME                READY   STATUS    RESTARTS   NODE');
+      for (const p of pods) ctx.print(`${pad(p.name, 20)}${pad(p.status === 'Running' ? '1/1' : '0/1', 8)}${pad(p.status, 10)}${pad(String(p.restarts), 11)}${p.node}`, p.status === 'Running' ? 'accent' : 'warn');
+      return;
+    }
+    if (what === 'deploy' || what === 'deployment' || what === 'deployments') {
+      ctx.head(`DEPLOYMENTS — ${cl.name}`);
+      if (!cl.workloads.length) { ctx.dim('No deployments.'); return; }
+      for (const w of cl.workloads) ctx.print(`${pad(w.name, 22)} ${pad((w.running || 0) + '/' + w.replicas, 8)} ${pad(w.image, 28)} ${w.service}`, 'accent');
+      return;
+    }
+    if (what === 'clusters' || what === 'cluster') {
+      ctx.head('CLUSTERS');
+      for (const c of clusters) ctx.print(`${pad(c.name, 18)} ${pad(c.version, 10)} ${pad(c.nodeIds.length + ' node(s)', 12)} ${pad(c.workloads.length + ' workload(s)', 14)} ${c.status}`, c.status === 'healthy' ? 'accent' : 'warn');
+      return;
+    }
+    ctx.err(`error: the server doesn't have a resource type "${what}"`);
+    return;
+  }
+
+  if (sub === 'apply') {
+    const fi = ctx.args.indexOf('-f');
+    const file = fi >= 0 ? ctx.args[fi + 1] : null;
+    if (!file) { ctx.err('error: must specify one of -f and -k'); return; }
+    const node = getNode(ctx.fs(), pathFor(ctx.term, file));
+    if (!node || node.type !== 'file') { ctx.err(`error: the path "${file}" does not exist`); return; }
+    const cl = findCluster(g, ctx.args[ctx.args.indexOf('--cluster') + 1]) || clusters.find(c => c.ownerType === 'player') || clusters[0];
+    if (!cl) { ctx.err('error: no cluster available. Create one with: kubectl create cluster edge'); return; }
+    const text = node.content;
+    const manifest = {
+      kind: (text.match(/kind:\s*(\w+)/) || [])[1] || 'Deployment',
+      name: (text.match(/name:\s*([a-z0-9][a-z0-9-]*)/i) || [])[1],
+      image: (text.match(/image:\s*([^\s]+)/) || [])[1],
+      replicas: Number((text.match(/replicas:\s*(\d+)/) || [])[1] || 1)
+    };
+    if (!manifest.name || !manifest.image) { ctx.err('error: manifest is missing metadata.name or a container image'); return; }
+    const r = applyWorkload(g, cl, manifest);
+    if (!r.ok) { ctx.err(`error: ${r.error}`); return; }
+    ctx.ok(`${manifest.kind.toLowerCase()}.apps/${r.workload.name} configured`);
+    ctx.dim(`image ${r.workload.image} · replicas ${r.workload.replicas} · cluster ${cl.name}`);
+    addFeed(g, `Applied ${r.workload.name} to ${cl.name}.`, 'info');
+    ctx.app.refreshUI?.();
+    return;
+  }
+
+  if (sub === 'scale') {
+    const target = (ctx.args[1] || '').replace(/^deployment(\.apps)?\//, '');
+    const ri = ctx.args.indexOf('--replicas');
+    const replicas = ri >= 0 ? Number(ctx.args[ri + 1]) : Number(ctx.args[2]);
+    const cl = clusters.find(c => c.workloads.some(w => w.name === target)) || clusters[0];
+    if (!cl) { ctx.err('error: no cluster available'); return; }
+    const r = scaleWorkload(cl, target, replicas);
+    if (!r.ok) { ctx.err(`error: ${r.error}`); return; }
+    ctx.ok(`deployment.apps/${target} scaled to ${r.workload.replicas}`);
+    return;
+  }
+
+  if (sub === 'delete') {
+    const target = (ctx.args[1] || '').replace(/^deployment(\.apps)?\//, '');
+    const cl = clusters.find(c => c.workloads.some(w => w.name === target));
+    if (!cl) { ctx.err(`Error from server (NotFound): deployments.apps "${target}" not found`); return; }
+    cl.workloads = cl.workloads.filter(w => w.name !== target);
+    ctx.ok(`deployment.apps "${target}" deleted`);
+    return;
+  }
+
+  if (sub === 'describe') {
+    const cl = findCluster(g, ctx.args[2]) || clusters[0];
+    if (!cl) { ctx.err('No cluster.'); return; }
+    ctx.head(`CLUSTER ${cl.name}`);
+    ctx.print(`Version     ${cl.version}`);
+    ctx.print(`Status      ${cl.status}`);
+    ctx.print(`Nodes       ${cl.nodeIds.length}`);
+    ctx.print(`Workloads   ${cl.workloads.length}`);
+    ctx.print('');
+    for (const w of cl.workloads) ctx.print(`  ${pad(w.name, 20)} ${w.image} · ${w.running || 0}/${w.replicas} ready`, 'accent');
+    return;
+  }
+
+  ctx.err(`kubectl: '${sub}' is not a recognized subcommand.`);
+};
+
+COMMANDS.agent = (ctx) => {
+  const g = ctx.game;
+  const sub = (ctx.args[0] || 'list').toLowerCase();
+  const { flags, rest } = parseLongFlags(ctx.args, 1);
+
+  if (sub === 'models' || sub === 'model') {
+    ctx.head('AGENT MODELS');
+    for (const m of AGENT_MODELS) {
+      ctx.print(`${pad(m.id, 15)} ${pad(m.vendor, 20)} ${pad('$' + m.cost + '/mo', 8)} ${pad('skill ' + m.skill, 9)} ${pad(m.context + 'k ctx', 8)} ${m.name}`, 'accent');
+      ctx.dim(`  ${m.desc}`);
+    }
+    return;
+  }
+  if (sub === 'roles' || sub === 'role') {
+    ctx.head('AGENT ROLES');
+    for (const r of AGENT_ROLES) {
+      ctx.print(`${pad(r.id, 12)} ${pad('~$' + r.revenue + '/day', 10)} ${r.name}`, 'accent');
+      ctx.dim(`  ${r.desc}`);
+    }
+    return;
+  }
+  if (sub === 'list' || sub === 'ls') {
+    const all = ctx.args.includes('--all');
+    const list = g.agents.filter(a => all || a.ownerType === 'player').slice(0, 24);
+    ctx.head(all ? 'AGENT REGISTER' : 'YOUR AGENTS');
+    if (!list.length) {
+      ctx.dim('You do not run any agents.');
+      ctx.dim('Deploy one: agent deploy <name> --role support --model nimbus-3');
+      ctx.dim('Or inspect the public register: agent list --all');
+      return;
+    }
+    for (const a of list) {
+      const model = agentModel(a.modelId), role = agentRole(a.roleId);
+      ctx.print(`${pad(a.name, 16)} ${pad(role.id, 10)} ${pad(model.name, 15)} ${pad(a.ownerName, 22)} ${pad(a.status, 8)} ${fmtNum(a.tasksDone)} tasks`, a.status === 'active' ? 'accent' : a.status === 'paused' ? 'warn' : 'dim');
+    }
+    ctx.dim('agent inspect <name>   agent start|stop <name>   agent deploy <name> --role <role> --model <model>');
+    return;
+  }
+  if (sub === 'deploy') {
+    const name = rest[0];
+    const roleId = flags.role || 'support';
+    const modelId = flags.model || 'nimbus-3';
+    if (!name) { ctx.err('usage: agent deploy <name> --role <role> --model <model> [--server <id>] [--site <domain>]'); return; }
+    if (!AGENT_ROLES.some(r => r.id === roleId)) { ctx.err(`Unknown role '${roleId}'.`); ctx.dim('Roles: ' + AGENT_ROLES.map(r => r.id).join(', ')); return; }
+    if (!AGENT_MODELS.some(m => m.id === modelId)) { ctx.err(`Unknown model '${modelId}'.`); ctx.dim('Models: ' + AGENT_MODELS.map(m => m.id).join(', ')); return; }
+    let serverId = flags.server;
+    if (!serverId) {
+      const owned = ownedServers(g).filter(s => s.status === 'online');
+      serverId = owned[0]?.id;
+    }
+    const r = deployAgent(g, { name, roleId, modelId, serverId, siteId: flags.site });
+    if (!r.ok) { ctx.err(r.error); return; }
+    ctx.ok(`Deployed agent ${r.agent.name} on ${r.server.host}.`);
+    ctx.print(`  role      ${r.role.name}`);
+    ctx.print(`  model     ${r.model.name} (${fmtMoney(r.model.cost)}/mo budget)`);
+    ctx.print(`  output    ~${fmtMoney(agentDailyRevenue(r.agent))}/day gross`);
+    ctx.dim(`agent inspect ${r.agent.name}   ·   agent assign ${r.agent.name} <domain>`);
+    addFeed(g, `Deployed agent ${r.agent.name} on ${r.server.host}.`, 'good');
+    ctx.app.refreshUI?.();
+    return;
+  }
+  if (sub === 'inspect' || sub === 'show') {
+    const a = findAgent(g, rest[0]);
+    if (!a) { ctx.err(`No agent matching '${rest[0] || ''}'.`); return; }
+    const model = agentModel(a.modelId), role = agentRole(a.roleId);
+    ctx.head(`AGENT ${a.name}`);
+    ctx.print(`Owner       ${a.ownerName}${a.ownerType === 'player' ? ' (you)' : ''}`);
+    ctx.print(`Role        ${role.name}`);
+    ctx.print(`Model       ${model.name} · skill ${model.skill} · ${model.context}k context`);
+    ctx.print(`Status      ${a.status}`, a.status === 'active' ? 'ok' : a.status === 'paused' ? 'warn' : 'dim');
+    ctx.print(`Tasks       ${fmtNum(a.tasksDone)} completed`);
+    ctx.print(`Budget      ${fmtMoney(a.budget)} · spent ${fmtMoney(a.spend)}`);
+    if (a.serverId) ctx.print(`Host        ${g.servers.find(s => s.id === a.serverId)?.host || a.serverId}`);
+    if (a.siteId) ctx.print(`Assigned    ${g.sites.find(s => s.id === a.siteId)?.domain || a.siteId}`);
+    ctx.print(`Permissions ${a.permissions.join(', ')}`, 'dim');
+    ctx.print(`Capabilities ${a.capabilities.join(', ')}`, 'dim');
+    ctx.print('');
+    ctx.print('MEMORY', 'head');
+    for (const m of a.memory.slice(-8)) ctx.dim(`  ${m.world ? hhmm(m.world) : '—'}  ${m.text}`);
+    return;
+  }
+  if (['start','stop','pause','resume'].includes(sub)) {
+    const a = findAgent(g, rest[0]);
+    if (!a) { ctx.err(`No agent matching '${rest[0] || ''}'.`); return; }
+    if (a.ownerType !== 'player') { ctx.err('You do not control that agent.'); return; }
+    const status = sub === 'stop' ? 'stopped' : sub === 'pause' ? 'paused' : 'active';
+    setAgentStatus(a, status);
+    ctx.ok(`${a.name} is now ${status}.`);
+    ctx.app.refreshUI?.();
+    return;
+  }
+  if (sub === 'assign') {
+    const a = findAgent(g, rest[0]);
+    if (!a) { ctx.err(`No agent matching '${rest[0] || ''}'.`); return; }
+    if (a.ownerType !== 'player') { ctx.err('You do not control that agent.'); return; }
+    const r = assignAgent(g, a, rest[1]);
+    if (!r.ok) { ctx.err(r.error); return; }
+    ctx.ok(`${a.name} assigned to ${r.site.domain}.`);
+    return;
+  }
+  if (sub === 'logs') {
+    const a = findAgent(g, rest[0]);
+    if (!a) { ctx.err(`No agent matching '${rest[0] || ''}'.`); return; }
+    ctx.head(`${a.name} — memory`);
+    for (const m of a.memory.slice(-16)) ctx.print(`${m.world ? hhmm(m.world) : '—'}  ${m.text}`, 'dim');
+    return;
+  }
+  if (sub === 'stats') {
+    const mine = g.agents.filter(a => a.ownerType === 'player');
+    const gross = mine.reduce((s, a) => s + agentDailyRevenue(a), 0);
+    const cost = mine.reduce((s, a) => s + agentDailyCost(a), 0);
+    ctx.head('AGENT OPERATIONS');
+    ctx.print(`Agents      ${mine.length}`);
+    ctx.print(`Daily gross ${fmtMoney(gross)}`, 'ok');
+    ctx.print(`Daily cost  ${fmtMoney(cost)}`, 'accent');
+    ctx.print(`Net         ${fmtMoney(gross - cost)}/day`, gross - cost >= 0 ? 'ok' : 'warn');
+    ctx.print(`Tasks       ${fmtNum(mine.reduce((s, a) => s + a.tasksDone, 0))}`);
+    return;
+  }
+  ctx.err(`agent: '${sub}' is not a recognized subcommand.`);
+};
+COMMANDS.ai = COMMANDS.agent;
+COMMANDS.agents = COMMANDS.agent;
+
+COMMANDS.company = (ctx) => {
+  const g = ctx.game;
+  const sub = (ctx.args[0] || 'list').toLowerCase();
+  const mine = playerCompany(g);
+
+  if (sub === 'register' || sub === 'create') {
+    const name = ctx.args.slice(1).join(' ').trim();
+    if (!name) { ctx.err('usage: company register <name>'); return; }
+    const r = registerCompany(g, name);
+    if (!r.ok) { ctx.err(r.error); return; }
+    ctx.ok(`Registered ${r.company.name}.`);
+    ctx.print(`  domain    ${r.company.domain}`);
+    ctx.print(`  fee       ${fmtMoney(r.fee)}`);
+    ctx.dim('Launch a product with: company launch <template>');
+    addFeed(g, `Registered company ${r.company.name}.`, 'good');
+    ctx.app.refreshUI?.();
+    return;
+  }
+
+  if (sub === 'launch' || sub === 'product') {
+    if (!mine) { ctx.err('Register a company first: company register <name>'); return; }
+    const r = launchProduct(g, mine, ctx.args[1]);
+    if (!r.ok) { ctx.err(r.error); return; }
+    ctx.ok(`Launched ${r.product.name}.`);
+    ctx.print(`  price     ${fmtMoney(r.product.price)}/mo`);
+    ctx.print(`  category  ${r.product.category}`);
+    ctx.dim('Revenue grows with subscribers, reputation, and the sites you operate.');
+    ctx.app.refreshUI?.();
+    return;
+  }
+
+  if (sub === 'products' || sub === 'portfolio') {
+    const products = g.products.filter(p => p.companyId === mine?.id);
+    ctx.head('YOUR PRODUCTS');
+    if (!products.length) { ctx.dim('No products. company launch <template>'); return; }
+    for (const p of products) ctx.print(`${pad(p.name, 28)} ${pad(fmtMoney(p.price) + '/mo', 10)} ${pad(fmtNum(p.subscribers) + ' subs', 12)} ${p.rating.toFixed(1)}★ ${p.status}`, p.status === 'live' ? 'accent' : 'dim');
+    return;
+  }
+
+  if (sub === 'mine' || sub === 'my') {
+    if (!mine) { ctx.dim('You do not operate a company. company register <name>'); return; }
+    ctx.head(mine.name);
+    ctx.print(`Sector      ${mine.sector}`);
+    ctx.print(`Status      ${mine.status}`, mine.status === 'operating' ? 'ok' : 'warn');
+    ctx.print(`Funds       ${fmtMoney(mine.funds)}`);
+    ctx.print(`MRR         ${fmtMoney(mine.revenue)}`);
+    ctx.print(`Burn        ${fmtMoney(mine.burn)}/mo`);
+    ctx.print(`Valuation   ${fmtMoney(companyValuation(mine))}`, 'accent');
+    ctx.print(`Products    ${mine.products.length}`);
+    return;
+  }
+
+  if (sub === 'inspect' || sub === 'show') {
+    const co = getCompany(g, ctx.args.slice(1).join(' ')) || (ctx.args[1] ? g.companies.find(c => c.name.toLowerCase().includes(ctx.args.slice(1).join(' ').toLowerCase())) : null);
+    if (!co) { ctx.err(`No company matching '${ctx.args.slice(1).join(' ')}'.`); return; }
+    ctx.head(co.name);
+    ctx.print(`${co.sector} · ${co.employees} employees · founded ${co.founded}`);
+    ctx.print(`Status      ${co.status}`, co.status === 'operating' ? 'ok' : 'warn');
+    ctx.print(`Funds       ${fmtMoney(co.funds)}`);
+    ctx.print(`Revenue     ${fmtMoney(co.revenue)}/mo`);
+    ctx.print(`Burn        ${fmtMoney(co.burn)}/mo`);
+    ctx.print(`Morale      ${Math.round(co.morale)}%`);
+    ctx.print(`Valuation   ${fmtMoney(companyValuation(co))}`, 'accent');
+    const products = g.products.filter(p => p.companyId === co.id);
+    if (products.length) {
+      ctx.print('');
+      ctx.print('PRODUCTS', 'head');
+      for (const p of products) ctx.print(`  ${pad(p.name, 26)} ${pad(fmtMoney(p.price) + '/mo', 9)} ${pad(fmtNum(p.subscribers), 8)} subs ${p.status}`, 'accent');
+    }
+    if (co.history?.length) {
+      ctx.print('');
+      ctx.print('HISTORY', 'head');
+      for (const h of co.history.slice(0, 6)) ctx.dim(`  ${hhmm(h.world)}  ${h.text}`);
+    }
+    return;
+  }
+
+  if (sub === 'list' || sub === 'all') {
+    ctx.head('ORGANIZATIONS');
+    const list = [...g.companies].sort((a, b) => (b.funds || 0) - (a.funds || 0));
+    for (const co of list) {
+      ctx.print(`${pad(co.name, 24)} ${pad(co.sector, 14)} ${pad(fmtMoney(co.revenue) + '/mo', 12)} ${pad(co.status, 12)} ${co.ownerType === 'player' ? 'you' : fmtNum(co.employees) + ' staff'}`, co.status === 'operating' ? 'accent' : co.status === 'failed' ? 'err' : 'warn');
+    }
+    ctx.dim('company inspect <name>   ·   company register <name>');
+    return;
+  }
+  ctx.err(`company: '${sub}' is not a recognized subcommand.`);
 };
 
 COMMANDS.save = (ctx) => {
