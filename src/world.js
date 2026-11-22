@@ -1626,8 +1626,11 @@ export function tickWorld(game, minutes = 1, opts = {}) {
   }
   game.pendingReplies = game.pendingReplies.filter(r => r.atWorld > game.worldMinutes);
 
-  // passive site traffic and revenue
-  if (Math.floor(game.worldMinutes / 10) > Math.floor((game.worldMinutes - minutes) / 10)) {
+  // Passive site traffic and revenue accrue at every crossed ten-minute boundary,
+  // including when a large offline-simulation chunk skips several boundaries.
+  const previousWorldMinute = game.worldMinutes - minutes;
+  const intervals = Math.floor(game.worldMinutes / 10) - Math.floor(previousWorldMinute / 10);
+  for (let interval = 0; interval < intervals; interval++) {
     for (const site of playerSites(game)) {
       const gain = Math.max(1, Math.round(site.visits * rng.float(.004, .012)) + rng.int(1, 8));
       site.visits += gain;
@@ -1643,10 +1646,12 @@ export function tickWorld(game, minutes = 1, opts = {}) {
     }
   }
 
-  // daily costs
+  // Charge once for every crossed world day, rather than only once per tick.
+  // For older v4 saves without lastRentDay, start at the tick's previous day.
+  const previousDay = Math.floor(previousWorldMinute / MINUTES_PER_DAY);
   const day = Math.floor(game.worldMinutes / MINUTES_PER_DAY);
-  if (day > (game.lastRentDay ?? 0)) {
-    game.lastRentDay = day;
+  const firstUnchargedDay = Math.max(previousDay, game.lastRentDay ?? previousDay) + 1;
+  for (let rentDay = firstUnchargedDay; rentDay <= day; rentDay++) {
     const owned = ownedServers(game);
     let rent = 0;
     for (const s of owned) rent += Math.round((s.monthly || 28) / 30);
@@ -1668,6 +1673,7 @@ export function tickWorld(game, minutes = 1, opts = {}) {
       }
     }
   }
+  if (day > (game.lastRentDay ?? previousDay)) game.lastRentDay = day;
 
   // heat decays slowly when quiet
   if (game.player.heat > 0) game.player.heat = Math.max(0, game.player.heat - (minutes / 60) * .55);
