@@ -11,6 +11,7 @@ import {
   allFiles, HOME
 } from './vfs.js';
 import { buildSystems, ensureSystems, tickSystems } from './systems.js';
+import { buildCivilization, ensureCivilization, tickCivilization } from './civilization.js';
 
 export const SAVE_KEY = 'internet-persistent-world.v1';
 export const WORLD_VERSION = 4;
@@ -135,6 +136,7 @@ function buildServerFS(server) {
 
 export function reviveGame(game) {
   ensureSystems(game);
+  ensureCivilization(game);
   if (!game.growth) game.growth = { companyCycle: 0, npcCycle: 0, serverCycle: 0, siteCycle: 0, contractCycle: 0, eventCycle: 0, lastWorldMinute: 0 };
   else {
     const growthDefaults = { companyCycle: 0, npcCycle: 0, serverCycle: 0, siteCycle: 0, contractCycle: 0, eventCycle: 0, lastWorldMinute: game.worldMinutes || 0 };
@@ -246,6 +248,7 @@ export function createGame(seed = randomSeed()) {
   buildNews(game, rng);
   buildProcesses(game, rng);
   buildRepos(game, rng);
+  buildCivilization(game, rng);
 
   game.feed = [
     { id: game.seq.feed++, time: now - 90000, world: game.worldMinutes - 3, text: 'NullNet Collective restarted the public shell after maintenance.', kind: 'info' },
@@ -1172,11 +1175,19 @@ export function netWorth(game) {
   const serverValue = owned.reduce((s, x) => s + (x.plan === 'dedicated' ? 1800 : x.plan === 'standard' ? 700 : 260), 0);
   const siteValue = playerSites(game).reduce((s, x) => s + Math.min(4000, Math.round(x.visits * .25)), 0);
   const inv = Object.values(game.player.inventory || {}).reduce((s, n) => s + Number(n || 0), 0) * 40;
-  return game.player.money + serverValue + siteValue + game.player.domains.length * 18 + inv;
+  const civ = game.civ || {};
+  const property = (civ.property?.owned || []).reduce((s, p) => s + Math.max(0, (p.marketValue || p.purchasePrice || 0) - (p.mortgage?.balance || 0)), 0);
+  const investments = (civ.investments || []).reduce((s, i) => s + Number(i.invested || 0), 0);
+  const commodities = Object.entries(civ.supply?.player || {}).reduce((s, [id, qty]) => {
+    const resource = (civ.supply?.resources || []).find(r => r.id === id);
+    return s + (resource?.price || 0) * Number(qty || 0);
+  }, 0);
+  return Math.round(game.player.money + serverValue + siteValue + game.player.domains.length * 18 + inv + property + investments + commodities);
 }
 export function getPlayerSkill(game) {
   const s = game.stats;
-  return clamp(1 + Math.floor(s.scans * .10 + s.audits * .65 + s.exploits * .9 + s.patches * .45 + s.contracts * 1.15 + s.deploys * .35 + s.codeLines * .004 + (game.player.bonusSkill || 0)), 1, 10);
+  const education = Math.max(game.player.bonusSkill || 0, (game.player.education?.totalLevels || 0) * .075);
+  return clamp(1 + Math.floor(s.scans * .10 + s.audits * .65 + s.exploits * .9 + s.patches * .45 + s.contracts * 1.15 + s.deploys * .35 + s.codeLines * .004 + education), 1, 10);
 }
 export const SKILL_TITLES = ['', 'novice', 'apprentice', 'practitioner', 'operator', 'specialist', 'senior operator', 'expert', 'veteran', 'master', 'architect'];
 export function skillTitle(game) { return SKILL_TITLES[getPlayerSkill(game)] || 'operator'; }
@@ -1830,6 +1841,24 @@ export function tickWorld(game, minutes = 1, opts = {}) {
     }
   } catch (err) {
     console.error('systems tick failed', err);
+  }
+
+  // countries, cities, law, research, media, supply chains, property and culture
+  try {
+    const civEvents = tickCivilization(game, minutes, rng);
+    for (const e of civEvents) {
+      if (e.type === 'money') addMoney(game, e.amount, e.memo);
+      else if (e.type === 'feed') addFeed(game, e.text, e.kind || 'info');
+      else if (e.type === 'news') addNews(game, rng, { headline: e.headline, body: e.body, source: e.source, silent: true });
+      else if (e.type === 'mail') addMail(game, { from: e.from, subject: e.subject, body: e.body });
+      else if (e.type === 'rep') awardReputation(game, e.amount, e.reason);
+      else if (e.type === 'legal') {
+        game.legal.push({ time: Date.now(), fine: e.fine || 0, reason: e.reason, authority: e.authority || 'Digital authority' });
+        addFeed(game, e.reason, 'warn');
+      }
+    }
+  } catch (err) {
+    console.error('civilization tick failed', err);
   }
 
   updateDerived(game);
