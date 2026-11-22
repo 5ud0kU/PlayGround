@@ -603,24 +603,3 @@ textarea.input{height:auto;padding:7px 8px;line-height:1.55;resize:none}
   .cloud-row{grid-template-columns:1.4fr 1fr .8fr auto;gap:5px}
   .cloud-row span:nth-child(3),.cloud-row span:nth-child(5){display:none}
 }
-
-/* ---------------- civilization ---------------- */
-.civ-layout .market-scroll{padding-bottom:18px}
-.civ-layout .pstat small{display:block;font-family:var(--mono);font-size:7.5px;color:var(--faint);margin-top:3px;line-height:1.35}
-.civ-layout .market-note span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.civ-timeline{position:relative;padding-left:16px;margin-top:4px}
-.civ-timeline::before{content:'';position:absolute;left:4px;top:4px;bottom:4px;width:1px;background:#1f2a32}
-.civ-history-row{display:flex;gap:10px;padding:8px 0;border-bottom:1px solid #151d23;position:relative}
-.civ-history-row:last-child{border-bottom:0}
-.civ-history-dot{position:absolute;left:-16px;top:13px;width:7px;height:7px;border-radius:50%;background:var(--green);box-shadow:0 0 0 3px #0c1114}
-.civ-history-row b{display:block;font-size:10.5px;color:#dbe6ec;font-weight:500;line-height:1.4}
-.civ-history-row p{font-size:9px;color:var(--dim);margin:2px 0 0;line-height:1.5;max-width:88ch}
-.civ-history-time{font-family:var(--mono);font-size:7px;letter-spacing:.09em;color:var(--faint);text-transform:uppercase;margin-bottom:2px}
-.civ-country-card{appearance:none;font:inherit;color:inherit;cursor:pointer;text-align:left}
-.civ-country-card:hover{border-color:#2f6a5a}
-.civ-layout .mcard .meta .tbtn{margin-left:auto}
-@media (max-width:640px){
-  .civ-layout .profile-grid{grid-template-columns:repeat(2,minmax(0,1fr))!important}
-  .civ-layout .market-tabs{overflow-x:auto;flex-wrap:nowrap}
-  .civ-layout .market-tab{white-space:nowrap}
-}

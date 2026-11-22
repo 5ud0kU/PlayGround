@@ -20,10 +20,6 @@ import {
   agentDailyRevenue, agentDailyCost, playerCompany, registerCompany, launchProduct, companyValuation
 } from './systems.js';
 import {
-  civSummary, filteredHistory, findCountry, findCity, identityFor, contextualReputation,
-  complianceReport, verifyAuthority, playerPropertyIncome
-} from './civilization.js';
-import {
   HOME, resolvePath, getNode, listDir, readFile, writeFile, ensureDir, removeNode,
   allFiles, sizeOf, modeString, basename, dirname, joinPath, isDir, exists
 } from './vfs.js';
@@ -31,7 +27,11 @@ import {
   SHOP_ITEMS, ACHIEVEMENTS, CLOUD_PROVIDERS, CLOUD_PLANS, CONTAINER_IMAGES, AGENT_MODELS,
   AGENT_ROLES, PRODUCT_TEMPLATES
 } from './data.js';
-import { SUBJECTS, RESEARCH_FIELDS, LAW_DOMAINS } from './civ-data.js';
+import {
+  civilizationSummary, civEventList, civHistory, educationFields, researchFields,
+  playerProperties, playerCredentials, playerCompliance, playerCountry, playerCity,
+  civKnowledge, validateLedger
+} from './civilization.js';
 import { execute, commandNames } from './shell.js';
 
 const $ = (sel, root = document) => root.querySelector(sel);
@@ -540,7 +540,7 @@ function tickLoop() {
 function softRefresh() {
   updateClock();
   updateMonitor();
-  for (const kind of ['market', 'servers', 'cloud', 'agents', 'civilization', 'processes', 'profile', 'map']) {
+  for (const kind of ['market', 'servers', 'cloud', 'agents', 'processes', 'profile', 'map']) {
     const win = app.windows.get(kind);
     if (win && !win.minimized && win.render) safe(() => win.render());
   }
@@ -558,7 +558,6 @@ const WINDOW_META = {
   servers: { title: 'Servers', sub: 'network inventory', w: 850, h: 550 },
   cloud: { title: 'Cloud', sub: 'instances + orchestration', w: 880, h: 570 },
   agents: { title: 'Agents', sub: 'AI operations', w: 860, h: 570 },
-  civilization: { title: 'Civilization', sub: 'nations · law · knowledge · history', w: 930, h: 620 },
   processes: { title: 'System', sub: 'processes', w: 770, h: 490 },
   profile: { title: 'Profile', sub: 'operator', w: 750, h: 570 },
   help: { title: 'Manual', sub: 'field guide', w: 810, h: 550 }
@@ -2554,338 +2553,6 @@ function renderProcesses(win) {
   }
   win.status.innerHTML = `<span>${procs.length} processes</span><span>load ${load.toFixed(2)} ${load.toFixed(2)} ${(load * .9).toFixed(2)}</span>
     <span class="st-right"><b>${cpu.toFixed(1)}% cpu</b><span>${mem.toFixed(1)}% mem</span></span>`;
-}
-
-/* ============================================================
-   CIVILIZATION
-   ============================================================ */
-MOUNTS.civilization = function mountCivilization(win) {
-  const g = app.game;
-  const summary = civSummary(g);
-  win.state = {
-    tab: 'overview', countryId: g.civ?.countries?.[0]?.id || 'northreach',
-    historyType: 'all', historyQuery: ''
-  };
-  win.render = () => renderCivilization(win);
-  renderCivilization(win);
-  win.status.innerHTML = `<span>${esc(summary.worldId)}</span><span>${summary.countries} nations · ${summary.cities} cities</span><span class="st-right"><b>${summary.activeEvents.length} active events</b><span>history rev ${summary.history}</span></span>`;
-};
-
-function civMetric(label, value, sub = '') {
-  return `<div class="pstat"><span>${esc(label)}</span><b>${esc(value)}</b>${sub ? `<small>${esc(sub)}</small>` : ''}</div>`;
-}
-function civTabs() {
-  return [
-    ['overview', 'Overview'], ['nations', 'Nations'], ['law', 'Law'], ['knowledge', 'Knowledge'],
-    ['media', 'Media'], ['infrastructure', 'Cities'], ['property', 'Property'], ['industry', 'Industry'],
-    ['culture', 'Culture'], ['history', 'Timeline'], ['identity', 'Identity']
-  ];
-}
-function renderCivilization(win) {
-  const g = app.game;
-  const st = win.state;
-  const summary = civSummary(g);
-  const tabs = civTabs();
-  win.body.innerHTML = `<div class="market-layout civ-layout">
-    <div class="market-tabs">${tabs.map(([id, label]) => `<button class="market-tab ${st.tab === id ? 'on' : ''}" data-civ-tab="${id}">${label}</button>`).join('')}</div>
-    <div class="market-note"><span><b>${fmtNum(summary.population)}</b> people · <b>${summary.countries}</b> nations · <b>${summary.cities}</b> cities · internet <b>${summary.internet}%</b></span><span>shared world · revision ${summary.authority}</span></div>
-    <div class="market-scroll" data-civ-body></div>
-  </div>`;
-  for (const b of $$('[data-civ-tab]', win.body)) b.addEventListener('click', () => { st.tab = b.dataset.civTab; renderCivilization(win); });
-  const body = win.body.querySelector('[data-civ-body]');
-  if (st.tab === 'overview') renderCivOverview(win, body, summary);
-  else if (st.tab === 'nations') renderCivNations(win, body);
-  else if (st.tab === 'law') renderCivLaw(win, body);
-  else if (st.tab === 'knowledge') renderCivKnowledge(win, body);
-  else if (st.tab === 'media') renderCivMedia(win, body);
-  else if (st.tab === 'infrastructure') renderCivCities(win, body);
-  else if (st.tab === 'property') renderCivProperty(win, body);
-  else if (st.tab === 'industry') renderCivIndustry(win, body);
-  else if (st.tab === 'culture') renderCivCulture(win, body);
-  else if (st.tab === 'history') renderCivHistory(win, body);
-  else renderCivIdentity(win, body);
-  win.status.innerHTML = `<span>${esc(summary.worldId)}</span><span>${esc(tabs.find(t => t[0] === st.tab)?.[1] || '')}</span><span class="st-right"><b>${summary.activeEvents.length} active events</b><span>${summary.history} timeline records</span></span>`;
-}
-
-function renderCivOverview(win, body, s) {
-  const g = app.game;
-  const civ = g.civ;
-  const events = civ.events.filter(e => e.status === 'active').slice(0, 6);
-  const countries = [...civ.countries].sort((a, b) => b.gdpReal - a.gdpReal).slice(0, 6);
-  body.innerHTML = `<div class="profile-grid" style="grid-template-columns:repeat(4,minmax(0,1fr))">
-      ${civMetric('POPULATION', fmtNum(s.population), 'simulated citizens')}
-      ${civMetric('INTERNET ACCESS', `${s.internet}%`, 'across all nations')}
-      ${civMetric('LITERACY INDEX', `${s.literacy}`, 'education + access')}
-      ${civMetric('GLOBAL STABILITY', `${s.stability}`, 'weighted average')}
-      ${civMetric('RESEARCH PROGRAMS', String(s.research), `${s.discoveries} discoveries`)}
-      ${civMetric('TECHNOLOGIES', String(s.products), 'released products')}
-      ${civMetric('MEDIA STORIES', String(s.stories), 'public record')}
-      ${civMetric('PROPERTY', String(s.listings), `${s.ownedProperty} owned by you`)}
-    </div>
-    <div class="section-label" style="margin-top:14px">ACTIVE WORLD EVENTS <b>${events.length}</b></div>
-    <div class="market-grid">${events.map(e => civEventCard(e)).join('') || '<div class="empty-state"><b>No active shocks</b>The world is between crises. This is temporary.</div>'}</div>
-    <div class="section-label" style="margin-top:14px">MAJOR ECONOMIES</div>
-    <div class="market-grid">${countries.map(c => civCountryCard(c)).join('')}</div>
-    <div class="section-label" style="margin-top:14px">LATEST HISTORY</div>
-    <div class="civ-timeline">${filteredHistory(g, { limit: 8 }).map(h => civHistoryRow(h)).join('')}</div>`;
-  bindCivCountryButtons(win, body);
-}
-
-function civEventCard(e) {
-  const country = app.game.civ.countries.find(c => c.id === e.countryId);
-  return `<div class="mcard"><div class="top"><h3>${esc(e.title)}</h3>${tag(e.status, e.status === 'active' ? 'a' : 'g')}</div>
-    <p>${esc(e.detail)}</p><div class="meta">${tag(e.type, 'b')}${tag(`severity ${e.severity}`, e.severity >= 4 ? 'r' : 'a')}${country ? tag(country.code) : ''}</div></div>`;
-}
-function civCountryCard(c) {
-  return `<button class="mcard civ-country-card" data-civ-country="${esc(c.id)}" style="text-align:left;cursor:pointer">
-    <div class="top"><h3>${esc(c.name)}</h3>${tag(c.code, 'b')}</div>
-    <p>${esc(c.government)} · ${esc(c.capital)} · ${esc(c.currency.code)}</p>
-    <div class="meta">${tag(`GDP ${fmtMoney(c.gdpReal).replace('$', '$')}`, 'g')}${tag(`net ${c.internet}%`)}${tag(`stability ${c.stability}`, c.stability > 70 ? 'g' : 'a')}</div>
-    <div class="bottom"><span class="price">${fmtNum(c.population)}<small> people</small></span><span class="tag">${esc(c.leader)}</span></div>
-  </button>`;
-}
-function civHistoryRow(h) {
-  const country = app.game.civ.countries.find(c => c.id === h.countryId);
-  return `<div class="civ-history-row"><div class="civ-history-dot"></div><div><div class="civ-history-time">CYCLE ${String(Math.floor(h.world / 1440) + 1).padStart(3, '0')} · ${esc(h.type)}${country ? ` · ${esc(country.code)}` : ''}</div><b>${esc(h.title)}</b><p>${esc(h.detail)}</p></div></div>`;
-}
-function bindCivCountryButtons(win, body) {
-  for (const b of $$('[data-civ-country]', body)) b.addEventListener('click', () => {
-    win.state.countryId = b.dataset.civCountry;
-    win.state.tab = 'nations';
-    renderCivilization(win);
-  });
-}
-
-function renderCivNations(win, body) {
-  const g = app.game;
-  const civ = g.civ;
-  const selected = civ.countries.find(c => c.id === win.state.countryId) || civ.countries[0];
-  const agreements = civ.agreements.filter(a => a.parties.includes(selected.id));
-  const sanctions = civ.sanctions.filter(s => s.from === selected.id || s.against === selected.id);
-  const cities = civ.cities.filter(c => c.countryId === selected.id);
-  const rel = Object.entries(selected.relations || {}).map(([id, r]) => ({ country: civ.countries.find(c => c.id === id), ...r })).filter(x => x.country).sort((a, b) => b.trade - a.trade).slice(0, 6);
-  body.innerHTML = `<div style="display:flex;gap:4px;flex-wrap:wrap;margin-bottom:10px">${civ.countries.map(c => `<button class="tbtn small ${c.id === selected.id ? 'primary' : ''}" data-civ-country="${esc(c.id)}">${esc(c.code)} ${esc(c.name)}</button>`).join('')}</div>
-    <div class="mcard" style="padding:14px">
-      <div class="top"><h3>${esc(selected.name)}</h3><span>${tag(selected.government, 'b')}${tag(selected.currency.code, 'g')}</span></div>
-      <p>${esc(selected.leader)} · ${esc(selected.capital)} · ${esc(selected.region)}</p>
-      <div class="profile-grid" style="grid-template-columns:repeat(4,minmax(0,1fr));margin-top:10px">
-        ${civMetric('GDP', fmtMoney(selected.gdpReal), `${(selected.growth * 100).toFixed(1)}% growth`)}
-        ${civMetric('POPULATION', fmtNum(selected.population), `${selected.internet}% online`)}
-        ${civMetric('TREASURY', fmtMoney(selected.treasury), `${Math.round(selected.tax * 100)}% tax`)}
-        ${civMetric('APPROVAL', `${selected.approval}%`, `${selected.stability} stability`)}
-        ${civMetric('PRIVACY', String(selected.privacy), 'legal posture')}
-        ${civMetric('CIVIL LIBERTY', String(selected.liberty), 'institutional')}
-        ${civMetric('ENERGY', String(selected.energy), 'grid resilience')}
-        ${civMetric('INNOVATION', String(selected.metrics.innovation), 'research capacity')}
-      </div>
-      <div class="meta" style="margin-top:10px">${tag(selected.digitalPolicy, 'b')}${tag(selected.cyberPolicy, 'a')}${selected.techFocus.map(t => tag(t)).join('')}</div>
-    </div>
-    <div class="section-label" style="margin-top:14px">CITIES</div>
-    <div class="market-grid">${cities.map(c => `<div class="mcard"><div class="top"><h3>${esc(c.name)}</h3>${tag(c.capital ? 'capital' : 'regional', c.capital ? 'g' : '')}</div><p>${fmtNum(c.population)} people · ${esc(c.districts.join(', '))}</p><div class="meta">${tag(`power ${c.infra.power}`, c.infra.power < 50 ? 'r' : 'g')}${tag(`fiber ${c.infra.fiber}`, c.infra.fiber < 50 ? 'a' : 'b')}${tag(`${c.infra.latency}ms`)}</div></div>`).join('')}</div>
-    <div class="section-label" style="margin-top:14px">INSTITUTIONS</div>
-    <div class="market-grid">${(selected.institutionIds || []).map(id => civ.institutions.find(i => i.id === id)).filter(Boolean).map(i => `<div class="mcard"><div class="top"><h3>${esc(i.name)}</h3>${tag(i.kind, 'b')}</div><p>Integrity ${i.integrity} · capacity ${i.capacity} · ${fmtMoney(i.budget)}</p></div>`).join('')}</div>
-    <div class="section-label" style="margin-top:14px">INTERNATIONAL RELATIONS</div>
-    <div class="market-grid">${rel.map(r => `<div class="mcard"><div class="top"><h3>${esc(r.country.name)}</h3>${tag(r.treaty ? 'treaty' : 'no treaty', r.treaty ? 'g' : '')}</div><div class="meta">${tag(`trade ${r.trade}`, 'g')}${tag(`diplomacy ${r.diplomacy}`, 'b')}${tag(`tension ${r.tension}`, r.tension > 55 ? 'r' : '')}${tag(`cyber ${r.cyber}`, 'a')}</div></div>`).join('')}</div>
-    <div class="section-label" style="margin-top:14px">AGREEMENTS + SANCTIONS</div>
-    <div>${agreements.map(a => `<div class="civ-history-row"><div class="civ-history-dot"></div><div><b>${esc(a.name)}</b><p>${esc(a.provisions.join(' · '))}</p></div></div>`).join('')}${sanctions.map(s => `<div class="civ-history-row"><div class="civ-history-dot" style="background:var(--red)"></div><div><b>${esc(s.kind)}</b><p>${esc(s.scope.join(', '))} · ${esc(s.status)}</p></div></div>`).join('')}</div>`;
-  bindCivCountryButtons(win, body);
-}
-
-function renderCivLaw(win, body) {
-  const g = app.game;
-  const civ = g.civ;
-  const selected = civ.countries.find(c => c.id === win.state.countryId) || civ.countries[0];
-  const laws = civ.laws.filter(l => l.countryId === selected.id);
-  const disputes = civ.legal.disputes.filter(d => d.countryId === selected.id || d.subjectId === 'player').slice(0, 8);
-  const risk = complianceReport(g, 'company', selected.id);
-  body.innerHTML = `<div style="display:flex;gap:4px;flex-wrap:wrap;margin-bottom:10px">${civ.countries.map(c => `<button class="tbtn small ${c.id === selected.id ? 'primary' : ''}" data-civ-country="${esc(c.id)}">${esc(c.code)}</button>`).join('')}</div>
-    <div class="market-grid">
-      ${laws.map(l => `<div class="mcard"><div class="top"><h3>${esc(l.name)}</h3>${tag(l.stance, l.stance === 'strict' ? 'r' : l.stance === 'permissive' ? 'g' : 'a')}</div><p>${esc(l.summary)}</p><div class="meta">${tag(`severity ${l.severity}`, 'b')}${tag(`changed cycle ${Math.floor(l.lastChangedWorld / 1440) + 1}`)}</div></div>`).join('')}
-    </div>
-    <div class="section-label" style="margin-top:14px">COMPLIANCE POSITION <b>${Math.round(risk.risk * 100)}% risk</b></div>
-    <div class="mcard"><p>Your commercial activity in ${esc(selected.name)} is evaluated against privacy, data, business, labor, consumer, finance, cybercrime, crypto and contract law. Studying digital law and maintaining a clean record lowers exposure.</p><div class="meta">${tag(`operator risk ${Math.round(risk.risk * 100)}%`, risk.risk > .1 ? 'a' : 'g')}${tag(`law level ${g.player.education?.subjects?.law?.level || 0}`, 'b')}${tag(`${risk.disputes.length} open cases`)}</div></div>
-    <div class="section-label" style="margin-top:14px">DISPUTES + COURTS</div>
-    <div class="market-grid">${disputes.map(d => `<div class="mcard"><div class="top"><h3>${esc(d.title)}</h3>${tag(d.status, d.status === 'settled' ? 'g' : 'a')}</div><p>${esc(d.subjectName)} · ${esc(d.domain)} · exposure ${fmtMoney(d.exposure)}</p><div class="meta">${tag(d.id)}${tag(d.severity >= 3 ? 'major' : 'standard', d.severity >= 3 ? 'r' : '')}</div>${d.subjectId === 'player' && !['settled', 'decided', 'closed'].includes(d.status) ? `<div class="bottom"><span></span><button class="tbtn small" data-civ-defend="${esc(d.id)}">Defend</button></div>` : ''}</div>`).join('') || '<div class="empty-state"><b>No disputes</b>No open cases in this jurisdiction.</div>'}</div>`;
-  bindCivCountryButtons(win, body);
-  for (const b of $$('[data-civ-defend]', body)) b.addEventListener('click', () => civRun(win, `court defend ${b.dataset.civDefend}`));
-}
-
-function renderCivKnowledge(win, body) {
-  const g = app.game;
-  const civ = g.civ;
-  const edu = g.player.education || { subjects: {}, credentials: [] };
-  const active = civ.research.projects.filter(p => p.status === 'active' && p.ownerType === 'player');
-  body.innerHTML = `<div class="section-label">YOUR KNOWLEDGE <b>${edu.totalLevels || 0} levels</b></div>
-    <div class="market-grid">${SUBJECTS.map(sub => {
-      const st = edu.subjects[sub.id] || { level: 0, progress: 0 };
-      return `<div class="mcard"><div class="top"><h3>${esc(sub.name)}</h3>${tag(`level ${st.level}`, st.level >= 3 ? 'g' : 'b')}</div>
-        <p>${esc(sub.desc)}</p><div class="meta">${tag(sub.credential)}${tag(`+${sub.practical}`)}</div>
-        <div class="bar" style="margin:8px 0 6px"><i style="width:${Math.round(st.progress || 0)}%"></i></div>
-        <div class="bottom"><span class="dim">${Math.round(st.progress || 0)}%</span><button class="tbtn small" data-civ-study="${esc(sub.id)}">Study</button></div></div>`;
-    }).join('')}</div>
-    <div class="section-label" style="margin-top:14px">CREDENTIALS</div>
-    <div style="display:flex;gap:4px;flex-wrap:wrap">${(edu.credentials || []).map(c => tag(c, 'g')).join('') || '<span class="dim" style="font-size:9px">No credentials yet. Reach level 3 in a subject.</span>'}</div>
-    <div class="section-label" style="margin-top:14px">YOUR RESEARCH <b>${active.length} active</b></div>
-    <div class="market-grid">${active.map(p => `<div class="mcard"><div class="top"><h3>${esc(p.title)}</h3>${tag(p.stage, 'b')}</div><p>${esc(p.field)} · quality ${Math.round(p.quality)} · ${fmtMoney(p.funding)} funded</p><div class="bar" style="margin:8px 0 6px"><i style="width:${Math.round(p.progress)}%"></i></div><div class="bottom"><span class="dim">${Math.round(p.progress)}%</span><button class="tbtn small" data-civ-fund="${esc(p.id)}">Fund +$500</button></div></div>`).join('') || '<div class="empty-state"><b>No active program</b>Start a research field below. Time, funding, equipment and expertise determine progress.</div>'}</div>
-    <div class="section-label" style="margin-top:14px">START A RESEARCH PROGRAM</div>
-    <div style="display:flex;flex-wrap:wrap;gap:4px">${RESEARCH_FIELDS.map(f => `<button class="tbtn small" data-civ-research="${esc(f.id)}">${esc(f.name)} · ${fmtMoney(f.baseCost)}</button>`).join('')}</div>
-    <div class="section-label" style="margin-top:14px">DISCOVERIES</div>
-    <div class="market-grid">${civ.research.discoveries.slice(0, 12).map(d => `<div class="mcard"><div class="top"><h3>${esc(d.title)}</h3>${tag(d.field, 'b')}</div><p>${esc(d.ownerName)} · ${d.year} · ${fmtNum(d.citations)} citations</p><div class="meta">${tag(d.status, 'g')}${d.commercialized ? tag('commercialized', 'b') : ''}</div></div>`).join('')}</div>`;
-  for (const b of $$('[data-civ-study]', body)) b.addEventListener('click', () => civRun(win, `study ${b.dataset.civStudy} 2`));
-  for (const b of $$('[data-civ-fund]', body)) b.addEventListener('click', () => civRun(win, `research fund ${b.dataset.civFund} 500`));
-  for (const b of $$('[data-civ-research]', body)) b.addEventListener('click', () => civRun(win, `research start ${b.dataset.civResearch}`));
-}
-
-function renderCivMedia(win, body) {
-  const g = app.game;
-  const civ = g.civ;
-  const opinion = civ.countries.map(c => ({ country: c, o: civ.media.opinion[c.id] })).filter(x => x.o);
-  body.innerHTML = `<div class="app-toolbar" style="padding:0 0 9px;border:0;background:transparent"><button class="tbtn small primary" data-civ-publish="1">${ic('plus')} Publish independent dispatch</button><span class="spacer"></span><span class="dim" style="font-size:9px">Audience spreads through trust, reach and sharing.</span></div>
-    <div class="market-grid">${civ.media.stories.slice(0, 18).map(s => `<div class="mcard"><div class="top"><h3>${esc(s.title)}</h3>${tag(s.status, s.status === 'corrected' ? 'a' : s.misinformation ? 'r' : 'g')}</div><p>${esc(s.outletName)} · ${esc(s.type)}${s.author ? ` · @${esc(s.author)}` : ''}</p><div class="meta">${tag(`trust ${s.trust}`, s.trust > 60 ? 'g' : 'a')}${tag(`reach ${fmtNum(s.reach)}`, 'b')}${(s.tags || []).map(t => tag(t)).join('')}</div>${s.correction ? `<p class="dim" style="color:var(--amber)">${esc(s.correction)}</p>` : ''}</div>`).join('')}</div>
-    <div class="section-label" style="margin-top:14px">MEDIA ORGANIZATIONS</div>
-    <div class="market-grid">${[...civ.media.outlets].sort((a, b) => b.audience - a.audience).slice(0, 12).map(o => `<div class="mcard"><div class="top"><h3>${esc(o.name)}</h3>${tag(o.kind, 'b')}</div><p>${esc(o.funding || 'independent')} · trust ${o.trust}</p><div class="meta">${tag(`audience ${fmtNum(o.audience)}`, 'g')}${tag(`${o.corrections} corrections`, o.corrections ? 'a' : '')}</div></div>`).join('')}</div>
-    <div class="section-label" style="margin-top:14px">PUBLIC OPINION</div>
-    <div class="market-grid">${opinion.map(({ country, o }) => `<div class="mcard"><div class="top"><h3>${esc(country.name)}</h3>${tag(country.code, 'b')}</div><div class="meta">${tag(`media trust ${o.trustMedia}`, o.trustMedia > 55 ? 'g' : 'a')}${tag(`tech optimism ${o.techOptimism}`, 'b')}${tag(`privacy concern ${o.privacyConcern}`, 'a')}</div></div>`).join('')}</div>`;
-  const pb = body.querySelector('[data-civ-publish]');
-  if (pb) pb.addEventListener('click', () => civPublishDialog(win));
-}
-
-function renderCivCities(win, body) {
-  const g = app.game;
-  const civ = g.civ;
-  const incidents = civ.events.filter(e => e.status === 'active' && (e.type === 'infrastructure' || e.type === 'supply'));
-  body.innerHTML = `<div class="market-grid">${civ.cities.map(c => {
-    const country = civ.countries.find(x => x.id === c.countryId);
-    const dc = c.dataCenters[0];
-    return `<div class="mcard"><div class="top"><h3>${esc(c.name)}</h3>${tag(c.status, c.status === 'operational' ? 'g' : 'a')}</div>
-      <p>${esc(country?.name || '')} · ${fmtNum(c.population)} people · ${esc(c.region)}</p>
-      <div class="meta">${tag(`power ${c.infra.power}`, c.infra.power < 50 ? 'r' : 'g')}${tag(`fiber ${c.infra.fiber}`, c.infra.fiber < 55 ? 'a' : 'b')}${tag(`water ${c.infra.water}`)}${tag(`transport ${c.infra.transport}`)}</div>
-      <div style="font-family:var(--mono);font-size:8px;color:var(--faint);margin-top:6px">latency ${c.infra.latency}ms · energy ${fmtMoney(c.infra.energyPrice)}/MWh · ${dc ? `${esc(dc.name)} load ${dc.load}%` : 'no public data center'}</div>
-    </div>`;
-  }).join('')}</div>
-    <div class="section-label" style="margin-top:14px">INFRASTRUCTURE SHOCKS</div>
-    <div class="market-grid">${incidents.map(e => civEventCard(e)).join('') || '<div class="empty-state"><b>Grids nominal</b>No active infrastructure event.</div>'}</div>`;
-}
-
-function renderCivProperty(win, body) {
-  const g = app.game;
-  const civ = g.civ;
-  const owned = civ.property.owned;
-  const listings = civ.property.listings.filter(l => l.status === 'listed').slice(0, 24);
-  body.innerHTML = `<div class="profile-grid" style="grid-template-columns:repeat(4,minmax(0,1fr))">
-      ${civMetric('MARKET RENT', fmtMoney(playerPropertyIncome(g)), 'your monthly gross')}
-      ${civMetric('MORTGAGE RATE', `${(civ.property.market.mortgageRate * 100).toFixed(1)}%`, '30-year benchmark')}
-      ${civMetric('VACANCY', `${Math.round(civ.property.market.vacancy * 100)}%`, 'listed inventory')}
-      ${civMetric('OWNED', String(owned.length), `${listings.length} listings shown`)}
-    </div>
-    <div class="section-label" style="margin-top:14px">YOUR PROPERTY</div>
-    <div class="market-grid">${owned.map(p => `<div class="mcard"><div class="top"><h3>${esc(p.name)}</h3>${tag(p.domain, 'b')}</div><p>${fmtMoney(p.marketValue)} value · ${fmtMoney(p.rent)}/mo rent · condition ${p.condition}</p><div class="meta">${tag(p.mortgage ? `mortgage ${fmtMoney(p.mortgage.balance)}` : 'owned outright', p.mortgage ? 'a' : 'g')}${tag(`maintenance ${fmtMoney(p.maintenance)}`)}</div><div class="bottom"><span class="price">${fmtMoney(p.rent * p.occupancy)}<small>/mo net</small></span><button class="tbtn small" data-civ-sell="${esc(p.id)}">Sell</button></div></div>`).join('') || '<div class="empty-state"><b>No property</b>Acquire an apartment, office, warehouse, data center or land. Income and costs accrue monthly.</div>'}</div>
-    <div class="section-label" style="margin-top:14px">LISTINGS</div>
-    <div class="market-grid">${listings.map(l => {
-      const city = civ.cities.find(c => c.id === l.cityId);
-      return `<div class="mcard"><div class="top"><h3>${esc(l.name)}</h3>${tag(l.domain, 'b')}</div><p>${esc(city?.name || '')} · ${l.condition} condition · ${Math.round(l.occupancy * 100)}% occupied</p><div class="meta">${tag(fmtMoney(l.rent) + '/mo rent', 'g')}${tag(fmtMoney(l.maintenance) + ' maintenance', 'a')}${tag(`tax ${fmtMoney(l.tax)}`)}</div><div class="bottom"><span class="price">${fmtMoney(l.asking)}</span><button class="tbtn small primary" data-civ-buy="${esc(l.id)}">Buy</button></div></div>`;
-    }).join('')}</div>`;
-  for (const b of $$('[data-civ-buy]', body)) b.addEventListener('click', () => civRun(win, `property buy ${b.dataset.civBuy}`));
-  for (const b of $$('[data-civ-sell]', body)) b.addEventListener('click', () => civRun(win, `property sell ${b.dataset.civSell}`));
-}
-
-function renderCivIndustry(win, body) {
-  const g = app.game;
-  const civ = g.civ;
-  body.innerHTML = `<div class="section-label">TECHNOLOGY ECOSYSTEMS</div>
-    <div class="market-grid">${civ.tech.sectors.map(s => `<div class="mcard"><div class="top"><h3>${esc(s.name)}</h3>${tag(`${Math.round(s.adoption * 100)}% adoption`, 'g')}</div><div class="bar" style="margin:8px 0"><i style="width:${Math.round(s.adoption * 100)}%"></i></div><div class="meta">${tag(`license ${s.license}`, 'b')}${tag(`maturity ${s.maturity}`)}${tag(`competition ${s.competition}`, 'a')}</div><div style="font-family:var(--mono);font-size:8px;color:var(--faint);margin-top:5px">${(s.leaders || []).map(id => civ.tech.products.find(p => p.id === id)?.name).filter(Boolean).slice(0, 3).join(' · ') || 'no dominant product'}</div></div>`).join('')}</div>
-    <div class="section-label" style="margin-top:14px">COMMODITY MARKET</div>
-    <div class="market-grid">${civ.supply.resources.map(r => `<div class="mcard"><div class="top"><h3>${esc(r.name)}</h3>${tag(r.status, r.status === 'shortage' ? 'r' : r.status === 'tight' ? 'a' : 'g')}</div><p>${fmtMoney(r.price)} / ${esc(r.unit)} · stock ${fmtNum(r.stock)}</p><div class="meta">${tag(`production ${fmtNum(r.production)}`)}${tag(`consumption ${fmtNum(r.consumption)}`)}<button class="tbtn small" data-civ-trade="${esc(r.id)}">Buy 10</button></div></div>`).join('')}</div>
-    <div class="section-label" style="margin-top:14px">COMPONENTS + MANUFACTURING</div>
-    <div class="market-grid">${civ.supply.components.map(c => `<div class="mcard"><div class="top"><h3>${esc(c.name)}</h3>${tag(c.status, c.status === 'shortage' ? 'r' : c.status === 'tight' ? 'a' : 'g')}</div><p>${fmtMoney(c.price)} · ${fmtNum(c.stock)} in stock · lead ${c.leadTimeDays}d</p><div class="bar" style="margin:7px 0"><i style="width:${Math.round((1 - c.shortage) * 100)}%"></i></div><div class="meta">${tag(`demand ${fmtNum(c.demand)}`)}${tag(`production ${fmtNum(c.production)}`)}</div></div>`).join('')}</div>
-    <div class="section-label" style="margin-top:14px">RELEASED TECHNOLOGIES</div>
-    <div class="market-grid">${civ.tech.products.slice(0, 18).map(p => `<div class="mcard"><div class="top"><h3>${esc(p.name)} ${esc(p.version)}</h3>${tag(p.license, 'b')}</div><p>${esc(p.companyName)} · ${esc(p.sector)}</p><div class="meta">${tag(`adoption ${(p.adoption * 100).toFixed(1)}%`, 'g')}${tag(`docs ${p.documentation}`)}${tag(`${(p.compatibility || []).length} compatible`)}</div></div>`).join('')}</div>`;
-  for (const b of $$('[data-civ-trade]', body)) b.addEventListener('click', () => civRun(win, `trade buy ${b.dataset.civTrade} 10`));
-}
-
-function renderCivCulture(win, body) {
-  const g = app.game;
-  const civ = g.civ;
-  body.innerHTML = `<div class="app-toolbar" style="padding:0 0 9px;border:0;background:transparent"><button class="tbtn small primary" data-civ-culture="1">${ic('plus')} Create a release</button><span class="spacer"></span><span class="dim" style="font-size:9px">Games, music, streaming, art, communities and esports.</span></div>
-    <div class="market-grid">${civ.culture.releases.slice(0, 18).map(r => `<div class="mcard"><div class="top"><h3>${esc(r.title)}</h3>${tag(r.type, 'b')}</div><p>${esc(r.orgName)} · quality ${r.quality} · ${fmtNum(r.audience)} audience</p><div class="meta">${tag(`revenue ${fmtMoney(r.revenue)}`, 'g')}${r.playerOwned ? tag('yours', 'g') : ''}</div></div>`).join('')}</div>
-    <div class="section-label" style="margin-top:14px">CULTURE ORGANIZATIONS</div>
-    <div class="market-grid">${[...civ.culture.organizations].sort((a, b) => b.audience - a.audience).slice(0, 14).map(o => `<div class="mcard"><div class="top"><h3>${esc(o.name)}</h3>${tag(o.kind, 'b')}</div><p>${esc(civ.cities.find(c => c.id === o.cityId)?.name || 'distributed')} · quality ${o.quality}</p><div class="meta">${tag(`audience ${fmtNum(o.audience)}`, 'g')}${tag(`revenue ${fmtMoney(o.revenue)}`)}</div></div>`).join('')}</div>
-    <div class="section-label" style="margin-top:14px">TOURNAMENTS + COMMUNITIES</div>
-    <div class="market-grid">${civ.culture.tournaments.map(t => `<div class="mcard"><div class="top"><h3>${esc(t.name)}</h3>${tag(t.status, t.status === 'complete' ? 'g' : 'a')}</div><p>${esc(t.game)} · prize ${fmtMoney(t.prize)}${t.winner ? ` · winner ${esc(t.winner)}` : ''}</p></div>`).join('')}${civ.culture.communities.slice(0, 4).map(c => `<div class="mcard"><div class="top"><h3>${esc(c.name)}</h3>${tag('community', 'b')}</div><p>${esc(c.topic)} · ${fmtNum(c.members)} members</p><div class="meta">${tag(`trust ${c.trust}`, 'g')}</div></div>`).join('')}</div>`;
-  const cb = body.querySelector('[data-civ-culture]');
-  if (cb) cb.addEventListener('click', () => civCultureDialog(win));
-}
-
-function renderCivHistory(win, body) {
-  const g = app.game;
-  const st = win.state;
-  const types = ['all', 'economy', 'law', 'research', 'infrastructure', 'supply', 'media', 'culture', 'diplomacy', 'technology'];
-  let history = filteredHistory(g, { type: st.historyType === 'all' ? null : st.historyType, limit: 120 });
-  if (st.historyQuery) history = history.filter(h => `${h.title} ${h.detail}`.toLowerCase().includes(st.historyQuery.toLowerCase()));
-  body.innerHTML = `<div class="app-toolbar" style="padding:0 0 9px;border:0;background:transparent;flex-wrap:wrap"><input class="term-input" data-civ-history-query placeholder="Search the historical record" value="${esc(st.historyQuery)}" style="max-width:260px;padding:6px 8px"><span class="spacer"></span>${types.map(t => `<button class="tbtn small ${st.historyType === t ? 'primary' : ''}" data-civ-history-type="${t}">${t}</button>`).join('')}</div>
-    <div class="civ-timeline">${history.map(h => civHistoryRow(h)).join('') || '<div class="empty-state"><b>No records</b>Nothing matches that filter yet.</div>'}</div>`;
-  for (const b of $$('[data-civ-history-type]', body)) b.addEventListener('click', () => { st.historyType = b.dataset.civHistoryType; renderCivilization(win); });
-  const input = body.querySelector('[data-civ-history-query]');
-  if (input) {
-    input.addEventListener('input', () => { st.historyQuery = input.value; });
-    input.addEventListener('keydown', e => { if (e.key === 'Enter') renderCivilization(win); });
-  }
-}
-
-function renderCivIdentity(win, body) {
-  const g = app.game;
-  const civ = g.civ;
-  const identity = identityFor(g, g.player.handle);
-  const auth = verifyAuthority(g);
-  const people = Object.values(civ.identities).filter(i => i.handle !== g.player.handle).sort((a, b) => b.contexts.public - a.contexts.public).slice(0, 12);
-  body.innerHTML = `<div class="mcard" style="padding:14px"><div class="top"><h3>@${esc(g.player.handle)}</h3>${tag('you', 'g')}</div>
-      <p>${esc(g.player.name)} · ${esc(g.player.title)} · ${esc(g.player.host)}</p>
-      <div class="profile-grid" style="grid-template-columns:repeat(4,minmax(0,1fr));margin-top:10px">
-        ${civMetric('PROFESSIONAL', String(identity?.contexts?.professional || 0), 'work + research')}
-        ${civMetric('COMMUNITY', String(identity?.contexts?.community || 0), 'social trust')}
-        ${civMetric('PUBLIC', String(identity?.contexts?.public || 0), 'media reach')}
-        ${civMetric('SECURITY TRUST', String(identity?.security?.trust || 0), 'heat + incidents')}
-      </div>
-      <div class="meta" style="margin-top:9px">${(identity?.credentials || []).map(c => tag(c, 'b')).join('')}${identity?.published?.length ? tag(`${identity.published.length} published works`, 'g') : ''}</div>
-    </div>
-    <div class="section-label" style="margin-top:14px">SHARED-WORLD AUTHORITY <b>${auth.ok ? 'verified' : 'checksum mismatch'}</b></div>
-    <div class="mcard"><p>Local authoritative mode · revision ${auth.revision} · ${auth.members} member${auth.members === 1 ? '' : 's'} · ${auth.rejected} rejected actions.</p><div class="meta">${tag('idempotent ledger', 'g')}${tag('permissioned actions', 'b')}${tag('server-portable', 'a')}</div></div>
-    <div class="section-label" style="margin-top:14px">CONTEXTUAL REPUTATION</div>
-    <div class="market-grid">${people.map(p => `<div class="mcard"><div class="top"><h3>@${esc(p.handle)}</h3>${tag(p.name, 'b')}</div><p>${esc(p.credentials?.join(', ') || 'independent')}</p><div class="meta">${tag(`pro ${p.contexts.professional}`, 'g')}${tag(`community ${p.contexts.community}`, 'b')}${tag(`public ${p.contexts.public}`, 'a')}</div></div>`).join('')}</div>`;
-}
-
-function civPublishDialog(win) {
-  formModal({
-    title: 'Publish an independent dispatch', eyebrow: 'MEDIA',
-    body: '<p>Independent publication costs $90 minus your media training. Trust and audience determine reach. Corrections are part of the public record.</p>',
-    fields: [{ name: 'title', label: 'Headline', value: '', placeholder: 'A quiet change in the routing tables' }],
-    submit: 'Publish',
-    onSubmit: vals => {
-      if (!vals.title.trim()) return false;
-      runCommand(`publish "${vals.title.replace(/"/g, '')}"`);
-      setTimeout(() => { if (win.render) win.render(); }, 180);
-    }
-  });
-}
-function civCultureDialog(win) {
-  formModal({
-    title: 'Create a cultural release', eyebrow: 'CULTURE',
-    body: '<p>Games, music, streaming, digital art, communities and esports. Production costs $240; quality depends on your relevant knowledge and reputation.</p>',
-    fields: [
-      { name: 'title', label: 'Title', value: '', placeholder: 'Glasshouse' },
-      { name: 'type', label: 'Format', type: 'select', value: 'game', options: [{ value: 'game', label: 'Game' }, { value: 'music', label: 'Music' }, { value: 'streaming', label: 'Streaming' }, { value: 'art', label: 'Digital art' }, { value: 'community', label: 'Community' }, { value: 'esports', label: 'Esports' }] }
-    ],
-    submit: 'Release',
-    onSubmit: vals => {
-      if (!vals.title.trim()) return false;
-      runCommand(`culture create "${vals.title.replace(/"/g, '')}" ${vals.type}`);
-      setTimeout(() => { if (win.render) win.render(); }, 180);
-    }
-  });
-}
-function civRun(win, cmd) {
-  runCommand(cmd);
-  setTimeout(() => { if (win.render) win.render(); }, 180);
 }
 
 /* ============================================================

@@ -26,12 +26,13 @@ import {
   AGENT_ROLES, PRODUCT_TEMPLATES
 } from './data.js';
 import {
-  study, startResearch, fundResearch, publishContent, buyProperty, sellProperty,
-  investCompany, tradeCommodity, createCulture, complianceReport, defendDispute,
-  civSummary, filteredHistory, identityFor, contextualReputation, verifyAuthority,
-  findCountry, findCity, playerPropertyIncome
+  civilizationSummary, civHistory, civEventList, educationFields, researchFields, lawDomains,
+  playerStudy, playerStartResearch, playerFundResearch, playerPublish, playerBuyProperty,
+  playerSellProperty, playerLobby, playerRelocate, playerAdoptTech, playerProperties,
+  playerCredentials, playerCompliance, getCivCountry, getCivCity, playerCountry, playerCity,
+  outletFor, researchField, civKnowledge, validateLedger, sharedSnapshot, joinSharedWorld,
+  disconnectSharedPlayer, activeLegalDisputes
 } from './civilization.js';
-import { SUBJECTS, RESEARCH_FIELDS, LAW_DOMAINS } from './civ-data.js';
 
 const CMD_ALIASES = {
   ll: 'ls -la', la: 'ls -a', l: 'ls', ports: 'ss -tulnp', dir: 'ls',
@@ -333,9 +334,9 @@ COMMANDS.help = (ctx) => {
     ['DEVELOP', 'python3  bash  gcc  make  git  sqlite3  node  docker  kubectl'],
     ['CLOUD', 'cloud  docker  kubectl'],
     ['AI', 'agent  agent models  agent deploy  company'],
-    ['ECONOMY', 'bank  contracts  accept  submit  market  buy  deploy  domains  site  servers  company  trade  invest  property'],
-    ['SOCIAL', 'mail  send  read  forum  thread  post  news  profile  search  whois  identity  publish'],
-    ['CIVILIZATION', 'civ  nation  law  court  study  research  culture  timeline  property  trade'],
+    ['ECONOMY', 'bank  contracts  accept  submit  market  buy  deploy  domains  site  servers  company'],
+    ['SOCIAL', 'mail  send  read  forum  thread  post  news  profile  search  whois'],
+    ['CIVILIZATION', 'civ  country  study  research  publish  civ laws  civ legal  civ identity  civ property  civ tech  civ supply  civ history  civ events  civ mp'],
     ['WORLD', 'map  status  world  achievements  save  reset  neofetch  history  clear'],
   ];
   for (const [g, cmds] of groups) {
@@ -367,19 +368,7 @@ function manPage(ctx, name) {
     kubectl: ['kubectl — orchestration', 'kubectl create cluster <name> [node...] | get pods|nodes|deploy | apply -f <manifest> | scale deployment/<name> --replicas N', 'A small Kubernetes-style control plane over your own nodes. Manifests are read from the virtual filesystem.'],
     agent: ['agent — autonomous AI agents', 'agent list [--all] | models | roles | deploy <name> --role <role> --model <model> | inspect <name> | start|stop|pause <name> | assign <name> <domain>', 'Agents perform bounded work on your infrastructure. They cost money, remember what they did, and pause when something looks wrong.'],
     company: ['company — organizations', 'company list | inspect <name> | register <name> | launch <product> | products | mine', 'Register and operate your own technology company. Products generate recurring revenue based on subscribers and reputation.'],
-    civ: ['civ — digital civilization', 'civ [overview|nations|law|cities|market|media|research|property|culture|history|identity|authority]', 'Reads the shared countries, cities, laws, research, media, supply chains, property and historical timeline.'],
-    nation: ['nation — countries', 'nation [code|name]', 'Shows government, economy, infrastructure, institutions and cities for a simulated country.'],
-    law: ['law — legal environment', 'law [country] [activity]', 'Lists statutes and your compliance risk. Digital law study reduces exposure; court defend handles open cases.'],
-    study: ['study — education', 'study <subject> [hours]', 'Builds practical knowledge and credentials. Subjects map to research, security, media, finance and infrastructure outcomes.'],
-    research: ['research — programs', 'research start <field> | research fund <program> <amount> | research', 'Funds projects that require time, equipment and expertise. Completed work can produce discoveries and technologies.'],
-    publish: ['publish — independent media', 'publish "<headline>"', 'Publishes a dispatch. Cost, trust and audience determine reach; the record is permanent.'],
-    property: ['property — real estate', 'property | property buy <id> [mortgage] | property sell <id>', 'Own apartments, offices, warehouses, data centers and land. Rent, maintenance and tax accrue monthly.'],
-    invest: ['invest — company equity', 'invest <company> <amount>', 'Buys a bounded stake in a company. Valuation follows revenue, funds and staff.'],
-    trade: ['trade — commodities', 'trade buy|sell <resource> <quantity>', 'Trades raw materials and components at simulated spot prices.'],
-    culture: ['culture — digital culture', 'culture create "<title>" <game|music|streaming|art|community|esports>', 'Publishes games, music, streaming, art, communities and esports through your own organization.'],
-    court: ['court — dispute resolution', 'court | court defend <case-id>', 'Reviews legal disputes and defends open player cases. Legal study and reputation improve outcomes.'],
-    timeline: ['timeline — history', 'timeline [type]', 'Explores the persistent historical record: law, research, infrastructure, supply, media, culture, diplomacy and technology.'],
-    identity: ['identity — reputation', 'identity [handle]', 'Shows contextual reputation, credentials, published work and the shared-world authority ledger.'],
+    civ: ['civ — civilization interface', 'civ [status|countries|country <q>|cities|laws|legal|identity|study|research|media|tech|supply|property|history|events|mp|relocate|lobby]', 'Inspect and act on the persistent civilization: governments, regulation, education, research, media, infrastructure, property, supply chains, technology, culture, identity and shared-world authority. The simulation runs whether or not you participate.'],
   };
   const p = pages[name];
   if (!p) { ctx.print(`No manual entry for ${name}`, 'err'); ctx.dim('Try: help'); return; }
@@ -3300,397 +3289,550 @@ COMMANDS.company = (ctx) => {
 };
 
 /* ---------------- civilization ---------------- */
+function fmtBigMoney(n) {
+  n = Number(n) || 0;
+  if (Math.abs(n) >= 1e12) return `$${(n / 1e12).toFixed(1)}T`;
+  if (Math.abs(n) >= 1e9) return `$${(n / 1e9).toFixed(1)}B`;
+  if (Math.abs(n) >= 1e6) return `$${(n / 1e6).toFixed(1)}M`;
+  return fmtMoney(n);
+}
+function civPlace(game) {
+  const city = playerCity(game);
+  const country = playerCountry(game);
+  return { city, country, label: `${city?.name || 'Meridian'}, ${country?.name || 'Novaria'}` };
+}
+function civLine(ctx, label, value, cls = '') {
+  ctx.print(`${pad(label, 20)} ${value}`, cls);
+}
+function civStatus(ctx) {
+  const g = ctx.game;
+  const s = civilizationSummary(g);
+  const m = s.metrics;
+  const place = civPlace(g);
+  ctx.head(`CIVILIZATION — ${s.year}`);
+  ctx.print(`${place.label} · ${fmtDate(worldClock(g).date)} · index ${m.civilizationIndex}/100`, 'accent');
+  ctx.print('');
+  civLine(ctx, 'Population', fmtNum(m.population) + ' people');
+  civLine(ctx, 'GDP', fmtBigMoney(m.gdp));
+  civLine(ctx, 'Growth', `${m.growth.toFixed(1)}% · inflation ${m.inflation.toFixed(1)}% · unemployment ${m.unemployment.toFixed(1)}%`);
+  civLine(ctx, 'Stability', `${m.stability.toFixed(1)} · internet freedom ${m.internetFreedom.toFixed(1)} · media trust ${m.mediaTrust.toFixed(1)}`);
+  civLine(ctx, 'Technology', `research level ${m.researchLevel.toFixed(2)} · adoption ${m.technologyAdoption.toFixed(1)}% · innovation ${m.innovation.toFixed(1)}`);
+  civLine(ctx, 'Supply', `hardware ${(m.supplyPressure * 100).toFixed(0)} / 100 · legal pressure ${m.legalPressure.toFixed(1)}`);
+  civLine(ctx, 'World', `${s.civ.countries.length} countries · ${s.civ.cities.length} cities · ${s.activeLaws} laws · ${s.activeEvents} active events`);
+  ctx.print('');
+  if (s.civ.events.filter(e => e.status === 'active').length) {
+    ctx.print('ACTIVE WORLD EVENTS', 'head');
+    for (const e of s.civ.events.filter(e => e.status === 'active').slice(0, 5)) {
+      ctx.print(`  ${pad(e.category, 14)} ${e.title}`, 'warn');
+      ctx.dim(`    ${e.body.slice(0, 108)}`);
+    }
+    ctx.print('');
+  }
+  ctx.dim('civ countries · civ laws · civ study · civ research · civ media · civ property · civ history · civ mp');
+}
+function civCountries(ctx) {
+  const g = ctx.game;
+  const civ = civilizationSummary(g).civ;
+  ctx.head('COUNTRIES AND REGIONS');
+  for (const c of civ.countries) {
+    const e = c.economy;
+    ctx.print(`${pad(c.code, 3)} ${pad(c.name, 12)} ${padLeft(e.growth.toFixed(1) + '%', 6)} growth ${padLeft(e.inflation.toFixed(1) + '%', 6)} infl ${padLeft(c.stability.toFixed(0), 4)} stability`, e.growth >= 2 ? 'accent' : '');
+    ctx.dim(`    ${c.region} · ${c.government} · ${c.leader} · net ${c.internet.penetration}% · privacy ${c.regulation.privacy} · cyber ${c.regulation.cyber}`);
+  }
+  ctx.dim('civ country <name|code>   ·   civ cities [country]');
+}
+function civCountry(ctx, query) {
+  const g = ctx.game;
+  const s = civilizationSummary(g);
+  const c = getCivCountry(g, query);
+  if (!c) { ctx.err(`civ: no country matching '${query}'`); return; }
+  ctx.head(`${c.name.toUpperCase()} — ${c.formal}`);
+  ctx.print(`${c.government} · capital ${c.capital} · ${c.region} · ${c.currency}`, 'accent');
+  ctx.print(`Leader ${c.leader} · ${c.rulingParty} · approval ${c.approval.toFixed(0)}% · stability ${c.stability.toFixed(0)}`);
+  ctx.print(`Population ${fmtNum(c.population)} · GDP ${fmtBigMoney(c.economy.gdp)} · growth ${c.economy.growth.toFixed(1)}% · inflation ${c.economy.inflation.toFixed(1)}% · unemployment ${c.economy.unemployment.toFixed(1)}%`);
+  ctx.print(`Debt ${c.economy.debt.toFixed(0)}% GDP · reserves ${fmtBigMoney(c.economy.reserves)} · productivity ${c.economy.productivity}`);
+  ctx.print('');
+  ctx.print('INTERNET AND TAX', 'head');
+  ctx.print(`  penetration ${c.internet.penetration}% · speed ${c.internet.speed} Mbps · cost ${fmtMoney(c.internet.cost)}/mo · censorship ${c.internet.censorship} · backbone ${c.internet.backbone}`);
+  ctx.print(`  corporate ${c.tax.corp}% · income ${c.tax.income}% · VAT ${c.tax.vat}% · digital ${c.tax.digital}%`);
+  ctx.print('');
+  ctx.print('REGULATION', 'head');
+  for (const d of lawDomains()) {
+    const v = c.regulation[d.id] || 0;
+    ctx.print(`  ${pad(d.name, 22)} ${progressBar(v, 18)} ${padLeft(Math.round(v), 3)}`, v >= 75 ? 'warn' : '');
+  }
+  const laws = s.civ.laws.filter(l => l.countryId === c.id && l.status === 'active').slice(0, 6);
+  ctx.print('');
+  ctx.print('INSTRUMENTS', 'head');
+  for (const l of laws) ctx.dim(`  ${l.name} · ${l.severity} · ${l.regulator} · max fine ${fmtMoney(l.fineMax)}`);
+  const cities = s.civ.cities.filter(x => x.countryId === c.id);
+  ctx.print('');
+  ctx.print('CITIES', 'head');
+  for (const city of cities) ctx.print(`  ${pad(city.name, 14)} ${padLeft(fmtNum(city.population), 8)} people · power ${city.utilities.power} · transport ${city.utilities.transport} · data centers ${city.districts.datacenter}`);
+  const rel = Object.entries(c.relations).sort((a, b) => b[1].trade - a[1].trade).slice(0, 5);
+  ctx.print('');
+  ctx.print('RELATIONS', 'head');
+  for (const [id, r] of rel) {
+    const other = s.civ.countries.find(x => x.id === id);
+    ctx.print(`  ${pad(other?.name || id, 12)} trade ${padLeft(r.trade.toFixed(0), 3)} · tension ${padLeft(r.tension.toFixed(0), 3)} · trust ${padLeft(r.trust.toFixed(0), 3)} · ${r.stance}${r.treaty ? ' · treaty' : ''}${r.sanctioned ? ' · sanctions' : ''}`, r.tension > 55 ? 'warn' : '');
+  }
+}
+function civCities(ctx, query) {
+  const g = ctx.game;
+  const civ = civilizationSummary(g).civ;
+  const country = query ? getCivCountry(g, query) : null;
+  const list = country ? civ.cities.filter(c => c.countryId === country.id) : civ.cities;
+  ctx.head(`CITIES${country ? ' — ' + country.name : ''}`);
+  for (const c of list) {
+    ctx.print(`${pad(c.name, 14)} ${pad(c.countryId, 12)} ${padLeft(fmtNum(c.population), 8)}  power ${padLeft(c.utilities.power, 3)}  water ${padLeft(c.utilities.water, 3)}  telecom ${padLeft(c.utilities.telecom, 3)}`, 'accent');
+    ctx.dim(`    housing ${fmtMoney(c.prices.housing)}/mo · energy ${fmtMoney(c.prices.energy)} · bandwidth ${fmtMoney(c.prices.bandwidth)} · congestion ${c.conditions.congestion} · ${c.character}`);
+  }
+}
+function civLaws(ctx, query) {
+  const g = ctx.game;
+  const civ = civilizationSummary(g).civ;
+  const q = String(query || '').toLowerCase();
+  const country = q ? getCivCountry(g, q) : null;
+  let laws = civ.laws;
+  if (country) laws = laws.filter(l => l.countryId === country.id);
+  else if (q) laws = laws.filter(l => `${l.domain} ${l.domainName} ${l.name} ${l.severity} ${l.countryId}`.toLowerCase().includes(q));
+  ctx.head(`LAW AND REGULATION${country ? ' — ' + country.name : ''}`);
+  const active = laws.filter(l => l.status === 'active');
+  const proposed = laws.filter(l => l.status === 'proposed');
+  for (const l of proposed.slice(0, 8)) {
+    const c = civ.countries.find(x => x.id === l.countryId);
+    ctx.print(`PROPOSED ${pad(l.name, 34)} ${pad(c?.name || l.countryId, 12)} effective in ${Math.max(0, Math.ceil((l.effectiveWorld - civ.worldMinutes) / 1440))} days`, 'warn');
+  }
+  for (const l of active.slice(0, 36)) {
+    ctx.print(`${pad(l.countryId, 10)} ${pad(l.domainName, 22)} ${pad(l.severity, 9)} ${pad(l.regulator, 28)} ${l.name}`, l.severity === 'strict' ? 'warn' : '');
+  }
+  ctx.print('');
+  ctx.dim(`${active.length} active instruments · ${proposed.length} proposed · courts ${civ.courts.length} · regulators ${civ.regulators.length}`);
+}
+function civLegal(ctx) {
+  const g = ctx.game;
+  const s = civilizationSummary(g);
+  const c = s.country;
+  const compliance = playerCompliance(g);
+  const disputes = activeLegalDisputes(g);
+  ctx.head('LEGAL STANDING');
+  ctx.print(`${c.name} · ${c.cyberPolicy} cyber policy · compliance ${compliance.score}/100`, compliance.score < 50 ? 'warn' : 'ok');
+  ctx.print('');
+  civLine(ctx, 'Cyber regulation', String(c.regulation.cyber));
+  civLine(ctx, 'Data protection', String(c.regulation.data));
+  civLine(ctx, 'Privacy', String(c.regulation.privacy));
+  civLine(ctx, 'Contracts', String(c.regulation.contracts));
+  ctx.print('');
+  if (compliance.records.length) {
+    ctx.print('COMPLIANCE RECORDS', 'head');
+    for (const r of compliance.records.slice(-8).reverse()) ctx.print(`  ${r.status.padEnd(10)} ${r.issue} · ${fmtMoney(r.fine || 0)}`, r.status === 'fined' ? 'err' : 'warn');
+  }
+  if (disputes.length) {
+    ctx.print('OPEN DISPUTES', 'head');
+    for (const d of disputes.slice(0, 8)) ctx.print(`  ${d.id} ${d.subject} · ${d.issue || d.kind} · ${d.status}`, 'warn');
+  } else ctx.dim('No open disputes against this operator.');
+  if (g.legal.length) {
+    ctx.print('ENFORCEMENT HISTORY', 'head');
+    for (const l of g.legal.slice(-6).reverse()) ctx.print(`  ${fmtDate(l.time)} · ${l.authority} · ${fmtMoney(l.fine)} · ${l.reason}`, 'err');
+  }
+  ctx.print('');
+  ctx.dim('Regulators, courts, and fines are simulated per jurisdiction. Conduct and evidence change the outcome.');
+}
+function civIdentity(ctx) {
+  const g = ctx.game;
+  const s = civilizationSummary(g);
+  const p = s.civ.player;
+  const creds = playerCredentials(g);
+  ctx.head(`DIGITAL IDENTITY — @${p.handle}`);
+  ctx.print(`${p.name} · ${civPlace(g).label} · updated ${fmtDate(new Date(g.createdAt + Math.floor(g.worldMinutes / 1440) * 86400000))}`, 'accent');
+  ctx.print('');
+  const rows = [
+    ['Professional', p.professional.score, p.professional.title, `endorsements ${p.professional.endorsements}${p.professional.verified ? ' · verified' : ''}`],
+    ['Social', p.social.score, `${fmtNum(p.social.followers)} followers`, `controversy ${p.social.controversy} · ${p.social.communities.join(', ')}`],
+    ['Security', p.security.score, `${p.security.incidents} incidents`, p.security.credentials.join(', ') || 'no hardware credentials'],
+    ['Financial', p.financial.score, `credit ${p.financial.credit}`, `assets ${fmtMoney(p.financial.assets)}`],
+    ['Academic', p.academic.score, `${p.academic.publications} publications`, `${p.academic.citations} citations · field ${p.academic.field || 'none'}`]
+  ];
+  for (const [label, score, sub, note] of rows) {
+    ctx.print(`${pad(label, 14)} ${progressBar(score, 20)} ${padLeft(Math.round(score), 3)}  ${sub}`, score >= 60 ? 'ok' : '');
+    ctx.dim(`              ${note}`);
+  }
+  ctx.print('');
+  if (creds.length) {
+    ctx.print('CREDENTIALS', 'head');
+    for (const c of creds) ctx.print(`  ${c.name} · ${c.issuer}`, 'accent');
+  } else ctx.dim('No formal credentials yet. Study and research produce verifiable credentials.');
+  ctx.print('');
+  ctx.dim('Reputation is contextual: professional, social, financial, academic and security standing are separate.');
+}
+function civStudy(ctx, args) {
+  const g = ctx.game;
+  const fields = educationFields();
+  if (!args.length) {
+    const knowledge = civKnowledge(g);
+    const civ = civilizationSummary(g).civ;
+    ctx.head('EDUCATION AND INDEPENDENT STUDY');
+    for (const f of fields) {
+      const v = knowledge[f.id] || 0;
+      ctx.print(`${pad(f.id, 14)} ${pad(f.name, 24)} ${progressBar(v, 16)} ${padLeft(Math.round(v), 3)}`, v >= 35 ? 'ok' : '');
+      ctx.dim(`    ${f.blurb}`);
+    }
+    ctx.print('');
+    ctx.print(`Study hours ${civ.education.player.studyHours || 0} · courses ${civ.education.courses.length} · credentials ${civ.education.player.credentials.length}`);
+    ctx.dim('civ study <field> [hours] [--course <id>]   ·   civ courses [field]');
+    return;
+  }
+  const field = args[0];
+  let hours = 2;
+  let courseId = null;
+  for (let i = 1; i < args.length; i++) {
+    if (args[i] === '--course' && args[i + 1]) courseId = args[++i];
+    else if (/^\d+$/.test(args[i])) hours = Number(args[i]);
+  }
+  const r = playerStudy(g, field, { hours, courseId });
+  if (!r.ok) { ctx.err(r.error); return; }
+  ctx.ok(`Studied ${r.field.name} for ${r.hours}h${r.cost ? ' · ' + fmtMoney(r.cost) : ''}.`);
+  ctx.print(`  knowledge ${progressBar(r.knowledge, 24)} ${Math.round(r.knowledge)}/100`, 'accent');
+  ctx.print(`  gain +${r.gain.toFixed(1)} · operator skill now ${getPlayerSkill(g)}/10`);
+  if (g.civ.education.player.credentials.some(c => c.field === r.field.id)) ctx.dim(`Credential: ${r.field.cert}`);
+  ctx.print('');
+  ctx.dim('Knowledge raises practical skill and research capability. Course tuition buys higher-quality instruction.');
+}
+function civCourses(ctx, query) {
+  const g = ctx.game;
+  const civ = civilizationSummary(g).civ;
+  const q = String(query || '').toLowerCase();
+  const courses = q ? civ.education.courses.filter(c => `${c.field} ${c.fieldName} ${c.institutionName} ${c.level}`.toLowerCase().includes(q)) : civ.education.courses;
+  ctx.head(`COURSES${q ? ' — ' + query : ''}`);
+  for (const c of courses.slice(0, 30)) {
+    ctx.print(`${pad(c.id, 11)} ${pad(c.fieldName, 20)} ${pad(c.level, 12)} ${padLeft(fmtMoney(c.tuition), 9)} ${padLeft(c.weeks + 'w', 4)} ${pad(c.institutionName, 28)} q${c.quality}`, 'accent');
+  }
+  ctx.dim('civ study <field> 4 --course <id>   ·   Online courses are cheaper; universities carry more prestige.');
+}
+function civResearch(ctx, args) {
+  const g = ctx.game;
+  const civ = civilizationSummary(g).civ;
+  if (args.length && (args[0] === 'start' || args[0] === 'fund')) {
+    if (args[0] === 'start') {
+      const field = args[1];
+      if (!field) { ctx.err('usage: civ research start <field> [funding]'); return; }
+      const funding = args[2] && /^\d+$/.test(args[2]) ? Number(args[2]) : undefined;
+      const r = playerStartResearch(g, field, { funding });
+      if (!r.ok) { ctx.err(r.error); return; }
+      ctx.ok(`Independent research started: ${r.project.fieldName} (${r.project.id})`);
+      ctx.print(`  committed ${fmtMoney(r.funding)} · tier ${r.project.tier} · target ${r.project.targetName}`);
+      ctx.dim('Fund it with: civ research fund <project> <amount>');
+      return;
+    }
+    const project = args[1];
+    const amount = Number(args[2] || 500);
+    if (!project) { ctx.err('usage: civ research fund <project> <amount>'); return; }
+    const r = playerFundResearch(g, project, amount);
+    if (!r.ok) { ctx.err(r.error); return; }
+    ctx.ok(`Committed ${fmtMoney(r.amount)} to ${r.project.title}.`);
+    ctx.print(`  progress ${progressBar(r.project.progress, 24)} ${Math.round(r.project.progress)}% · status ${r.project.status}`);
+    return;
+  }
+  const query = args.join(' ').toLowerCase();
+  const fieldMatch = query ? researchField(g, query) : null;
+  if (fieldMatch) {
+    const state = civ.research.fields.find(f => f.id === fieldMatch.id);
+    ctx.head(`${fieldMatch.name.toUpperCase()} — ${fieldMatch.code}`);
+    ctx.print(`Level ${state?.level || 1} · progress ${progressBar(state?.progress || 0, 22)} ${Math.round(state?.progress || 0)}% · funding ${fmtBigMoney(state?.funding || 0)}`, 'accent');
+    ctx.print('');
+    ctx.print('KNOWN RESULTS', 'head');
+    const found = civ.research.discoveries.filter(d => d.field === fieldMatch.id);
+    if (!found.length) ctx.dim('  No published results in this field yet.');
+    for (const d of found.slice(-8)) ctx.print(`  ${d.year} · tier ${d.tier} · ${d.name}${d.replicated ? ' · replicated' : ''}`, 'accent');
+    ctx.print('');
+    ctx.print('ACTIVE PROJECTS', 'head');
+    for (const p of civ.research.projects.filter(p => p.field === fieldMatch.id && p.status === 'active')) {
+      ctx.print(`  ${p.id} ${pad(p.title, 32)} ${progressBar(p.progress, 16)} ${Math.round(p.progress)}% ${p.labName}`, 'warn');
+    }
+    ctx.dim('civ research start ' + fieldMatch.id + ' [funding]');
+    return;
+  }
+  ctx.head('SCIENTIFIC RESEARCH');
+  for (const f of civ.research.fields) {
+    const active = civ.research.projects.filter(p => p.field === f.id && p.status === 'active').length;
+    ctx.print(`${pad(f.id, 14)} ${pad(f.name, 24)} level ${f.level} ${progressBar(f.progress || 0, 14)} ${padLeft(active + ' active', 9)}`, f.level >= 3 ? 'ok' : '');
+  }
+  ctx.print('');
+  ctx.print('ACTIVE PROJECTS', 'head');
+  for (const p of civ.research.projects.filter(p => p.status === 'active').slice(0, 10)) {
+    ctx.print(`  ${p.id} ${pad(p.fieldName, 20)} ${progressBar(p.progress, 14)} ${padLeft(Math.round(p.progress) + '%', 4)}  ${p.labName}`, 'accent');
+  }
+  ctx.print('');
+  ctx.print(`Published discoveries ${civ.research.discoveries.length} · labs ${civ.research.labs.length} · dataset is persistent.`, 'dim');
+  ctx.dim('civ research <field>   ·   civ research start <field> [funding]   ·   civ research fund <project> <amount>');
+}
+function civMedia(ctx, args) {
+  const g = ctx.game;
+  const civ = civilizationSummary(g).civ;
+  if (args[0] === 'publish') {
+    const headline = args.slice(1).filter(a => !a.startsWith('--')).join(' ').trim();
+    if (!headline) { ctx.err('usage: civ publish <headline> [--outlet <name>] [--investigation] [--evidence]'); return; }
+    const outlet = args.includes('--outlet') ? outletFor(g, args[args.indexOf('--outlet') + 1]) : null;
+    const r = playerPublish(g, headline, {
+      outletId: outlet?.id,
+      investigation: args.includes('--investigation'),
+      evidence: args.includes('--evidence')
+    });
+    if (!r.ok) { ctx.err(r.error); return; }
+    ctx.ok(`Published in ${r.outlet.name}: ${r.content.headline}`);
+    ctx.print(`  reach ${fmtNum(r.reach)} · trust delta ${r.content.trustDelta} · followers ${fmtNum(g.civ.player.social.followers)}`);
+    ctx.dim('Investigations with evidence travel further. Every piece is attributed and persistent.');
+    return;
+  }
+  const query = args.join(' ').toLowerCase();
+  if (query) {
+    const outlet = outletFor(g, query);
+    if (outlet) {
+      ctx.head(`${outlet.name.toUpperCase()} — ${outlet.type}`);
+      ctx.print(`${outlet.ownerName} · ${outlet.focus} · trust ${outlet.trust} · audience ${fmtNum(outlet.audience)} · reach ${fmtNum(outlet.reach)}`, 'accent');
+      ctx.print(`Bias ${outlet.bias} · staff ${outlet.staff} · corrections ${outlet.corrections} · retractions ${outlet.retractions}`);
+      const items = civ.media.content.filter(c => c.outletId === outlet.id).slice(-6).reverse();
+      for (const c of items) ctx.print(`  ${c.headline} · reach ${fmtNum(c.reach)}`, 'dim');
+      return;
+    }
+  }
+  ctx.head('MEDIA AND INFORMATION');
+  for (const o of civ.media.outlets.slice(0, 20)) {
+    ctx.print(`${pad(o.name, 26)} ${pad(o.type, 11)} trust ${padLeft(o.trust, 3)} audience ${padLeft(fmtNum(o.audience), 7)} ${o.focus}`, o.trust >= 70 ? 'ok' : '');
+  }
+  ctx.print('');
+  ctx.print('LATEST REPORTING', 'head');
+  for (const c of civ.media.content.slice(-8).reverse()) ctx.print(`  ${pad(c.outletName, 22)} ${c.headline}`, 'accent');
+  ctx.print('');
+  ctx.print('TRENDS', 'head');
+  ctx.print('  ' + civ.media.trends.map(t => `${t.topic} (${t.volume})`).join(' · '), 'dim');
+  ctx.dim('civ media <outlet>   ·   civ publish <headline> [--outlet <name>] [--investigation] [--evidence]');
+}
+function civTech(ctx, args) {
+  const g = ctx.game;
+  const civ = civilizationSummary(g).civ;
+  if (args[0] === 'adopt') {
+    if (!args[1]) { ctx.err('usage: civ tech adopt <name|id>'); return; }
+    const r = playerAdoptTech(g, args.slice(1).join(' '));
+    if (!r.ok) { ctx.err(r.error); return; }
+    ctx.ok(`Adopted ${r.tech.name} ${r.tech.version} from ${r.tech.vendorName} for ${fmtMoney(r.cost)}.`);
+    ctx.print(`  category ${r.tech.category} · license ${r.tech.license} · adoption ${r.tech.adoption.toFixed(1)}%`);
+    return;
+  }
+  const q = args.join(' ').toLowerCase();
+  const list = q ? civ.tech.technologies.filter(t => `${t.name} ${t.category} ${t.vendorName} ${t.license}`.toLowerCase().includes(q)) : civ.tech.technologies;
+  ctx.head('TECHNOLOGY ECOSYSTEM');
+  for (const t of list.slice(0, 28)) {
+    ctx.print(`${pad(t.name, 28)} ${pad(t.category, 12)} ${pad(t.license, 16)} ${padLeft(t.version, 6)} adoption ${padLeft(t.adoption.toFixed(1) + '%', 6)}${t.standard ? ' STANDARD' : ''}`, t.standard ? 'ok' : 'accent');
+    ctx.dim(`    ${t.vendorName} · docs ${t.documentation} · security ${t.security} · ecosystem ${t.ecosystem} · ${t.compatibility.join(', ')}`);
+  }
+  ctx.dim('civ tech adopt <name>   ·   standards emerge from adoption, not from a script.');
+}
+function civSupply(ctx) {
+  const g = ctx.game;
+  const civ = civilizationSummary(g).civ;
+  const s = civ.supply;
+  ctx.head('GLOBAL SUPPLY CHAIN');
+  ctx.print(`Hardware index ${s.hardwareIndex} / 100 · energy index ${s.energyIndex} / 100 · factories ${s.factories.length} · warehouses ${s.warehouses.length}`, 'accent');
+  ctx.print('');
+  ctx.print('MATERIALS', 'head');
+  for (const m of Object.values(s.materials)) {
+    ctx.print(`  ${pad(m.name, 20)} ${padLeft(fmtMoney(Math.round(m.price)), 8)}/${m.unit}  availability ${padLeft(m.availability.toFixed(0), 3)}  demand ${padLeft(m.demand.toFixed(0), 3)}`, m.availability < 40 ? 'warn' : '');
+  }
+  ctx.print('');
+  ctx.print('COMPONENTS', 'head');
+  for (const c of Object.values(s.components)) {
+    ctx.print(`  ${pad(c.name, 20)} ${padLeft(fmtMoney(c.price), 8)}  availability ${padLeft(c.availability.toFixed(0), 3)}  stock ${padLeft(fmtNum(c.stock), 7)}`, c.availability < 35 ? 'warn' : '');
+  }
+  ctx.print('');
+  ctx.print('SHIPMENTS IN TRANSIT', 'head');
+  const moving = s.shipments.filter(x => x.status !== 'delivered').slice(0, 8);
+  if (!moving.length) ctx.dim('  None in transit.');
+  for (const x of moving) {
+    const eta = Math.max(0, Math.ceil((x.etaWorld - civ.worldMinutes) / 60));
+    ctx.print(`  ${pad(x.cargo, 18)} ${padLeft(fmtNum(x.quantity), 6)} units · ${x.status} · eta ${eta}h`, x.status === 'delayed' ? 'warn' : 'accent');
+  }
+}
+function civProperty(ctx, args) {
+  const g = ctx.game;
+  const civ = civilizationSummary(g).civ;
+  const sub = (args[0] || '').toLowerCase();
+  if (sub === 'buy' || sub === 'sell') {
+    const id = args[1];
+    if (!id) { ctx.err(`usage: civ property ${sub} <property-id>`); return; }
+    const r = sub === 'buy' ? playerBuyProperty(g, id, { rented: args.includes('--rented') }) : playerSellProperty(g, id);
+    if (!r.ok) { ctx.err(r.error); return; }
+    if (sub === 'buy') {
+      ctx.ok(`Acquired ${r.property.label} for ${fmtMoney(r.price)}.`);
+      ctx.print(`  ${r.property.cityId} · occupancy ${r.property.occupancy} · rent ${fmtMoney(r.property.rent)}/mo · maintenance ${fmtMoney(r.property.maintenance)}/mo`);
+      ctx.dim('Property charges and rental income settle as world days pass.');
+    } else {
+      ctx.ok(`Sold ${r.property.label} for ${fmtMoney(r.sale)}.`);
+    }
+    return;
+  }
+  if (sub === 'available' || sub === 'list') {
+    const q = args.slice(1).join(' ').toLowerCase();
+    const listings = civ.property.listings.filter(p => p.status === 'available' && (!q || `${p.type} ${p.label} ${p.cityId}`.toLowerCase().includes(q)));
+    ctx.head('PROPERTY MARKET — AVAILABLE');
+    for (const p of listings.slice(0, 20)) {
+      const city = civ.cities.find(c => c.id === p.cityId);
+      ctx.print(`${pad(p.id, 10)} ${pad(p.label, 22)} ${pad(city?.name || p.cityId, 13)} ${padLeft(fmtMoney(p.price), 12)}  rent ${padLeft(fmtMoney(p.rent), 7)}/mo  q${p.quality}`, 'accent');
+    }
+    ctx.dim('Market index ' + civ.property.market.index.toFixed(1) + ' · vacancy ' + civ.property.market.vacancy.toFixed(1) + '% · civ property buy <id> [--rented]');
+    return;
+  }
+  const owned = playerProperties(g);
+  ctx.head('PROPERTY AND REAL ESTATE');
+  ctx.print(`Market index ${civ.property.market.index.toFixed(1)} · rent index ${civ.property.market.rentIndex.toFixed(1)} · vacancy ${civ.property.market.vacancy.toFixed(1)}%`, 'accent');
+  ctx.print(`Listed ${civ.property.listings.filter(p => p.status === 'available').length} · owned locally ${civ.property.owned.length} · yours ${owned.length}`);
+  ctx.print('');
+  if (!owned.length) ctx.dim('You own no property. civ property available');
+  for (const p of owned) {
+    const city = civ.cities.find(c => c.id === p.cityId);
+    ctx.print(`  ${p.id} ${pad(p.label, 22)} ${pad(city?.name || p.cityId, 13)} value ${fmtMoney(p.price)} · ${p.occupancy}${p.occupancy === 'rented' ? ' · rent ' + fmtMoney(p.rent) + '/mo' : ''}`, 'ok');
+  }
+  ctx.print('');
+  ctx.dim('civ property available   ·   civ property buy <id> [--rented]   ·   civ property sell <id>');
+}
+function civHistoryCmd(ctx) {
+  const g = ctx.game;
+  const q = ctx.args.join(' ').trim();
+  const rows = civHistory(g, { query: q, limit: 30 });
+  ctx.head(`WORLD HISTORY${q ? ' — ' + q : ''}`);
+  for (const t of rows) {
+    ctx.print(`${t.year}  ${pad(t.category, 14)} ${t.title}`, t.major ? 'accent' : '');
+    ctx.dim(`      ${t.body.slice(0, 120)}`);
+  }
+  ctx.print('');
+  ctx.dim(`${civilizationSummary(g).timeline} recorded entries. History is generated by the simulation, not authored cutscenes.`);
+}
+function civEvents(ctx) {
+  const g = ctx.game;
+  const activeOnly = (ctx.args[0] || 'active') !== 'all';
+  const rows = civEventList(g, activeOnly);
+  const civ = civilizationSummary(g).civ;
+  ctx.head(`DYNAMIC WORLD EVENTS${activeOnly ? ' — ACTIVE' : ' — ALL'}`);
+  for (const e of rows.slice(0, 24)) {
+    const c = civ.countries.find(x => x.id === e.countryId);
+    const left = e.status === 'active' ? Math.max(0, Math.ceil((e.startedWorld + e.durationWorld - civ.worldMinutes) / 1440)) : 0;
+    ctx.print(`${pad(e.status, 9)} ${pad(e.category, 14)} ${pad(e.severity, 9)} ${e.title}`, e.status === 'active' ? 'warn' : 'dim');
+    ctx.dim(`      ${c?.name || 'global'} · ${e.status === 'active' ? left + ' days remaining' : 'resolved'} · ${e.body.slice(0, 100)}`);
+  }
+  ctx.print('');
+  ctx.dim('civ events active   ·   civ events all');
+}
+function civMultiplayer(ctx, args) {
+  const g = ctx.game;
+  const civ = civilizationSummary(g).civ;
+  const sub = (args[0] || 'status').toLowerCase();
+  if (sub === 'join') {
+    const handle = args[1];
+    if (!handle) { ctx.err('usage: civ mp join <handle>'); return; }
+    const r = joinSharedWorld(g, { handle, name: args.slice(2).join(' ') || handle, role: 'operator' });
+    ctx.ok(`@${r.player.handle} joined shared world ${r.worldId} as ${r.player.role}.`);
+    ctx.dim('Local authority records the player and ledger entry. A network transport can relay this to an authoritative server.');
+    return;
+  }
+  if (sub === 'leave') {
+    const handle = args[1];
+    if (!handle) { ctx.err('usage: civ mp leave <handle>'); return; }
+    const r = disconnectSharedPlayer(g, handle);
+    if (!r.ok) { ctx.err(r.error); return; }
+    ctx.ok(`@${r.player.handle} disconnected. The world continues without them.`);
+    return;
+  }
+  if (sub === 'validate') {
+    const r = validateLedger(g);
+    if (r.ok) ctx.ok(`Ledger valid · ${r.entries} entries · head ${r.head}`);
+    else ctx.err(`Ledger broken at ${r.brokenAt}: expected ${r.expected}, found ${r.found}`);
+    return;
+  }
+  if (sub === 'snapshot') {
+    ctx.head('SHARED WORLD SNAPSHOT');
+    ctx.print(JSON.stringify(sharedSnapshot(g), null, 2), 'accent');
+    return;
+  }
+  const snap = sharedSnapshot(g);
+  const ledger = validateLedger(g);
+  ctx.head('MULTIPLAYER / SHARED CIVILIZATION');
+  ctx.print(`World ${snap.worldId} · authority ${civ.multiplayer.authority} · transport ${civ.multiplayer.transport}`, 'accent');
+  ctx.print(`Year ${snap.year} · ${snap.countries.length} countries · ledger ${snap.ledgerHead} (${ledger.ok ? 'valid' : 'BROKEN'})`, ledger.ok ? 'ok' : 'err');
+  ctx.print('');
+  for (const p of civ.multiplayer.players) {
+    ctx.print(`  ${pad(p.handle, 18)} ${pad(p.role, 10)} ${p.connected ? 'connected' : 'offline'} · ${p.lastSeen ? fmtDate(p.lastSeen) : 'unknown'}`, p.connected ? 'ok' : 'dim');
+  }
+  ctx.print('');
+  ctx.print(`Anti-cheat rejected ${civ.multiplayer.antiCheat.rejected} action(s) · permissions are role-scoped.`, 'dim');
+  ctx.dim('civ mp join <handle> · civ mp leave <handle> · civ mp validate · civ mp snapshot');
+}
 COMMANDS.civ = (ctx) => {
   const g = ctx.game;
-  const sub = (ctx.args[0] || 'overview').toLowerCase();
-  const a1 = ctx.args[1];
-  if (sub === 'overview' || sub === 'summary' || sub === 'status') {
-    const s = civSummary(g);
-    ctx.head('DIGITAL CIVILIZATION — shared world');
-    ctx.print(`World ${s.worldId} · ${s.countries} nations · ${s.cities} cities · ${fmtNum(s.population)} people`, 'accent');
-    ctx.print('');
-    ctx.print(`Internet access   ${s.internet}%`);
-    ctx.print(`Literacy index    ${s.literacy}`);
-    ctx.print(`Global stability  ${s.stability}`);
-    ctx.print(`Research          ${s.research} active · ${s.discoveries} discoveries`);
-    ctx.print(`Technology        ${s.products} released products`);
-    ctx.print(`Media             ${s.stories} stories in the public record`);
-    ctx.print(`Property          ${s.listings} listings · ${s.ownedProperty} owned by you`);
-    ctx.print(`Timeline          ${s.history} records · authority revision ${s.authority}`);
-    ctx.print('');
-    const active = s.activeEvents.slice(0, 6);
-    if (active.length) {
-      ctx.print('ACTIVE EVENTS', 'head');
-      for (const e of active) ctx.print(`  ${pad(`[${e.type}]`, 16)} ${e.title}`, e.severity >= 4 ? 'warn' : 'info');
-      ctx.print('');
-    }
-    ctx.dim('civ nations · civ law · civ cities · civ market · civ media');
-    ctx.dim('civ research · civ property · civ culture · civ history · civ identity');
+  const sub = (ctx.args[0] || 'status').toLowerCase();
+  const rest = ctx.args.slice(1);
+  if (sub === 'status' || sub === 'overview') return civStatus(ctx);
+  if (sub === 'countries' || sub === 'country') return rest.length ? civCountry(ctx, rest.join(' ')) : civCountries(ctx);
+  if (sub === 'cities' || sub === 'city') return civCities(ctx, rest.join(' '));
+  if (sub === 'laws' || sub === 'law' || sub === 'regulation') return civLaws(ctx, rest.join(' '));
+  if (sub === 'legal' || sub === 'court' || sub === 'courts') return civLegal(ctx);
+  if (sub === 'identity' || sub === 'id') return civIdentity(ctx);
+  if (sub === 'study' || sub === 'learn') return civStudy(ctx, rest);
+  if (sub === 'courses' || sub === 'course') return civCourses(ctx, rest.join(' '));
+  if (sub === 'research' || sub === 'science') return civResearch(ctx, rest);
+  if (sub === 'media' || sub === 'news') return civMedia(ctx, rest);
+  if (sub === 'tech' || sub === 'technology') return civTech(ctx, rest);
+  if (sub === 'supply' || sub === 'logistics') return civSupply(ctx);
+  if (sub === 'property' || sub === 'properties' || sub === 'realestate') return civProperty(ctx, rest);
+  if (sub === 'history' || sub === 'timeline') return civHistoryCmd(ctx);
+  if (sub === 'events' || sub === 'event') return civEvents(ctx);
+  if (sub === 'mp' || sub === 'multiplayer' || sub === 'shared') return civMultiplayer(ctx, rest);
+  if (sub === 'relocate' || sub === 'move') {
+    const country = rest[0], city = rest[1];
+    if (!country) { ctx.err('usage: civ relocate <country> [city]'); return; }
+    const r = playerRelocate(g, country, city);
+    if (!r.ok) { ctx.err(r.error); return; }
+    ctx.ok(`Relocated to ${r.city?.name || r.country.name}, ${r.country.name} for ${fmtMoney(r.cost)}.`);
+    ctx.dim('Location changes which regulations, taxes, prices and opportunities apply to you.');
     return;
   }
-  if (sub === 'nations' || sub === 'countries' || sub === 'nation') {
-    const q = a1 ? findCountry(a1) : null;
-    if (q) {
-      const c = g.civ.countries.find(x => x.id === q.id);
-      ctx.head(`${c.name} (${c.code}) — ${c.government}`);
-      ctx.print(`${c.leader} · capital ${c.capital} · ${c.region}`, 'accent');
-      ctx.print('');
-      ctx.print(`GDP            ${fmtMoney(c.gdpReal)} · growth ${(c.growth * 100).toFixed(1)}%`);
-      ctx.print(`Population     ${fmtNum(c.population)} · internet ${c.internet}% · broadband ${c.broadband}%`);
-      ctx.print(`Currency       ${c.currency.code} (${c.currency.name}) @ ${c.currency.usd.toFixed(3)} USD`);
-      ctx.print(`Treasury       ${fmtMoney(c.treasury)} · tax ${Math.round(c.tax * 100)}% · corporate ${Math.round(c.corporateTax * 100)}%`);
-      ctx.print(`Approval       ${c.approval}% · stability ${c.stability}`);
-      ctx.print(`Privacy        ${c.privacy} · liberty ${c.liberty} · energy ${c.energy}`);
-      ctx.print('');
-      ctx.print('POLICY', 'head');
-      ctx.print(`  ${c.digitalPolicy}`);
-      ctx.print(`  ${c.cyberPolicy}`, 'dim');
-      ctx.print('');
-      ctx.print('INSTITUTIONS', 'head');
-      for (const id of c.institutionIds || []) {
-        const inst = g.civ.institutions.find(i => i.id === id);
-        if (inst) ctx.print(`  ${pad(inst.kind, 22)} ${inst.name} · integrity ${inst.integrity}`, 'info');
-      }
-      ctx.print('');
-      ctx.print('CITIES', 'head');
-      for (const city of g.civ.cities.filter(x => x.countryId === c.id)) {
-        ctx.print(`  ${pad(city.name, 16)} ${pad(fmtNum(city.population), 10)} power ${city.infra.power} · fiber ${city.infra.fiber} · ${city.infra.latency}ms`, city.status === 'operational' ? 'info' : 'warn');
-      }
-      return;
-    }
-    ctx.head('NATIONS');
-    const list = [...g.civ.countries].sort((a, b) => b.gdpReal - a.gdpReal);
-    for (const c of list) {
-      ctx.print(`${pad(c.code, 3)} ${pad(c.name, 14)} ${pad(fmtMoney(c.gdpReal), 16)} ${pad(fmtNum(c.population), 12)} net ${pad(c.internet + '%', 5)} stab ${c.stability}`, c.stability > 70 ? 'accent' : 'info');
-    }
-    ctx.dim('civ nations <code|name> for institutions, policy and cities.');
+  if (sub === 'lobby' || sub === 'policy') {
+    const country = rest[0], domain = rest[1];
+    if (!country) { ctx.err('usage: civ lobby <country> [domain]'); return; }
+    const r = playerLobby(g, country, domain);
+    if (!r.ok) { ctx.err(r.error); return; }
+    ctx.ok(`Policy meeting in ${r.country.name} for ${fmtMoney(r.cost)}.`);
+    ctx.print(`  ${r.domain.name} proposal support now ${Math.round(r.support)}% · ${r.policy.name}`, 'accent');
+    ctx.dim('Lobbying changes support. It does not guarantee passage.');
     return;
   }
-  if (sub === 'law' || sub === 'laws' || sub === 'legal') {
-    const q = a1 ? findCountry(a1) : null;
-    const country = q ? g.civ.countries.find(c => c.id === q.id) : g.civ.countries[0];
-    const report = complianceReport(g, ctx.args[2] || 'company', country.id);
-    ctx.head(`LAW — ${country.name}`);
-    for (const law of report.relevant) {
-      ctx.print(`${pad(law.short, 12)} ${pad(law.stance, 11)} sev ${law.severity}  ${law.name}`, law.stance === 'strict' ? 'warn' : law.stance === 'permissive' ? 'ok' : 'info');
-    }
-    ctx.print('');
-    ctx.print(`Compliance risk (${report.activity})  ${Math.round(report.risk * 100)}%`, report.risk > .1 ? 'warn' : 'ok');
-    ctx.dim(`Law level ${g.player.education?.subjects?.law?.level || 0} reduces exposure. Study digital law to improve it.`);
-    const mine = g.civ.legal.disputes.filter(d => d.subjectId === 'player');
-    if (mine.length) {
-      ctx.print('');
-      ctx.print('YOUR DISPUTES', 'head');
-      for (const d of mine.slice(0, 8)) {
-        ctx.print(`  ${pad(d.id, 12)} ${pad(d.status, 9)} ${d.title} · exposure ${fmtMoney(d.exposure)}`, ['settled', 'decided', 'closed'].includes(d.status) ? 'dim' : 'warn');
-      }
-      ctx.dim('court defend <case-id>');
-    }
-    ctx.print('');
-    ctx.dim('civ law <country> <activity>   ·   activity: company research media property crypto security');
+  if (sub === 'help' || sub === '?') {
+    ctx.head('CIVILIZATION COMMANDS');
+    ctx.print('  civ                             world overview and metrics');
+    ctx.print('  civ countries | civ country <name|code>');
+    ctx.print('  civ cities [country]');
+    ctx.print('  civ laws [country|domain]       active and proposed instruments');
+    ctx.print('  civ legal                       compliance, disputes and enforcement');
+    ctx.print('  civ identity                    contextual professional/social/financial record');
+    ctx.print('  civ study [field] [hours] [--course id]');
+    ctx.print('  civ courses [field]');
+    ctx.print('  civ research [field] | civ research start <field> [funding] | civ research fund <project> <amount>');
+    ctx.print('  civ media [outlet] | civ publish <headline> [--outlet name] [--investigation] [--evidence]');
+    ctx.print('  civ tech [query] | civ tech adopt <name>');
+    ctx.print('  civ supply                      materials, components and shipments');
+    ctx.print('  civ property [available|buy id|sell id]');
+    ctx.print('  civ history [query] | civ events [active|all]');
+    ctx.print('  civ mp [status|join handle|leave handle|validate|snapshot]');
+    ctx.print('  civ relocate <country> [city] | civ lobby <country> [domain]');
     return;
   }
-  if (sub === 'cities' || sub === 'city' || sub === 'infrastructure' || sub === 'world') {
-    const q = a1 ? findCity(a1) : null;
-    if (q) {
-      const city = g.civ.cities.find(c => c.id === q.id);
-      const country = g.civ.countries.find(c => c.id === city.countryId);
-      ctx.head(`${city.name} — ${country?.name || ''}`);
-      ctx.print(`${fmtNum(city.population)} people · districts ${city.districts.join(', ')}`, 'accent');
-      ctx.print(`Power ${city.infra.power} · fiber ${city.infra.fiber} · water ${city.infra.water} · transport ${city.infra.transport}`);
-      ctx.print(`Latency ${city.infra.latency}ms · energy ${fmtMoney(city.infra.energyPrice)}/MWh`);
-      ctx.print(`Employment ${city.economy.employment}% · rent index ${city.economy.rentIndex.toFixed(2)} · vacancy ${Math.round(city.economy.vacancy * 100)}%`);
-      if (city.shock) ctx.warn(`Active shock: ${city.shock.label} (${city.shock.kind})`);
-      ctx.print('');
-      ctx.print('DATA CENTERS', 'head');
-      for (const dc of city.dataCenters) ctx.print(`  ${dc.name} · load ${dc.load}% · power ${dc.power} · cooling ${dc.cooling} · tier ${dc.tier}`, dc.status === 'operational' ? 'info' : 'warn');
-      return;
-    }
-    ctx.head('CITIES');
-    for (const city of g.civ.cities) {
-      const country = g.civ.countries.find(c => c.id === city.countryId);
-      ctx.print(`${pad(city.name, 16)} ${pad(country?.code || '', 3)} ${pad(fmtNum(city.population), 11)} pwr ${pad(city.infra.power, 4)} fib ${pad(city.infra.fiber, 4)} ${pad(city.status, 10)}`, city.status === 'operational' ? 'info' : 'warn');
-    }
-    ctx.dim('civ cities <name> for districts, infrastructure and data centers.');
-    return;
-  }
-  if (sub === 'market' || sub === 'supply' || sub === 'industry' || sub === 'tech') {
-    ctx.head('INDUSTRIAL ECONOMY');
-    ctx.print('COMMODITIES', 'head');
-    for (const r of g.civ.supply.resources) {
-      ctx.print(`  ${pad(r.name, 16)} ${pad(fmtMoney(r.price) + '/' + r.unit, 14)} stock ${pad(fmtNum(r.stock), 9)} ${pad(r.status, 9)}`, r.status === 'shortage' ? 'warn' : 'info');
-    }
-    ctx.print('');
-    ctx.print('COMPONENTS', 'head');
-    for (const c of g.civ.supply.components.slice(0, 10)) {
-      ctx.print(`  ${pad(c.name, 18)} ${pad(fmtMoney(c.price), 10)} demand ${pad(fmtNum(c.demand), 8)} ${c.status}`, c.status === 'shortage' ? 'warn' : 'info');
-    }
-    ctx.print('');
-    ctx.print('TECHNOLOGY SECTORS', 'head');
-    for (const s of g.civ.tech.sectors) {
-      ctx.print(`  ${pad(s.name, 24)} adoption ${pad(Math.round(s.adoption * 100) + '%', 5)} maturity ${pad(s.maturity, 3)} ${s.license}`);
-    }
-    ctx.print('');
-    ctx.dim('trade buy <resource> <qty>   ·   trade sell <resource> <qty>');
-    return;
-  }
-  if (sub === 'media' || sub === 'news') {
-    ctx.head('MEDIA + PUBLIC OPINION');
-    for (const s of g.civ.media.stories.slice(0, 14)) {
-      ctx.print(`${pad(s.status, 10)} ${pad(`trust ${s.trust}`, 10)} ${pad(s.outletName, 18)} ${s.title}`, s.misinformation ? 'warn' : 'info');
-    }
-    ctx.print('');
-    ctx.print('PUBLIC OPINION', 'head');
-    for (const country of g.civ.countries) {
-      const o = g.civ.media.opinion[country.id];
-      if (o) ctx.print(`  ${pad(country.name, 14)} media trust ${pad(o.trustMedia, 3)} · tech optimism ${pad(o.techOptimism, 3)} · privacy concern ${o.privacyConcern}`);
-    }
-    ctx.print('');
-    ctx.dim('publish "<headline>" — independent dispatch (costs money; trust determines reach)');
-    return;
-  }
-  if (sub === 'research' || sub === 'knowledge' || sub === 'education') {
-    const edu = g.player.education || { subjects: {}, credentials: [] };
-    ctx.head('KNOWLEDGE + RESEARCH');
-    ctx.print('SUBJECTS', 'head');
-    for (const subj of SUBJECTS) {
-      const st = edu.subjects[subj.id] || { level: 0, progress: 0 };
-      ctx.print(`  ${pad(subj.name, 24)} level ${pad(st.level, 2)} ${progressBar(st.progress || 0, 18)} ${Math.round(st.progress || 0)}%`, st.level >= 3 ? 'ok' : 'info');
-    }
-    if ((edu.credentials || []).length) {
-      ctx.print('');
-      ctx.print('Credentials: ' + edu.credentials.join(', '), 'ok');
-    }
-    ctx.print('');
-    ctx.print('YOUR PROGRAMS', 'head');
-    const mine = g.civ.research.projects.filter(p => p.ownerType === 'player');
-    for (const p of mine.slice(0, 6)) {
-      ctx.print(`  ${pad(p.id, 10)} ${pad(p.status, 10)} ${progressBar(p.progress, 16)} ${Math.round(p.progress)}%  ${p.title}`, p.status === 'active' ? 'info' : 'dim');
-    }
-    if (!mine.length) ctx.dim('  No programs. research start <field>');
-    ctx.print('');
-    ctx.print('DISCOVERIES', 'head');
-    for (const d of g.civ.research.discoveries.slice(0, 6)) ctx.print(`  ${d.year}  ${pad(d.field, 22)} ${d.title}`, 'accent');
-    ctx.print('');
-    ctx.dim('study <subject> [hours]   ·   research start <field>   ·   research fund <program> <amount>');
-    return;
-  }
-  if (sub === 'property' || sub === 'realestate' || sub === 'housing') {
-    ctx.head('PROPERTY ECONOMY');
-    ctx.print(`Mortgage ${(g.civ.property.market.mortgageRate * 100).toFixed(1)}% · vacancy ${Math.round(g.civ.property.market.vacancy * 100)}% · your gross rent ${fmtMoney(playerPropertyIncome(g))}/mo`);
-    ctx.print('');
-    ctx.print('YOUR PROPERTY', 'head');
-    for (const p of g.civ.property.owned) {
-      ctx.print(`  ${pad(p.id, 14)} ${pad(p.type, 14)} ${pad(fmtMoney(p.marketValue), 14)} rent ${pad(fmtMoney(p.rent) + '/mo', 12)} ${p.mortgage ? 'mortgage' : 'outright'}`, 'accent');
-    }
-    if (!g.civ.property.owned.length) ctx.dim('  None owned. property list');
-    ctx.print('');
-    ctx.print('LISTINGS', 'head');
-    for (const l of g.civ.property.listings.filter(x => x.status === 'listed').slice(0, 12)) {
-      ctx.print(`  ${pad(l.id, 14)} ${pad(l.type, 14)} ${pad(fmtMoney(l.asking), 14)} rent ${pad(fmtMoney(l.rent) + '/mo', 12)} ${l.name}`);
-    }
-    ctx.dim('property buy <id> [mortgage]   ·   property sell <id>');
-    return;
-  }
-  if (sub === 'culture' || sub === 'entertainment') {
-    ctx.head('DIGITAL CULTURE');
-    for (const r of g.civ.culture.releases.slice(0, 14)) {
-      ctx.print(`  ${pad(r.type, 10)} ${pad(r.orgName, 22)} ${pad(fmtNum(r.audience) + ' audience', 18)} ${r.title}`, r.playerOwned ? 'ok' : 'info');
-    }
-    ctx.print('');
-    ctx.dim('culture create "<title>" <game|music|streaming|art|community|esports>');
-    return;
-  }
-  if (sub === 'history' || sub === 'timeline') {
-    ctx.head('HISTORICAL TIMELINE');
-    const type = a1 && a1 !== 'all' ? a1.toLowerCase() : null;
-    const rows = filteredHistory(g, { type, limit: 40 });
-    for (const h of rows) {
-      const country = g.civ.countries.find(c => c.id === h.countryId);
-      ctx.print(`cycle ${pad(Math.floor(h.world / 1440) + 1, 4)}  ${pad(h.type, 14)} ${country ? pad(country.code, 3) : '   '} ${h.title}`, h.importance >= 4 ? 'accent' : 'info');
-    }
-    ctx.dim('civ history all|economy|law|research|infrastructure|supply|media|culture|diplomacy|technology');
-    return;
-  }
-  if (sub === 'identity' || sub === 'reputation') {
-    const q = a1 || g.player.handle;
-    const id = identityFor(g, q);
-    if (!id) { ctx.err(`civ: no identity for '${q}'`); return; }
-    ctx.head(`IDENTITY — @${id.handle}`);
-    ctx.print(id.name || 'Independent operator', 'accent');
-    ctx.print('');
-    ctx.print(`Professional   ${contextualReputation(g, id.handle, 'professional')}`);
-    ctx.print(`Community      ${contextualReputation(g, id.handle, 'community')}`);
-    ctx.print(`Public         ${contextualReputation(g, id.handle, 'public')}`);
-    ctx.print(`Security trust ${id.security?.trust || 0}`);
-    if ((id.credentials || []).length) ctx.print(`Credentials    ${id.credentials.join(', ')}`, 'ok');
-    if ((id.published || []).length) ctx.print(`Published      ${id.published.length} work(s)`);
-    const auth = verifyAuthority(g);
-    ctx.print('');
-    ctx.print(`Authority      ${auth.ok ? 'verified' : 'checksum mismatch'} · revision ${auth.revision} · ${auth.members} member(s)`, auth.ok ? 'ok' : 'warn');
-    return;
-  }
-  if (sub === 'authority') {
-    const auth = verifyAuthority(g);
-    ctx.head('SHARED-WORLD AUTHORITY');
-    ctx.print(`Mode       local-authoritative`);
-    ctx.print(`World      ${g.civ.worldId}`);
-    ctx.print(`Revision   ${auth.revision}`);
-    ctx.print(`Checksum   ${auth.ok ? 'valid' : 'MISMATCH'}`, auth.ok ? 'ok' : 'err');
-    ctx.print(`Members    ${auth.members} · rejected actions ${auth.rejected}`);
-    ctx.print('');
-    for (const m of g.civ.authority.members) ctx.print(`  ${pad(m.id, 12)} @${m.handle} ${pad(m.kind, 6)} ${m.status} [${(m.permissions || []).join(' ')}]`, m.status === 'online' ? 'info' : 'dim');
-    return;
-  }
-  ctx.err(`civ: '${sub}' is not a recognized subcommand. Try: civ overview`);
+  ctx.err(`civ: '${sub}' is not a recognized subcommand.`);
+  ctx.dim('Try: civ help');
 };
-
-COMMANDS.study = (ctx) => {
-  if (!ctx.args[0]) {
-    ctx.head('STUDY');
-    for (const s of SUBJECTS) ctx.print(`${pad(s.id, 16)} ${s.name} → ${s.credential}`, 'info');
-    ctx.dim('study <subject> [hours] · costs money and simulated time');
-    return;
-  }
-  const res = study(ctx.game, ctx.args[0], Math.max(1, Math.min(8, Number(ctx.args[1]) || 1)));
-  if (!res.ok) { ctx.err('study: ' + res.error); return; }
-  ctx.ok(`${res.subject.name} → level ${res.state.level} (${Math.round(res.state.progress)}%)`);
-  ctx.dim(`Spent ${fmtMoney(res.cost)} · session ${res.state.sessions}${res.course ? ` · ${res.course.name}` : ''}`);
-  if (res.leveled) ctx.print(`Level up: ${res.subject.name} ${res.state.level}`, 'ok');
-  if (res.credential) ctx.print(`Credential earned: ${res.credential}`, 'ok');
-  ctx.app.refreshUI?.();
-};
-
-COMMANDS.research = (ctx) => {
-  const sub = (ctx.args[0] || 'list').toLowerCase();
-  if (sub === 'start') {
-    if (!ctx.args[1]) { ctx.err('usage: research start <field>'); return; }
-    const res = startResearch(ctx.game, ctx.args.slice(1).join(' '));
-    if (!res.ok) { ctx.err('research: ' + res.error); return; }
-    ctx.ok(`Program started: ${res.project.title}`);
-    ctx.dim(`Funded ${fmtMoney(res.cost)} · ${res.project.durationDays} day estimate · ${res.project.equipment}`);
-    ctx.app.refreshUI?.();
-    return;
-  }
-  if (sub === 'fund') {
-    if (!ctx.args[1]) { ctx.err('usage: research fund <program> <amount>'); return; }
-    const res = fundResearch(ctx.game, ctx.args[1], Number(ctx.args[2]) || 500);
-    if (!res.ok) { ctx.err('research: ' + res.error); return; }
-    ctx.ok(`Funded ${res.project.title} by ${fmtMoney(res.amount)} (total ${fmtMoney(res.project.funding)}).`);
-    ctx.app.refreshUI?.();
-    return;
-  }
-  ctx.head('RESEARCH FIELDS');
-  for (const f of RESEARCH_FIELDS) {
-    ctx.print(`${pad(f.id, 28)} ${fmtMoney(f.baseCost)} · ${f.equipment}`, 'info');
-  }
-  ctx.print('');
-  const mine = ctx.game.civ.research.projects.filter(p => p.ownerType === 'player');
-  for (const p of mine) ctx.print(`${pad(p.id, 10)} ${pad(p.status, 10)} ${progressBar(p.progress, 16)} ${p.title}`, p.status === 'active' ? 'accent' : 'dim');
-  ctx.dim('research start <field>   ·   research fund <program> <amount>');
-};
-
-COMMANDS.publish = (ctx) => {
-  const title = ctx.args.join(' ').trim();
-  if (!title) { ctx.err('usage: publish "<headline>"'); return; }
-  const res = publishContent(ctx.game, title);
-  if (!res.ok) { ctx.err('publish: ' + res.error); return; }
-  ctx.ok(`Published: ${res.story.title}`);
-  ctx.dim(`${res.outlet.name} · trust ${res.story.trust} · reach ${fmtNum(res.story.reach)} · cost ${fmtMoney(res.cost)}`);
-  ctx.app.refreshUI?.();
-};
-
-COMMANDS.property = (ctx) => {
-  const sub = (ctx.args[0] || 'list').toLowerCase();
-  if (sub === 'buy') {
-    if (!ctx.args[1]) { ctx.err('usage: property buy <id> [mortgage]'); return; }
-    const res = buyProperty(ctx.game, ctx.args[1], (ctx.args[2] || '').toLowerCase() !== 'mortgage');
-    if (!res.ok) { ctx.err('property: ' + res.error); return; }
-    ctx.ok(`Acquired ${res.property.name} for ${fmtMoney(res.down)}${res.cash ? '' : ' down'}.`);
-    ctx.dim(`${fmtMoney(res.property.rent)}/mo rent · maintenance ${fmtMoney(res.property.maintenance)} · tax ${fmtMoney(res.property.tax)}`);
-    ctx.app.refreshUI?.();
-    return;
-  }
-  if (sub === 'sell') {
-    if (!ctx.args[1]) { ctx.err('usage: property sell <id>'); return; }
-    const res = sellProperty(ctx.game, ctx.args[1]);
-    if (!res.ok) { ctx.err('property: ' + res.error); return; }
-    ctx.ok(`Sold ${res.property.name} for ${fmtMoney(res.gross)}.`);
-    ctx.dim(`Mortgage payoff ${fmtMoney(res.payoff)} · net ${fmtMoney(res.net)}`);
-    ctx.app.refreshUI?.();
-    return;
-  }
-  COMMANDS.civ({ ...ctx, args: ['property'] });
-};
-
-COMMANDS.invest = (ctx) => {
-  if (!ctx.args[0]) { ctx.err('usage: invest <company> <amount>'); return; }
-  const amount = Number(ctx.args[ctx.args.length - 1]);
-  const name = ctx.args.slice(0, -1).join(' ');
-  const res = investCompany(ctx.game, name, amount);
-  if (!res.ok) { ctx.err('invest: ' + res.error); return; }
-  ctx.ok(`Invested ${fmtMoney(res.value)} in ${res.company.name}.`);
-  ctx.dim(`Estimated stake ${Math.round(res.stake * 1000) / 10}% · valuation follows revenue, funds and staff.`);
-  ctx.app.refreshUI?.();
-};
-
-COMMANDS.trade = (ctx) => {
-  const side = (ctx.args[0] || 'buy').toLowerCase();
-  if (side !== 'buy' && side !== 'sell') { ctx.err('usage: trade buy|sell <resource> <quantity>'); return; }
-  if (!ctx.args[1]) { ctx.err('usage: trade buy|sell <resource> <quantity>'); return; }
-  const res = tradeCommodity(ctx.game, ctx.args[1], Number(ctx.args[2]) || 1, side);
-  if (!res.ok) { ctx.err('trade: ' + res.error); return; }
-  ctx.ok(`${side === 'buy' ? 'Bought' : 'Sold'} ${res.qty} ${res.resource.unit} of ${res.resource.name} for ${fmtMoney(res.total)}.`);
-  ctx.dim(`Unit ${fmtMoney(res.unit)} · you now hold ${res.inventory} ${res.resource.unit}`);
-  ctx.app.refreshUI?.();
-};
-
-COMMANDS.culture = (ctx) => {
-  const sub = (ctx.args[0] || 'list').toLowerCase();
-  if (sub === 'create') {
-    const type = ctx.args[ctx.args.length - 1];
-    const title = ctx.args.slice(1, -1).join(' ').replace(/^"|"$/g, '').trim() || ctx.args.slice(1).join(' ');
-    if (!title) { ctx.err('usage: culture create "<title>" <game|music|streaming|art|community|esports>'); return; }
-    const res = createCulture(ctx.game, title, type);
-    if (!res.ok) { ctx.err('culture: ' + res.error); return; }
-    ctx.ok(`Released ${res.release.title} (${res.org.name}).`);
-    ctx.dim(`Initial audience ${fmtNum(res.release.audience)} · revenue ${fmtMoney(res.release.revenue)} · cost ${fmtMoney(res.cost)}`);
-    ctx.app.refreshUI?.();
-    return;
-  }
-  COMMANDS.civ({ ...ctx, args: ['culture'] });
-};
-
-COMMANDS.court = (ctx) => {
-  const sub = (ctx.args[0] || 'list').toLowerCase();
-  if (sub === 'defend') {
-    if (!ctx.args[1]) { ctx.err('usage: court defend <case-id>'); return; }
-    const res = defendDispute(ctx.game, ctx.args[1]);
-    if (!res.ok) { ctx.err('court: ' + res.error); return; }
-    if (res.outcome === 'dismissed') ctx.ok(`Case dismissed: ${res.dispute.title}.`);
-    else ctx.warn(`Case decided against you: ${res.dispute.title}. Penalty ${fmtMoney(res.fine)}.`);
-    ctx.dim(`Representation cost ${fmtMoney(res.cost)}.`);
-    ctx.app.refreshUI?.();
-    return;
-  }
-  const civ = ctx.game.civ;
-  ctx.head('COURTS + DISPUTES');
-  const mine = civ.legal.disputes.filter(d => d.subjectId === 'player');
-  const others = civ.legal.disputes.filter(d => d.subjectId !== 'player').slice(0, 10);
-  if (mine.length) {
-    ctx.print('YOUR CASES', 'head');
-    for (const d of mine) ctx.print(`  ${pad(d.id, 12)} ${pad(d.status, 9)} ${d.title} · exposure ${fmtMoney(d.exposure)}`, ['settled', 'decided', 'closed'].includes(d.status) ? 'dim' : 'warn');
-  }
-  ctx.print('');
-  ctx.print('RECENT DISPUTES', 'head');
-  for (const d of others) ctx.print(`  ${pad(d.id, 12)} ${pad(d.status, 9)} ${pad(d.subjectName, 22)} ${d.title}`, 'info');
-  ctx.dim('court defend <case-id>');
-};
-
-COMMANDS.law = (ctx) => COMMANDS.civ({ ...ctx, args: ['law', ...ctx.args] });
-COMMANDS.nation = (ctx) => COMMANDS.civ({ ...ctx, args: ['nations', ...ctx.args] });
-COMMANDS.timeline = (ctx) => COMMANDS.civ({ ...ctx, args: ['history', ...ctx.args] });
-COMMANDS.identity = (ctx) => COMMANDS.civ({ ...ctx, args: ['identity', ...ctx.args] });
+COMMANDS.civilization = COMMANDS.civ;
+COMMANDS.study = (ctx) => civStudy(ctx, ctx.args);
+COMMANDS.research = (ctx) => civResearch(ctx, ctx.args);
+COMMANDS.publish = (ctx) => civMedia(ctx, ['publish', ...ctx.args]);
+COMMANDS.country = (ctx) => ctx.args.length ? civCountry(ctx, ctx.args.join(' ')) : civCountries(ctx);
 
 COMMANDS.save = (ctx) => {
   if (typeof ctx.app.saveGame === 'function') {
