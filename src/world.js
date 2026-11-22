@@ -135,6 +135,12 @@ function buildServerFS(server) {
 
 export function reviveGame(game) {
   ensureSystems(game);
+  if (!game.growth) game.growth = { companyCycle: 0, npcCycle: 0, serverCycle: 0, siteCycle: 0, contractCycle: 0, eventCycle: 0, lastWorldMinute: 0 };
+  else {
+    const growthDefaults = { companyCycle: 0, npcCycle: 0, serverCycle: 0, siteCycle: 0, contractCycle: 0, eventCycle: 0, lastWorldMinute: game.worldMinutes || 0 };
+    for (const [key, value] of Object.entries(growthDefaults)) if (typeof game.growth[key] !== 'number') game.growth[key] = value;
+  }
+  if (typeof game.lastRentDay !== 'number') game.lastRentDay = Math.floor((game.worldMinutes || 0) / MINUTES_PER_DAY);
   for (const s of game.servers || []) {
     if (!s.fsMeta) {
       s.fsMeta = {
@@ -224,7 +230,9 @@ export function createGame(seed = randomSeed()) {
     market: { index: 1000, history: [1000], volume: 0, sentiment: 'neutral' },
     seq: { mail: 100, contract: 1000, news: 1, feed: 1, forum: 1, server: 1, site: 1, npc: 1, company: 1, agent: 1, product: 1, container: 1, cluster: 1, bucket: 1, cloud: 1 },
     achievements: {}, settings: { reducedMotion: false, sound: false },
-    offline: null, versionTag: 'sim/4.2'
+    offline: null, versionTag: 'sim/4.2',
+    growth: { companyCycle: 0, npcCycle: 0, serverCycle: 0, siteCycle: 0, contractCycle: 0, eventCycle: 0, lastWorldMinute: START_MINUTES },
+    lastRentDay: Math.floor(START_MINUTES / MINUTES_PER_DAY)
   };
 
   buildCompanies(game, rng);
@@ -247,6 +255,119 @@ export function createGame(seed = randomSeed()) {
   ];
   checkAchievements(game, true);
   return game;
+}
+
+/* ---------------- bounded procedural growth ---------------- */
+const GROWTH_CAPS = Object.freeze({ companies: 30, npcs: 420, servers: 180, sites: 220, contracts: 60 });
+
+function crossedCadence(game, key, interval) {
+  const cycle = Math.floor(game.worldMinutes / interval);
+  if (cycle <= (game.growth[key] || 0)) return false;
+  game.growth[key] = cycle;
+  return true;
+}
+
+function growthRng(game, salt) {
+  return makeRng((game.seed ^ Math.floor(game.worldMinutes * 2654435761) ^ (game.tickCount * 97) ^ salt) >>> 0);
+}
+
+function addGrowthNpc(game, rng) {
+  if (game.npcs.length >= GROWTH_CAPS.npcs) return null;
+  const used = new Set(game.npcs.map(n => n.handle));
+  const id = makeIdentity(rng, used);
+  const co = rng.chance(.78) ? rng.pick(game.companies) : null;
+  const npc = {
+    ...id, id: `npc-${String(game.seq.npc++).padStart(4, '0')}`,
+    companyId: co?.id || null, company: co?.name || 'independent',
+    email: `${id.handle}@${co?.domain || 'nullnet'}`,
+    faction: co?.sector === 'government' ? 'gov' : (!co && id.rep < 38) ? 'underground' : 'civilian',
+    key: false, sent: 0, received: 0
+  };
+  game.npcs.push(npc);
+  game.player.relations[npc.handle] = 0;
+  return npc;
+}
+
+function addGrowthServer(game, rng) {
+  if (game.servers.length >= GROWTH_CAPS.servers) return null;
+  const co = rng.chance(.72) ? rng.pick(game.companies) : null;
+  const users = co ? game.npcs.filter(n => n.companyId === co.id) : [];
+  const seq = game.seq.server++;
+  const ip = `198.51.${rng.int(100, 249)}.${rng.int(10, 249)}`;
+  let domain = `${rng.pick(DOMAIN_WORDS)}-${rng.int(10, 999)}.${rng.pick(TLDS)}`;
+  const server = makeServer(rng, {
+    seq, ip, host: `${rng.pick(['edge','node','service','app','stage','api','cdn']).toLowerCase()}-${seq}`,
+    domain, org: co?.name || rng.pick(['Independent Operator','Neighborhood Collective','Small Systems Guild','Field Station']),
+    role: rng.pick(['application node','edge cache','backup target','internal service','static origin']),
+    os: rng.pick(OSES), security: rng.int(42, 82), ports: rng.picks([22,80,443,3306,5432,8080,8443], rng.int(2,5)),
+    user: users[0]?.handle || 'deploy', pass: null, vulns: rng.picks(VULN_TYPES.map(v => v.name), rng.int(1,3)),
+    tags: rng.picks(TAGS, rng.int(1,3)), asn: rng.pick(ASNS), ownerId: users[0]?.id || null,
+    companyId: co?.id || null, status: 'online', createdWorld: game.worldMinutes
+  });
+  game.servers.push(server);
+  if (co) co.serverIds.push(server.id);
+  return server;
+}
+
+function addGrowthSite(game, rng) {
+  if (game.sites.length >= GROWTH_CAPS.sites) return null;
+  const server = rng.pick(game.servers.filter(s => s.status === 'online' && s.siteKind == null));
+  const company = server?.companyId ? game.companies.find(c => c.id === server.companyId) : null;
+  const owner = server?.ownerId ? game.npcs.find(n => n.id === server.ownerId) : rng.pick(game.npcs);
+  if (!server || !owner) return null;
+  const kind = rng.pick(['community','corp','news','git','generic']);
+  server.siteKind = kind;
+  const site = makeSite(rng, {
+    id: `site-${String(game.seq.site++).padStart(4, '0')}`,
+    domain: server.domain, title: company?.name || server.org, kind,
+    category: company?.sector || 'independent', ownerId: owner.id,
+    companyId: company?.id || null, serverId: server.id,
+    desc: `Public ${kind} service operated from ${server.host}.`,
+    sections: siteSectionsFor(kind, company, server, rng), ownerType: company ? 'company' : 'npc', tech: rng.pick(['nginx','Caddy','static','Next.js','Rails','Go','Flask'])
+  });
+  game.sites.push(site);
+  if (company) company.siteId = company.siteId || site.id;
+  return site;
+}
+
+function growWorldEntities(game, rng) {
+  const growthEvents = [];
+  if (crossedCadence(game, 'companyCycle', MINUTES_PER_DAY * 3) && game.companies.length < GROWTH_CAPS.companies) {
+    // Companies are introduced only as bounded, deterministic offshoots of existing entities.
+    const source = rng.pick(game.companies);
+    if (source) {
+      const name = `${rng.pick(DOMAIN_WORDS).replace(/./, c => c.toUpperCase())} ${rng.pick(['Systems','Networks','Works','Collective','Labs','Services'])}`;
+      if (!game.companies.some(c => c.name === name)) {
+        const company = { id: `co-${String(game.seq.company++).padStart(3, '0')}`, name, domain: `${name.toLowerCase().replace(/[^a-z]+/g, '-')}.net`, sector: source.sector, size: rng.int(12, 420), security: rng.int(35, 88), funds: rng.int(500000, 18000000), desc: `A growing ${source.sector} operation with an independent network footprint.`, rep: rng.int(20, 78), founded: 2026 - rng.int(0, 8), employees: rng.int(12, 420), serverIds: [], siteId: null, ceoId: null, status: 'operating', projects: rng.picks(['expansion','migration','hiring','audit','platform rebuild'], 2), hq: rng.pick(REGIONS) };
+        game.companies.push(company);
+        growthEvents.push({ type: 'growth', text: `${company.name} entered the network` });
+      }
+    }
+  }
+  if (crossedCadence(game, 'npcCycle', 240)) {
+    const npc = addGrowthNpc(game, rng);
+    if (npc) growthEvents.push({ type: 'growth', text: `@${npc.handle} joined the network` });
+  }
+  if (crossedCadence(game, 'serverCycle', 360) && rng.chance(.85)) {
+    const server = addGrowthServer(game, rng);
+    if (server) growthEvents.push({ type: 'growth', text: `${server.host} came online` });
+  }
+  if (crossedCadence(game, 'siteCycle', 720)) {
+    const site = addGrowthSite(game, rng);
+    if (site) growthEvents.push({ type: 'growth', text: `${site.domain} launched` });
+  }
+  if (crossedCadence(game, 'contractCycle', 180)) {
+    const open = game.contracts.filter(c => c.status === 'open').length;
+    if (open < GROWTH_CAPS.contracts) {
+      const contract = generateContract(game, rng);
+      if (contract) growthEvents.push({ type: 'contract', text: `${contract.id} ${contract.title}` });
+    }
+  }
+  if (crossedCadence(game, 'eventCycle', 480)) {
+    const headline = addNews(game, rng, { silent: true });
+    if (headline) growthEvents.push({ type: 'news', text: headline.headline });
+  }
+  return growthEvents;
 }
 
 /* ---------------- generation: companies + people ---------------- */
@@ -1494,6 +1615,7 @@ export function sendMailReply(game, pending, rng) {
    ============================================================ */
 export function tickWorld(game, minutes = 1, opts = {}) {
   ensureSystems(game);
+  reviveGame(game);
   const rng = makeRng((game.seed ^ Math.floor(game.worldMinutes * 2654435761) ^ (game.tickCount * 97)) >>> 0);
   minutes = Math.max(1, Math.round(minutes));
   game.worldMinutes += minutes;
@@ -1572,6 +1694,11 @@ export function tickWorld(game, minutes = 1, opts = {}) {
       }
       server.lastSeen = Date.now();
     }
+  }
+
+  // bounded procedural growth across the persistent world
+  for (const growthEvent of growWorldEntities(game, growthRng(game, 0x9a17))) {
+    events.push(growthEvent);
   }
 
   // news + forum life
