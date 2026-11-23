@@ -942,6 +942,21 @@ function buildPlayerHousehold(game, civ) {
 /* ============================================================
    BUILD ROOT
    ============================================================ */
+/* Live references used only while the simulation runs. They are defined as
+   non-enumerable so a save does not serialize the company roster twice; every
+   revive or ensure pass rebuilds them from the current game state. */
+function defineTransientRefs(civ, game) {
+  const attach = (key, value) => {
+    try {
+      Object.defineProperty(civ, key, { value, enumerable: false, configurable: true, writable: true });
+    } catch (e) {
+      civ[key] = value;
+    }
+  };
+  attach('_companies', game.companies || []);
+  attach('_npcIds', []);
+}
+
 export function buildCivilization(game, rng = null) {
   rng = rng || makeRng((game.seed ^ 0x1c1b1a19) >>> 0);
   const civ = {
@@ -960,6 +975,7 @@ export function buildCivilization(game, rng = null) {
     metrics: {}, multiplayer: null, _companies: (game.companies || []).slice(), _npcIds: []
   };
   civ.worldMinutes = game.worldMinutes;
+  defineTransientRefs(civ, game);
 
   civ.countries = COUNTRY_DEFS.map(def => makeCountry(def, rng));
   civ.cities = CITY_DEFS.map(def => makeCity(def, civ.countries.find(c => c.id === def[1]), rng));
@@ -1222,8 +1238,7 @@ export function ensureCivilization(game) {
   const civ = game.civ;
   civ.version = CIV_VERSION;
   civ.worldMinutes = game.worldMinutes;
-  civ._companies = game.companies || [];
-  civ._npcIds = [];
+  defineTransientRefs(civ, game);
   assignCompanyJurisdictions(civ, game, makeRng((game.seed ^ 0x6d21) >>> 0));
   const defaults = {
     countries: [], cities: [], institutions: [], laws: [], courts: [], regulators: [], disputes: [], compliance: [], policies: [],
@@ -1419,6 +1434,10 @@ function trimCiv(civ) {
   bounded(civ.education.enrollments, 120);
   bounded(civ.media.outlets, CAPS.outlets);
   bounded(civ.media.content, CAPS.content);
+  bounded(civ.media.playerPublished, CAPS.content);
+  bounded(civ.education.player.credentials, 24);
+  bounded(civ.player.credentials, 24);
+  bounded(civ.player.published, CAPS.content);
   bounded(civ.infrastructure.outages, CAPS.outages);
   bounded(civ.property.listings, CAPS.listings);
   bounded(civ.property.owned, CAPS.owned);
@@ -1663,8 +1682,7 @@ function dailyEconomy(game, civ, rng, events) {
       playerCompany.funds -= tax;
       playerCompany.taxPaid = (playerCompany.taxPaid || 0) + tax;
       if (playerCompany.funds < 0) playerCompany.funds = 0;
-      game.player.transactions.unshift({ time: Date.now(), amount: -tax, memo: `corporate tax · ${country.name}`, balance: game.player.money });
-      if (game.player.transactions.length > 120) game.player.transactions.length = 120;
+      // Paid from company funds, so it must not appear as a personal charge.
       if (rng.chance(.04)) emit(events, 'feed', `Corporate tax of ${fmtMoney(tax)} assessed in ${country.name}.`, { kind: 'info' });
     }
     const complianceChance = country.regulation.data / 100 * .006 + country.regulation.privacy / 100 * .004;
@@ -1973,13 +1991,20 @@ function mediaCadence(game, civ, rng, events) {
       }
     }
   }
-  // Player-published work continues to find an audience.
-  for (const pub of civ.media.playerPublished) {
+  // Player-published work continues to find an audience. Read the canonical
+  // content list, not the playerPublished mirror, so a save/load round trip
+  // cannot leave two copies of the same story drifting apart.
+  const playerPublishedIds = new Set((civ.media.playerPublished || []).map(p => p.id));
+  for (const pub of civ.media.content) {
     if (pub.status !== 'published') continue;
+    if (pub.authorId !== 'player' && !playerPublishedIds.has(pub.id)) continue;
     pub.reach = Math.round(pub.reach * (1 + rng.float(.002, .02)));
     pub.revenue += Math.round(pub.reach * .00008);
     civ.player.social.followers += Math.round(pub.reach * .0004);
   }
+  civ.media.playerPublished = civ.media.content
+    .filter(c => c.authorId === 'player' || playerPublishedIds.has(c.id))
+    .slice(-CAPS.content);
   for (const trend of civ.media.trends) {
     trend.volume = clamp(trend.volume + rng.int(-3, 4), 0, 100);
     trend.sentiment = clamp(trend.sentiment + rng.int(-2, 2), -100, 100);
@@ -2938,7 +2963,6 @@ export function tickCivilization(game, minutes = 1, rng = null) {
   const civ = ensureCivilization(game);
   rng = rng || civRng(game, 0x7f4a);
   const events = [];
-  void minutes;
   civ.worldMinutes = game.worldMinutes;
 
   const continuous = advanceBucket(civ, 'continuous', 30, civ.worldMinutes, 96);
@@ -3157,7 +3181,7 @@ export function playerBuyProperty(game, listingId, opts = {}) {
   const civ = ensureCivilization(game);
   const listing = civ.property.listings.find(p => p.id === listingId);
   if (!listing || listing.status !== 'available') return { ok: false, error: 'That property is not available.' };
-  const price = Math.round(listing.price * (opts.rented ? 1 : 1));
+  const price = listing.price;
   if (price > game.player.money) return { ok: false, error: `Property costs ${fmtMoney(price)}; you have ${fmtMoney(game.player.money)}.` };
   game.player.money -= price;
   game.stats.spent += price;
@@ -3276,7 +3300,7 @@ export function playerApplyJob(game, query) {
   const job = findOpenJob(civ, query);
   if (!job) return { ok: false, error: 'No open role matches that. Try: civ jobs' };
   const existing = civ.applications.find(a => a.jobId === job.id);
-  if (existing && ['applied', 'interview', 'offered'].includes(existing.status)) {
+  if (existing && ['applied', 'applicants', 'interview', 'offered'].includes(existing.status)) {
     return { ok: false, error: `You already have an application for ${job.title} (${existing.status}). Interview: civ interview ${job.id}` };
   }
   const match = jobMatch(game, job);
@@ -3285,7 +3309,7 @@ export function playerApplyJob(game, query) {
     return { ok: false, error: `Your application is not competitive (${match}% match). Study ${fieldName.toLowerCase()} or build professional experience first.` };
   }
   const app = existing || { id: nextId(civ, 'app'), jobId: job.id, appliedWorld: civ.worldMinutes };
-  app.status = 'applicants';
+  app.status = 'applied';
   app.match = match;
   app.appliedWorld = civ.worldMinutes;
   app.interviewWorld = null;
@@ -3380,7 +3404,7 @@ export function playerAcceptJob(game, query) {
 export function playerDeclineJob(game, query) {
   const civ = ensureCivilization(game);
   const app = findApplication(civ, query);
-  if (!app || !['offered', 'applicants'].includes(app.status)) return { ok: false, error: 'No active application to decline.' };
+  if (!app || !['offered', 'applicants', 'applied', 'interview'].includes(app.status)) return { ok: false, error: 'No active application to decline.' };
   const job = civ.jobs.find(j => j.id === app.jobId);
   app.status = 'declined';
   emitPlayerFeed(game, `Declined ${job?.title || 'the role'} at ${job?.companyName || 'the employer'}.`, 'info');
