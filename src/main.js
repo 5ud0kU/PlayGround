@@ -32,6 +32,18 @@ import {
   playerProperties, playerBuyProperty, playerSellProperty, playerInsureProperty, playerRelease,
   playerLegalAction, educationFields, researchFields
 } from './civilization.js';
+import {
+  languageFor, highlight, lint, formatCode, outline, completions, snippetsFor,
+  analyzeProject, findInProject, projectTemplates, scaffoldProject, runCommandFor,
+  testCommandFor, codingSummary, recordCoding, recordEdit
+} from './coding.js';
+import {
+  internetSummary, networkOverview, devEcosystem, aiEcosystem, securityOverview, socialOverview,
+  internetHistory, resolveDomain, playerHardenWebsite, playerRenewCertificate, playerAttachApi,
+  playerPublishPackage, playerTrainModel, playerDeployEndpoint, playerSecurityScan,
+  playerMitigateIncident
+} from './internet.js';
+import { devOverview, playerPublishTool, playerLabSession, playerInspectSource } from './devworld.js';
 import { execute, commandNames } from './shell.js';
 
 const $ = (sel, root = document) => root.querySelector(sel);
@@ -540,7 +552,7 @@ function tickLoop() {
 function softRefresh() {
   updateClock();
   updateMonitor();
-  for (const kind of ['market', 'servers', 'cloud', 'agents', 'processes', 'profile', 'map']) {
+  for (const kind of ['market', 'servers', 'cloud', 'agents', 'processes', 'profile', 'map', 'dev', 'internet']) {
     const win = app.windows.get(kind);
     if (win && !win.minimized && win.render) safe(() => win.render());
   }
@@ -561,6 +573,8 @@ const WINDOW_META = {
   processes: { title: 'System', sub: 'processes', w: 770, h: 490 },
   profile: { title: 'Profile', sub: 'operator', w: 750, h: 570 },
   civ: { title: 'Civilization', sub: 'persistent world', w: 900, h: 600 },
+  dev: { title: 'Developers', sub: 'autonomous software economy', w: 900, h: 600 },
+  internet: { title: 'Internet', sub: 'architecture + ecosystem', w: 900, h: 600 },
   help: { title: 'Manual', sub: 'field guide', w: 810, h: 550 }
 };
 
@@ -1179,7 +1193,7 @@ function filesAction(win, action) {
    EDITOR
    ============================================================ */
 MOUNTS.editor = function mountEditor(win) {
-  win.state = { files: [], active: null };
+  win.state = { files: [], active: null, sideTab: 'outline', outline: [], problems: [] };
   win.render = () => renderEditor(win);
   win.onParams = params => { if (params.path) openEditorPath(win, params.path); else renderEditor(win); };
   win.onClose = () => {
@@ -1222,21 +1236,31 @@ function renderEditor(win) {
   if (!win.ed) {
     win.body.innerHTML = `<div class="editor-layout">
       <div class="editor-tabs" data-ed-tabs></div>
-      <div class="app-toolbar">
+      <div class="app-toolbar ed-toolbar">
         <button class="tbtn small" data-ed-action="new">${ic('plus')} New</button>
         <button class="tbtn small primary" data-ed-action="save">${ic('save')} Save</button>
         <button class="tbtn small" data-ed-action="saveas">Save As</button>
+        <button class="tbtn small" data-ed-action="format">Format</button>
+        <button class="tbtn small" data-ed-action="lint">Lint</button>
         <button class="tbtn small" data-ed-action="run">Run</button>
+        <button class="tbtn small" data-ed-action="test">Test</button>
         <span class="spacer"></span>
+        <button class="tbtn small" data-ed-action="project">Project</button>
         <button class="tbtn small" data-ed-action="terminal">Terminal</button>
         <button class="tbtn small danger" data-ed-action="close">Close buffer</button>
       </div>
-      <div class="editor-main"><div class="line-nums" data-ed-lines></div><div class="editor-area"><textarea data-ed-area spellcheck="false" wrap="off"></textarea></div></div>
+      <div class="editor-main">
+        <div class="line-nums" data-ed-lines></div>
+        <div class="editor-area"><pre class="editor-highlight" data-ed-highlight aria-hidden="true"></pre><textarea data-ed-area spellcheck="false" wrap="off"></textarea></div>
+        <aside class="editor-side" data-ed-side></aside>
+      </div>
     </div>`;
     const ed = {
       tabs: win.body.querySelector('[data-ed-tabs]'),
       area: win.body.querySelector('[data-ed-area]'),
-      lines: win.body.querySelector('[data-ed-lines]')
+      lines: win.body.querySelector('[data-ed-lines]'),
+      highlight: win.body.querySelector('[data-ed-highlight]'),
+      side: win.body.querySelector('[data-ed-side]')
     };
     win.ed = ed;
     ed.area.addEventListener('input', () => {
@@ -1245,8 +1269,35 @@ function renderEditor(win) {
       f.content = ed.area.value;
       f.dirty = true;
       syncEditorLines(win);
+      syncEditorOverlay(win);
+      refreshEditorAnalysis(win);
       renderEditorTabs(win);
       updateEditorStatus(win);
+    });
+    ed.area.addEventListener('scroll', () => {
+      ed.highlight.scrollTop = ed.area.scrollTop;
+      ed.highlight.scrollLeft = ed.area.scrollLeft;
+      ed.lines.scrollTop = ed.area.scrollTop;
+    });
+    ed.side.addEventListener('click', e => {
+      const tab = e.target.closest('[data-ed-side-tab]');
+      if (tab) { st.sideTab = tab.dataset.edSideTab; renderEditorSide(win); return; }
+      const jump = e.target.closest('[data-ed-jump]');
+      if (jump) {
+        const line = Number(jump.dataset.edJump) || 1;
+        const lines = ed.area.value.split('\n');
+        const pos = lines.slice(0, line - 1).reduce((s, l) => s + l.length + 1, 0);
+        ed.area.focus();
+        ed.area.setSelectionRange(pos, pos);
+        const lineHeight = parseFloat(getComputedStyle(ed.area).lineHeight) || 18;
+        ed.area.scrollTop = Math.max(0, (line - 6) * lineHeight);
+        ed.highlight.scrollTop = ed.area.scrollTop;
+        ed.lines.scrollTop = ed.area.scrollTop;
+        updateEditorStatus(win);
+        return;
+      }
+      const snip = e.target.closest('[data-ed-snippet]');
+      if (snip) { applyEditorSnippet(win, snip.dataset.edSnippet); }
     });
     ed.area.addEventListener('keydown', e => {
       if (e.key === 'Tab') {
@@ -1271,8 +1322,91 @@ function renderEditor(win) {
   }
   renderEditorTabs(win);
   syncEditorLines(win);
+  syncEditorOverlay(win);
+  refreshEditorAnalysis(win);
   updateEditorStatus(win);
   setWindowMeta(win, 'Editor', basename(active.path));
+}
+
+function activeEditorFile(win) {
+  return (win.state.files || []).find(f => f.path === win.state.active) || null;
+}
+function editorLanguage(file) {
+  return file ? languageFor(file.path, file.content) : languageFor('text');
+}
+
+function syncEditorOverlay(win) {
+  const f = activeEditorFile(win);
+  if (!f || !win.ed?.highlight) return;
+  const lang = editorLanguage(f);
+  win.ed.highlight.innerHTML = highlight(f.content, lang.id) + '\n';
+  win.ed.highlight.scrollTop = win.ed.area.scrollTop;
+  win.ed.highlight.scrollLeft = win.ed.area.scrollLeft;
+}
+
+function refreshEditorAnalysis(win) {
+  const f = activeEditorFile(win);
+  if (!f) return;
+  const lang = editorLanguage(f);
+  win.state.outline = outline(f.content, lang.id);
+  win.state.problems = f.content.length > 180000 ? [] : lint(f.content, lang.id, f.path);
+  renderEditorSide(win);
+}
+
+function renderEditorSide(win) {
+  if (!win.ed?.side) return;
+  const st = win.state;
+  const f = activeEditorFile(win);
+  const lang = f ? editorLanguage(f) : null;
+  const tabs = [['outline','Outline'],['problems','Problems'],['snippets','Snippets'],['project','Project']];
+  let body = '';
+  if (!f) body = '<div class="ed-side-empty">Open a file to see its structure.</div>';
+  else if (st.sideTab === 'outline') {
+    body = st.outline.length
+      ? st.outline.slice(0, 160).map(s => `<button class="ed-symbol" data-ed-jump="${s.line}" title="${esc(s.kind)} · line ${s.line}"><span class="ed-kind">${esc(s.kind)}</span><span>${esc(s.name)}</span><small>${s.line}</small></button>`).join('')
+      : '<div class="ed-side-empty">No symbols detected in this file.</div>';
+  } else if (st.sideTab === 'problems') {
+    const errors = st.problems.filter(p => p.severity === 'error').length;
+    const warnings = st.problems.filter(p => p.severity === 'warning').length;
+    body = `<div class="ed-problem-summary">${errors} errors · ${warnings} warnings · ${st.problems.length} total</div>` +
+      (st.problems.length ? st.problems.slice(0, 120).map(p => `<button class="ed-problem ${esc(p.severity)}" data-ed-jump="${p.line}" title="${esc(p.rule)}"><span>${esc(p.severity === 'error' ? '✕' : p.severity === 'warning' ? '!' : 'i')}</span><b>${esc(p.message)}</b><small>${p.line}:${p.col}</small></button>`).join('') : '<div class="ed-side-empty">No static findings. The source parses cleanly.</div>');
+  } else if (st.sideTab === 'snippets') {
+    body = snippetsFor(lang?.id || 'text').map(s => `<button class="ed-snippet" data-ed-snippet="${esc(s.body)}" title="Insert ${esc(s.label)}"><b>${esc(s.label)}</b><span>${esc(s.detail)}</span></button>`).join('') || '<div class="ed-side-empty">No snippets for this language.</div>';
+  } else {
+    const root = editorProjectRoot(f.path);
+    const report = analyzeProject(app.game.fs, root);
+    const level = codingSummary(app.game);
+    body = `<div class="ed-project-head"><b>${esc(basename(root))}</b><span>${report.files} files · ${fmtNum(report.lines)} lines</span></div>
+      <div class="ed-project-health"><span>Project health</span><b>${report.health}/100</b><div class="bar ${report.health < 45 ? 'red' : report.health < 70 ? 'amber' : ''}"><i style="width:${report.health}%"></i></div></div>
+      <div class="ed-project-meta"><span>Languages</span>${report.languages.slice(0, 4).map(l => `<span>${esc(l.name)} ${l.files}</span>`).join('') || '<span>none</span>'}</div>
+      <div class="ed-project-meta"><span>Tests</span><b>${report.hasTests ? 'yes' : 'no'}</b><span>Git</span><b>${report.hasGit ? 'yes' : 'no'}</b><span>TODO</span><b>${report.todos}</b></div>
+      <div class="ed-project-checks">${report.checks.slice(0, 5).map(c => `<div>· ${esc(c)}</div>`).join('') || '<div>No immediate recommendations.</div>'}</div>
+      <div class="ed-project-level">Coding level ${level.level} · ${level.xp} XP · streak ${level.streak}</div>`;
+  }
+  win.ed.side.innerHTML = `<div class="ed-side-tabs">${tabs.map(([id, label]) => `<button data-ed-side-tab="${id}" class="${st.sideTab === id ? 'on' : ''}">${label}</button>`).join('')}</div><div class="ed-side-body">${body}</div>`;
+}
+
+function editorProjectRoot(path) {
+  let dir = dirname(path);
+  for (let i = 0; i < 5 && dir && dir !== '/'; i++) {
+    if (getNode(app.game.fs, joinPath(dir, '.git/repo.json')) || getNode(app.game.fs, joinPath(dir, 'package.json')) || getNode(app.game.fs, joinPath(dir, 'Makefile')) || getNode(app.game.fs, joinPath(dir, 'requirements.txt'))) return dir;
+    dir = dirname(dir);
+  }
+  return dirname(path) || HOME;
+}
+
+function applyEditorSnippet(win, body) {
+  const ed = win.ed;
+  if (!ed) return;
+  const text = String(body || '');
+  const pos = ed.area.selectionStart;
+  const end = ed.area.selectionEnd;
+  const caret = text.indexOf('|');
+  const insert = caret >= 0 ? text.slice(0, caret) + text.slice(caret + 1) : text;
+  ed.area.setRangeText(insert, pos, end, 'end');
+  ed.area.dispatchEvent(new Event('input'));
+  if (caret >= 0) ed.area.setSelectionRange(pos + caret, pos + caret);
+  ed.area.focus();
 }
 
 function renderEditorTabs(win) {
@@ -1306,8 +1440,11 @@ function updateEditorStatus(win) {
     col = lines[lines.length - 1].length + 1;
   }
   const lines = f.content.split('\n').length;
-  win.status.innerHTML = `<span>${esc(f.path)}</span><span>${lines} lines · ${f.content.length} chars</span>
-    <span class="st-right"><b>Ln ${ln}, Col ${col}</b><span>${f.dirty ? 'unsaved' : 'saved'}</span><span>UTF-8</span></span>`;
+  const lang = editorLanguage(f);
+  const problems = win.state.problems || [];
+  const errors = problems.filter(p => p.severity === 'error').length;
+  win.status.innerHTML = `<span>${esc(f.path)}</span><span>${esc(lang.name)} · ${lines} lines · ${f.content.length} chars</span>
+    <span class="st-right"><span class="${errors ? 'status-err' : ''}">${errors ? errors + ' errors' : problems.length + ' findings'}</span><b>Ln ${ln}, Col ${col}</b><span>${f.dirty ? 'unsaved' : 'saved'}</span><span>UTF-8</span></span>`;
 }
 
 function editorAction(win, action) {
@@ -1323,6 +1460,7 @@ function editorAction(win, action) {
         const abs = vals.path.startsWith('/') ? vals.path : resolvePath(HOME, vals.path);
         const old = readFile(app.game.fs, abs);
         writeFile(app.game.fs, abs, f.content, { owner: 'operator' });
+        recordEdit(app.game, abs, old || '', f.content);
         const delta = Math.max(0, f.content.split('\n').length - (old == null ? 0 : old.split('\n').length));
         app.game.stats.codeLines += delta;
         f.path = abs; f.dirty = false; st.active = abs;
@@ -1334,11 +1472,36 @@ function editorAction(win, action) {
   }
   if (action === 'close') { closeEditorBuffer(win, st.active); return; }
   if (action === 'terminal') { runCommand(`cd "${dirname(st.active || HOME)}"`); return; }
+  if (action === 'format') {
+    if (!f) return;
+    const formatted = formatCode(f.content, editorLanguage(f).id);
+    if (formatted === f.content) { toast('Formatted', 'Already in canonical form.', 'b'); return; }
+    recordEdit(app.game, f.path, f.content, formatted);
+    f.content = formatted; f.dirty = true;
+    if (win.ed.area.dataset.path === f.path) win.ed.area.value = formatted;
+    syncEditorLines(win); syncEditorOverlay(win); refreshEditorAnalysis(win); updateEditorStatus(win);
+    toast('Formatted', basename(f.path), 'g');
+    return;
+  }
+  if (action === 'lint') { st.sideTab = 'problems'; refreshEditorAnalysis(win); return; }
+  if (action === 'outline') { st.sideTab = 'outline'; renderEditorSide(win); return; }
+  if (action === 'snippets') { st.sideTab = 'snippets'; renderEditorSide(win); return; }
+  if (action === 'project') { st.sideTab = 'project'; renderEditorSide(win); return; }
+  if (action === 'test') {
+    if (!f) return;
+    const cmd = testCommandFor(f.path, editorLanguage(f).id);
+    if (!cmd) { toast('No test runner', 'This language has no simulated test command.', 'a'); return; }
+    recordCoding(app.game, 'test', 1, f.path);
+    runCommand(cmd);
+    return;
+  }
   if (action === 'run') {
     if (!f) return;
-    const ext = f.path.split('.').pop().toLowerCase();
-    const cmd = ext === 'py' ? `python3 "${f.path}"` : ext === 'sh' ? `bash "${f.path}"` : ext === 'c' ? `gcc "${f.path}" -o /tmp/a.out && /tmp/a.out` : ext === 'html' ? null : `cat "${f.path}"`;
-    if (cmd) runCommand(cmd); else openWindow('browser', { url: 'home' });
+    const spec = runCommandFor(f.path, editorLanguage(f).id);
+    recordCoding(app.game, spec.kind === 'build' ? 'compile' : 'run', 1, f.path);
+    if (spec.kind === 'preview') openWindow('browser', { url: 'home' });
+    else if (spec.command) runCommand(spec.command);
+    else toast('No runtime', 'This file type has no simulated runtime.', 'a');
   }
 }
 
@@ -1358,6 +1521,7 @@ function saveActiveBuffer(win) {
   if (!f) return;
   const old = readFile(app.game.fs, f.path);
   writeFile(app.game.fs, f.path, f.content, { owner: 'operator' });
+  recordEdit(app.game, f.path, old || '', f.content);
   const delta = Math.max(0, f.content.split('\n').length - (old == null ? 0 : old.split('\n').length));
   app.game.stats.codeLines += delta;
   f.dirty = false;
@@ -2998,6 +3162,172 @@ MOUNTS.civ = function mountCiv(win) {
 };
 
 /* ============================================================
+   AUTONOMOUS DEVELOPERS + INTERNET ARCHITECTURE
+   ============================================================ */
+const DEV_TABS = [['overview','Overview'],['developers','Developers'],['projects','Projects'],['advisories','Advisories'],['labs','Labs']];
+const NET_TABS = [['overview','Overview'],['network','Network'],['protocols','Protocols'],['web','Web'],['developers','Developers'],['ai','AI'],['security','Security'],['history','History']];
+
+MOUNTS.dev = function mountDev(win) {
+  win.devTab = win.devTab || 'overview';
+  win.body.addEventListener('click', e => handleDevClick(win, e));
+  win.render = () => renderDev(win);
+  renderDev(win);
+};
+
+function renderDev(win) {
+  const g = app.game;
+  const s = devOverview(g);
+  const m = s.metrics;
+  if (!DEV_TABS.some(t => t[0] === win.devTab)) win.devTab = 'overview';
+  const tab = win.devTab;
+  const tabs = DEV_TABS.map(([id, label]) => `<button class="civ-tab ${id === tab ? 'on' : ''}" data-dev-tab="${id}">${label}</button>`).join('');
+  let content = '';
+  if (tab === 'overview') {
+    content = `<div class="civ-grid cols-4">
+      ${civStat('Active developers', m.activeDevelopers, `${m.securityProfessionals} security professionals`, 'ok')}
+      ${civStat('Published projects', m.publishedProjects, `${m.detailedProjects} detailed`, 'ok')}
+      ${civStat('Generated source', fmtNum(m.lines), `${m.files} files`, 'b')}
+      ${civStat('Open advisories', m.openVulns, `${m.patchedVulns} patched`, m.openVulns > 8 ? 'r' : '')}
+    </div>
+    ${civSection('Developer economy', `<div class="civ-row"><div><b>Software is created by inhabitants</b><small>Developers plan, write, test, release and maintain real source files</small></div><div class="civ-row-right"><button class="tbtn small" data-dev-cmd="dev developers">Developers</button><button class="tbtn small" data-dev-cmd="dev projects">Repositories</button></div></div>
+      <div class="civ-row"><div><b>Supply chain security</b><small>Advisories originate in code, configuration and dependency decisions</small></div><div class="civ-row-right"><button class="tbtn small" data-dev-cmd="vuln">Advisories</button></div></div>
+      <div class="civ-row"><div><b>Authorized practice</b><small>Isolated ranges for legitimate security research</small></div><div class="civ-row-right"><button class="tbtn small" data-dev-cmd="lab">Laboratories</button></div></div>
+      <div class="civ-row"><div><b>Publish a tool</b><small>Release your own security utility into the shared registry</small></div><div class="civ-row-right"><button class="tbtn small primary" data-dev-action="publish">Publish</button></div></div>`, 'live state')}
+    ${civSection('Development chronicle', s.events.slice(0, 12).map(e => `<div class="civ-row"><div><b>${esc(e.title)}</b><small>${esc(e.body)}</small></div><div class="civ-row-right"><span class="tag">${esc(e.category)}</span><span class="dim">${e.year}</span></div></div>`).join(''))}`;
+  } else if (tab === 'developers') {
+    content = civSection('Independent developers', s.developers.slice(0, 60).map(d => {
+      const langs = Object.keys(d.languages || {}).sort((a, b) => (d.languages[b] || 0) - (d.languages[a] || 0)).slice(0, 5);
+      return `<div class="civ-row"><div><b>@${esc(d.handle)} · ${esc(d.name)}</b><small>${esc(d.role)} · ${esc(d.employment)} · ${esc(d.objectives[0] || '')}</small></div><div class="civ-row-right">
+        ${langs.map(l => `<span class="tag">${esc(l)} ${Math.round(d.languages[l] || 0)}</span>`).join('')}
+        <span class="tag ${d.status === 'active' ? 'g' : 'a'}">${esc(d.status)}</span>
+        <button class="tbtn small" data-dev-cmd="repo projects">${d.projects.length} repos</button>
+      </div></div>`;
+    }).join(''), `${s.developers.length} developers`);
+  } else if (tab === 'projects') {
+    content = civSection('Repositories and generated source', s.projects.slice(0, 60).map(p => `<div class="civ-row"><div><b>${esc(p.name)}</b><small>${esc(p.kind)} · ${esc(p.ownerHandle)} · ${esc(p.architecture.target || '')}</small></div><div class="civ-row-right">
+      <span class="tag">${esc(p.language)}</span><span class="tag">${fmtNum(p.metrics.lines)} lines</span><span class="tag">${fmtNum(p.metrics.downloads)} dl</span>
+      <span class="tag ${p.status === 'abandoned' ? 'r' : p.published ? 'g' : 'a'}">${esc(p.status)}</span>
+      <button class="tbtn small" data-dev-cmd="repo show ${esc(p.slug)}">Inspect</button>
+      <button class="tbtn small" data-dev-cmd="repo source ${esc(p.slug)}">Source</button>
+    </div></div>`).join(''), `${s.projects.length} projects`);
+  } else if (tab === 'advisories') {
+    content = civSection('Security advisories', s.advisories.slice(0, 50).map(a => `<div class="civ-row"><div><b>${esc(a.cve)} · ${esc(a.title)}</b><small>${esc(a.summary)} · reported by ${esc(a.publishedBy)}</small></div><div class="civ-row-right">
+      <span class="tag ${a.severity === 'critical' ? 'r' : a.severity === 'high' ? 'a' : ''}">${esc(a.severity)}</span>
+      <span class="tag ${a.status === 'patched' ? 'g' : 'r'}">${esc(a.status)}</span>
+      <button class="tbtn small" data-dev-cmd="vuln info ${esc(a.cve)}">Detail</button>
+    </div></div>`).join('') || '<div class="empty-state">No advisories published yet.</div>', `${s.advisories.length} advisories`);
+  } else {
+    content = civSection('Authorized laboratories', s.labs.map(l => {
+      const authorized = l.authorizedHandles.includes(g.player.handle);
+      return `<div class="civ-row"><div><b>${esc(l.name)}</b><small>${esc(l.desc)} · scope ${esc(l.targets.join(', '))}</small></div><div class="civ-row-right">
+        <span class="tag ${l.status === 'online' ? 'g' : 'r'}">${esc(l.status)}</span><span class="tag">${l.sessions} sessions</span>
+        <button class="tbtn small ${authorized ? 'danger' : 'primary'}" data-dev-lab="${esc(l.id)}" data-dev-lab-action="${authorized ? 'leave' : 'enter'}">${authorized ? 'Leave' : 'Enter'}</button>
+      </div></div>`;
+    }).join(''), 'isolated fictional environments');
+  }
+  win.body.innerHTML = `<div class="civ-tabs">${tabs}</div><div class="win-scroll">${content}</div>`;
+  win.status.innerHTML = `<span>${m.activeDevelopers} active developers</span><span>${m.publishedProjects} repositories</span><span class="st-right"><b>${m.openVulns} open advisories</b><span>year ${m.year}</span></span>`;
+}
+
+function handleDevClick(win, e) {
+  const tab = e.target.closest('[data-dev-tab]');
+  if (tab) { win.devTab = tab.dataset.devTab; renderDev(win); return; }
+  const cmd = e.target.closest('[data-dev-cmd]');
+  if (cmd) { openWindow('terminal'); runCommand(cmd.dataset.devCmd); return; }
+  const action = e.target.closest('[data-dev-action]');
+  if (action && action.dataset.devAction === 'publish') {
+    formModal({
+      title: 'Publish a security tool', eyebrow: 'DEVELOPER ECONOMY',
+      fields: [
+        { name: 'name', label: 'TOOL NAME', value: '' },
+        { name: 'language', label: 'LANGUAGE', type: 'select', value: 'python', options: ['python','javascript','go','rust','c','bash'].map(v => ({ value: v, label: v })) }
+      ],
+      submit: 'Publish for $80',
+      onSubmit: vals => {
+        const r = playerPublishTool(app.game, vals.name, vals.language);
+        if (!r.ok) { toast('Publish failed', r.error, 'r'); return false; }
+        toast('Tool published', `${r.project.name} · ${Object.keys(r.project.files).length} source files`, 'g');
+        refreshUI();
+      }
+    });
+    return;
+  }
+  const lab = e.target.closest('[data-dev-lab]');
+  if (lab) {
+    const r = playerLabSession(app.game, lab.dataset.devLab, lab.dataset.devLabAction);
+    toast(lab.dataset.devLabAction === 'enter' ? 'Range session' : 'Range closed', r.ok ? r.message : r.error, r.ok ? 'g' : 'r');
+    refreshUI();
+  }
+}
+
+MOUNTS.internet = function mountInternet(win) {
+  win.netTab = win.netTab || 'overview';
+  win.body.addEventListener('click', e => handleInternetClick(win, e));
+  win.render = () => renderInternet(win);
+  renderInternet(win);
+};
+
+function renderInternet(win) {
+  const g = app.game;
+  const s = internetSummary(g);
+  const m = s.metrics;
+  if (!NET_TABS.some(t => t[0] === win.netTab)) win.netTab = 'overview';
+  const tab = win.netTab;
+  const tabs = NET_TABS.map(([id, label]) => `<button class="civ-tab ${id === tab ? 'on' : ''}" data-net-tab="${id}">${label}</button>`).join('');
+  let content = '';
+  if (tab === 'overview') {
+    content = `<div class="civ-grid cols-4">
+      ${civStat('Internet health', `${m.health}/100`, `${m.year} · ${m.trafficTbps} Tbps`, m.health > 70 ? 'ok' : '')}
+      ${civStat('Autonomous systems', m.asnCount, `${m.ixpCount} exchanges · ${m.cableCount} cables`, 'b')}
+      ${civStat('Web + APIs', m.siteCount, `${m.apiCount} APIs · ${m.certCount} certs`, 'ok')}
+      ${civStat('Open incidents', m.openIncidents, `${m.advisoryCount} advisories`, m.openIncidents > 8 ? 'r' : '')}
+    </div>
+    ${civSection('Protocol adoption', s.protocols.slice(0, 12).map(p => `<div class="civ-row"><div><b>${esc(p.name)}</b><small>${esc(p.layer)} · ${esc(p.spec)} · ${esc(p.status)}</small></div><div class="civ-row-right"><div class="bar" style="width:120px"><i style="width:${Math.round(p.adoption)}%"></i></div><span class="tag">${Math.round(p.adoption)}%</span></div></div>`).join(''))}
+    ${civSection('Live events', g.internet.events.slice(-8).reverse().map(e => `<div class="civ-row"><div><b>${esc(e.title)}</b><small>${esc(e.body || '')}</small></div><div class="civ-row-right"><span class="tag ${e.severity === 'critical' ? 'r' : 'a'}">${esc(e.category)}</span></div></div>`).join(''))}`;
+  } else if (tab === 'network') {
+    content = civSection('Autonomous systems', s.asns.slice(0, 40).map(a => `<div class="civ-row"><div><b>${esc(a.name)}</b><small>AS${a.asn} · ${esc(a.type)} · ${a.peers.length} peers · ${a.upstreams.length} upstreams</small></div><div class="civ-row-right"><span class="tag">${fmtNum(a.trafficGbps)} Gbps</span><span class="tag ${a.status === 'operational' ? 'g' : 'a'}">${esc(a.status)}</span></div></div>`).join('')) +
+      civSection('Exchange points', s.ixps.slice(0, 20).map(x => `<div class="civ-row"><div><b>${esc(x.name)}</b><small>${x.members.length} members · route server ${x.routeServer ? 'yes' : 'no'}</small></div><div class="civ-row-right"><span class="tag">${fmtNum(x.trafficGbps)} Gbps</span></div></div>`).join('')) +
+      civSection('Long-haul links', s.cables.slice(0, 20).map(c => `<div class="civ-row"><div><b>${esc(c.name)}</b><small>${esc(c.kind)} · ${c.latencyMs} ms · ${esc(c.owner)}</small></div><div class="civ-row-right"><span class="tag">${fmtNum(c.capacityTbps)} Tbps</span><span class="tag ${c.status === 'up' ? 'g' : 'a'}">${esc(c.status)}</span></div></div>`).join(''));
+  } else if (tab === 'protocols') {
+    content = civSection('Protocol registry', s.protocols.map(p => `<div class="civ-row"><div><b>${esc(p.name)}</b><small>${esc(p.notes)}</small></div><div class="civ-row-right"><span class="tag">sec ${Math.round(p.security)}</span><span class="tag">perf ${Math.round(p.performance)}</span><span class="tag ${p.status === 'standard' ? 'g' : 'a'}">${esc(p.status)}</span></div></div>`).join(''));
+  } else if (tab === 'web') {
+    const mine = s.web.filter(r => r.ownerType === 'player');
+    content = civSection('Your web properties', mine.map(r => `<div class="civ-row"><div><b>${esc(r.domain)}</b><small>${esc(r.title)} · TLS ${r.tls?.version || 'none'} · ${Math.round(r.availability)}% availability</small></div><div class="civ-row-right">
+      <button class="tbtn small" data-net-cmd="web secure ${esc(r.domain)}">Harden</button>
+      <button class="tbtn small" data-net-cmd="web cert ${esc(r.domain)}">Renew cert</button>
+      <button class="tbtn small" data-net-cmd="web scan ${esc(r.domain)}">Scan</button>
+    </div></div>`).join('') || '<div class="empty-state">Deploy a site to manage its TLS, APIs and security posture.</div>', `${mine.length} owned`) +
+      civSection('Internet index', s.web.slice(0, 40).map(r => `<div class="civ-row"><div><b>${esc(r.domain)}</b><small>${esc(r.stack.join(', '))} · ${esc(r.backend)} · ${esc(r.status)}</small></div><div class="civ-row-right"><span class="tag">${fmtNum(r.requestsPerMin)}/min</span><button class="tbtn small" data-net-cmd="web ${esc(r.domain)}">Inspect</button></div></div>`).join(''));
+  } else if (tab === 'developers') {
+    const d = devEcosystem(g);
+    content = civSection('Languages', d.languages.map(l => `<div class="civ-row"><div><b>${esc(l.name)}</b><small>${esc(l.runtime)} · ${esc(l.status)}</small></div><div class="civ-row-right"><span class="tag">${Math.round(l.adoption)}% adoption</span></div></div>`).join('')) +
+      civSection('Popular packages', d.packages.slice(0, 30).map(p => `<div class="civ-row"><div><b>${esc(p.name)}@${esc(p.version)}</b><small>${esc(p.desc)} · ${esc(p.registry)} · ${esc(p.license)}</small></div><div class="civ-row-right"><span class="tag">${fmtNum(p.weeklyDownloads)}/wk</span>${p.vulnerabilityCount ? `<span class="tag r">${p.vulnerabilityCount} vuln</span>` : ''}</div></div>`).join(''));
+  } else if (tab === 'ai') {
+    const ai = aiEcosystem(g);
+    content = civSection('Models', ai.models.slice(0, 30).map(m => `<div class="civ-row"><div><b>${esc(m.name)}</b><small>${esc(m.vendor)} · ${esc(m.params)} · ${esc(m.modality)} · ${fmtNum(m.context)} ctx</small></div><div class="civ-row-right"><span class="tag">q${Math.round(m.quality)}</span><span class="tag">${m.costPerM ? '$' + m.costPerM + '/M' : 'open'}</span></div></div>`).join('')) +
+      civSection('Inference endpoints', ai.endpoints.slice(0, 20).map(e => `<div class="civ-row"><div><b>${esc(e.modelId)}</b><small>${esc(e.ownerName)} · ${esc(e.region)} · ${e.latencyMs} ms</small></div><div class="civ-row-right"><span class="tag">${fmtNum(e.requests)} req</span><span class="tag g">${e.uptime.toFixed(2)}%</span></div></div>`).join('')) +
+      civSection('Training', ai.training.slice(0, 12).map(t => `<div class="civ-row"><div><b>${esc(t.modelName)}</b><small>${fmtNum(t.computeHours)} compute hours</small></div><div class="civ-row-right"><div class="bar" style="width:110px"><i style="width:${Math.round(t.progress)}%"></i></div><span class="tag">${esc(t.status)}</span></div></div>`).join(''));
+  } else if (tab === 'security') {
+    const sec = securityOverview(g);
+    const z = sec.zeroTrust;
+    content = `<div class="civ-grid cols-3">${civMeter('Identity', z.identity)}${civMeter('Devices', z.device)}${civMeter('Network', z.network)}${civMeter('Workloads', z.workload)}${civMeter('Data', z.data)}</div>` +
+      civSection('Advisories', sec.advisories.slice(0, 30).map(a => `<div class="civ-row"><div><b>${esc(a.cve)} · ${esc(a.title)}</b><small>${esc(a.product)} · ${esc(a.affected)}</small></div><div class="civ-row-right"><span class="tag ${a.severity === 'critical' ? 'r' : 'a'}">${esc(a.severity)}</span><span class="tag ${a.status === 'patched' ? 'g' : 'r'}">${esc(a.status)}</span></div></div>`).join('')) +
+      civSection('Incidents', sec.incidents.slice(0, 24).map(i => `<div class="civ-row"><div><b>${esc(i.id)} · ${esc(i.kind)}</b><small>${esc(i.targetName || '')} · ${esc(i.impact)}</small></div><div class="civ-row-right"><span class="tag ${i.status === 'resolved' ? 'g' : 'r'}">${esc(i.status)}</span>${i.status !== 'resolved' ? `<button class="tbtn small" data-net-cmd="sec respond ${esc(i.id)}">Respond</button>` : ''}</div></div>`).join(''));
+  } else {
+    content = civSection('Internet history', internetHistory(g, { limit: 60 }).map(h => `<div class="civ-row"><div><b>${esc(h.title)}</b><small>${esc(h.body)}</small></div><div class="civ-row-right"><span class="tag ${h.major ? 'g' : ''}">${h.year}</span><span class="tag">${esc(h.category)}</span></div></div>`).join(''));
+  }
+  win.body.innerHTML = `<div class="civ-tabs">${tabs}</div><div class="win-scroll">${content}</div>`;
+  win.status.innerHTML = `<span>health ${m.health}/100</span><span>${m.asnCount} ASNs · ${m.siteCount} sites · ${m.aiModelCount} models</span><span class="st-right"><b>${m.openIncidents} open incidents</b><span>${m.year}</span></span>`;
+}
+
+function handleInternetClick(win, e) {
+  const tab = e.target.closest('[data-net-tab]');
+  if (tab) { win.netTab = tab.dataset.netTab; renderInternet(win); return; }
+  const cmd = e.target.closest('[data-net-cmd]');
+  if (cmd) { openWindow('terminal'); runCommand(cmd.dataset.netCmd); }
+}
+
+/* ============================================================
    HELP / MANUAL
    ============================================================ */
 const CMD_HELP = {
@@ -3116,6 +3446,30 @@ const CMD_HELP = {
   map: 'Open the network topology.',
   achievements: 'List achievements.',
   search: 'Search sites, hosts, people, and work.',
+  project: 'Analyse a local project and its code health.',
+  init: 'Scaffold a new project from a template.',
+  lint: 'Statically analyse local source files.',
+  fmt: 'Format a source file in place.',
+  symbols: 'List functions, classes and selectors.',
+  run: 'Run a file with its simulated runtime.',
+  build: 'Compile a project file.',
+  test: 'Run the matching test command.',
+  coding: 'Show coding level, XP and activity.',
+  net: 'Inspect internet architecture and adoption.',
+  web: 'Inspect DNS, TLS, APIs and web properties.',
+  registry: 'Browse and publish software packages.',
+  model: 'Inspect and train AI models, serve inference.',
+  sec: 'Check security posture and advisories.',
+  dev: 'Inspect autonomous NPC developers and projects.',
+  repo: 'Read, clone, lint and contribute to generated repositories.',
+  vuln: 'Investigate vulnerabilities derived from real generated code.',
+  lab: 'Open authorized cyber ranges and practice safely.',
+  packets: 'Capture a bounded packet trace from a simulated host.',
+  forensics: 'Produce a chain-of-custody forensic report.',
+  http: 'Inspect HTTP headers and site state.',
+  inspect: 'Fingerprint a host from simulated configuration.',
+  debug: 'Inspect symbols and static faults in local code.',
+  openssl: 'Inspect a simulated TLS certificate.',
   save: 'Save the persistent world.',
   reset: 'Erase the world and start over.'
 };

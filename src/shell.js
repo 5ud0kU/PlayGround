@@ -1,5 +1,5 @@
 /* Terminal shell: parsing, pipes, virtual filesystem, networking and tools. */
-import { fmtMoney, fmtNum, fmtBytes, fmtDate, fmtTime, fmtDateTime, fmtDuration, esc, pad, padLeft, table, sleep, clamp, progressBar, lineWrap, titleCase } from './util.js';
+import { fmtMoney, fmtNum, fmtBytes, fmtDate, fmtTime, fmtDateTime, fmtDuration, esc, pad, padLeft, table, sleep, clamp, progressBar, lineWrap, titleCase, hash32 } from './util.js';
 import {
   HOME, resolvePath, getNode, listDir, readFile, writeFile, ensureDir, removeNode, moveNode,
   copyNode, exists, isDir, basename, dirname, joinPath, normalize, allFiles, findFiles, treeLines,
@@ -26,6 +26,23 @@ import {
   AGENT_ROLES, PRODUCT_TEMPLATES
 } from './data.js';
 import {
+  analyzeProject, findInProject, lint, formatCode, outline, completions, languages,
+  projectTemplates, scaffoldProject, runCommandFor, testCommandFor, snippetsFor,
+  languageFor, languageName, codingSummary, recordCoding, recordEdit, codingSkillBonus
+} from './coding.js';
+import {
+  devOverview, developerList, projectList, projectDetail, vulnList, labList, contributionList,
+  evaluateAuthorization, playerCloneProject, playerContribute, playerReportVulnerability,
+  playerPublishTool, playerLabSession, playerPracticeExploit, playerInspectSource, playerForkProject
+} from './devworld.js';
+import {
+  ensureInternet, internetSummary, protocolList, networkOverview, webList, webRecord,
+  resolveDomain, devEcosystem, aiEcosystem, securityOverview, socialOverview, internetHistory,
+  playerHardenWebsite, playerRenewCertificate, playerAttachApi, playerPublishPackage,
+  playerDeploySite, playerTrainModel, playerDeployEndpoint, playerSecurityScan,
+  playerMitigateIncident
+} from './internet.js';
+import {
   civilizationSummary, civHistory, civEventList, educationFields, researchFields, lawDomains,
   playerStudy, playerStartResearch, playerFundResearch, playerPublish, playerBuyProperty,
   playerSellProperty, playerInsureProperty, playerRelease, playerLobby, playerRelocate, playerAdoptTech, playerProperties,
@@ -40,6 +57,8 @@ const CMD_ALIASES = {
   cls: 'clear', logout: 'exit', quit: 'exit', h: 'history', '?': 'help',
   inbox: 'mail', jobs: 'contracts', gigs: 'contracts', board: 'contracts',
   shop: 'market', store: 'market', topology: 'map', netmap: 'map',
+  tcpdump: 'packets', wireshark: 'packets', dns: 'dig', trace: 'traceroute',
+  webtest: 'http', sast: 'lint', reverse: 'debug',
   whoami: 'whoami', sysinfo: 'neofetch', fetch: 'neofetch'
 };
 
@@ -179,7 +198,9 @@ export async function execute(app, term, rawLine) {
 
   if (term.pending) return handlePending(app, term, line);
 
-  const aliased = CMD_ALIASES[line] ? CMD_ALIASES[line] : line;
+  const firstToken = line.split(/\s+/)[0] || '';
+  const aliased = CMD_ALIASES[line] ? CMD_ALIASES[line]
+    : CMD_ALIASES[firstToken] ? CMD_ALIASES[firstToken] + line.slice(firstToken.length) : line;
   const controls = splitControl(aliased);
   let lastCode = 0;
   for (const control of controls) {
@@ -331,10 +352,13 @@ COMMANDS.help = (ctx) => {
     ['SYSTEM', 'whoami  id  hostname  uname  date  uptime  ps  top  kill  free  systemctl  sudo  su'],
     ['PACKAGES', 'apt update  apt install <pkg>  apt list --installed'],
     ['NETWORK', 'ip  ifconfig  ping  traceroute  dig  whois  curl  wget  ssh  scp  nc  netstat  ss'],
-    ['SECURITY', 'nmap  vulnscan  audit  exploit  patch  hydra  heat  legal'],
+    ['SECURITY', 'nmap  vulnscan  audit  exploit  patch  hydra  heat  legal  sec'],
     ['DEVELOP', 'python3  bash  gcc  make  git  sqlite3  node  docker  kubectl'],
+    ['CODING', 'project  init  templates  lint  fmt  symbols  rg  todo  run  build  test  coding'],
+    ['INTERNET', 'net  web  registry  sec  social  nethistory  dig  curl  map'],
+    ['DEV ECOSYSTEM', 'dev  repo  vuln  lab  packets  forensics  http  inspect  debug  openssl'],
     ['CLOUD', 'cloud  docker  kubectl'],
-    ['AI', 'agent  agent models  agent deploy  company'],
+    ['AI', 'agent  model  company'],
     ['ECONOMY', 'bank  contracts  accept  submit  market  buy  deploy  domains  site  servers  company'],
     ['SOCIAL', 'mail  send  read  forum  thread  post  news  profile  search  whois'],
     ['CIVILIZATION', 'civ  country  study  research  publish  civ laws  civ legal  civ identity  civ property  civ tech  civ supply  civ history  civ events  civ mp'],
@@ -370,6 +394,33 @@ function manPage(ctx, name) {
     agent: ['agent — autonomous AI agents', 'agent list [--all] | models | roles | deploy <name> --role <role> --model <model> | inspect <name> | start|stop|pause <name> | assign <name> <domain>', 'Agents perform bounded work on your infrastructure. They cost money, remember what they did, and pause when something looks wrong.'],
     company: ['company — organizations', 'company list | inspect <name> | register <name> | launch <product> | products | mine', 'Register and operate your own technology company. Products generate recurring revenue based on subscribers and reputation.'],
     civ: ['civ — civilization interface', 'civ [status|countries|country <q>|cities|laws|legal|identity|study|research|media|tech|supply|property|society|diplomacy|release|history|events|mp|relocate|lobby]', 'Inspect and act on the persistent civilization: governments, regulation, education, research, media, infrastructure, property, supply chains, technology, culture, identity and shared-world authority. The simulation runs whether or not you participate.'],
+    project: ['project — analyse a workspace', 'project [directory]', 'Reports file counts, language mix, size, test and manifest coverage, TODOs and a bounded health score. Uses only the virtual filesystem.'],
+    init: ['init — scaffold a project', 'init [list] | init <template> [directory] [--force]', 'Creates a real project tree with source files, tests, a manifest and an optional git repository. Templates: blank, web, python, node, api, game, library, c, docs.'],
+    lint: ['lint — static analysis', 'lint [file...]', 'Parses source without executing it. Reports bracket errors, unsafe constructs, hard-coded credentials, style issues and unfinished work.'],
+    fmt: ['fmt — format source', 'fmt <file> [--check]', 'Normalises indentation, trailing whitespace, blank lines and JSON layout. Writes the result back to the virtual filesystem.'],
+    symbols: ['symbols — code outline', 'symbols <file>', 'Lists functions, classes, types and selectors with line numbers.'],
+    rg: ['rg — project search', 'rg <pattern> [directory]', 'Searches text files in a project, skipping build output, dependencies and binary assets.'],
+    run: ['run — execute a file', 'run [file]', 'Chooses a runtime from the file type, runs it in the simulated machine and records the attempt. HTML launches the site preview.'],
+    build: ['build — compile a project file', 'build <file>', 'Runs the build path for C, C++, Rust, Go, TypeScript or other compiled languages.'],
+    test: ['test — run tests', 'test [file]', 'Chooses the test runner for the language and records a pass or failure against your coding record.'],
+    coding: ['coding — developer record', 'coding', 'Shows coding level, XP, streak, line output, builds, releases and recent activity.'],
+    net: ['net — internet architecture', 'net [status|asns|ixps|cables|dc|protocols|events|map]', 'Inspects the simulated internet: autonomous systems, exchange points, long-haul links, data centers, protocol adoption and network events.'],
+    web: ['web — world wide web', 'web [list|<domain>|secure <site>|cert <site>|api <site> [protocol]|scan <site>|advisories|incidents|respond <id>|sbom|dev|platforms|history]', 'Inspects DNS, TLS, CDN, stack, API and health records for websites. Owners can harden, re-certify, publish APIs and scan their own sites.'],
+    registry: ['registry — package registries', 'registry [list|search <q>|info <name>|publish <name> [version] [language]]', 'The public package ecosystem. Publishing a package costs money and enters the shared registry.'],
+    model: ['model — AI ecosystem', 'model [list|info <id>|train <name> [base] [hours]|serve <model> <site> [price]|endpoints|training|vector]', 'Inspect models, train a new one on rented compute, and serve inference through a site you control.'],
+    sec: ['sec — security posture', 'sec [status|advisories|incidents|scan <site>|respond <id>|sbom]', 'Zero-trust scores, advisories, open incidents and remediation. Scanning works only on your own infrastructure.'],
+    social: ['social — social platforms', 'social [name]', 'Lists the simulated social internet and its trust, user and protocol characteristics.'],
+    nethistory: ['nethistory — internet history', 'nethistory [query]', 'Chronological internet history, from early packet switching to current adoption shifts.'],
+    dev: ['dev — autonomous developer economy', 'dev [status|developers|projects|events|contributions|publish <name> [language]]', 'Inspects NPC developers, their repositories, technical decisions and published tools. Developers write and maintain actual source code in the simulation.'],
+    repo: ['repo — repositories and source', 'repo [list|show <project>|source <project> [file]|lint <project>|clone <project> [dir]|contribute <project> <change>|fork <project>|report <project> [category]|issues <project>]', 'Reads real generated source files, git history and advisories. Cloning writes the project into your virtual filesystem.'],
+    vuln: ['vuln — vulnerability register', 'vuln [list|info <cve|id>|advisories|report <project> [category]]', 'Findings originate in generated code, dependencies and configuration decisions. Each includes preconditions, impact, detection and remediation.'],
+    lab: ['lab — authorized cyber ranges', 'lab [list|enter <lab>|targets <lab>|exploit <lab> <target>|leave <lab>]', 'Isolated fictional environments for authorized practice. Exploits outside scope are not permitted.'],
+    packets: ['packets — traffic capture', 'packets <host> [count]', 'Builds a bounded capture from the target\'s simulated ports, addresses and traffic. Captures are stored locally as evidence.'],
+    forensics: ['forensics — incident evidence', 'forensics <host>', 'Produces a chain-of-custody report from simulated host notes, configuration and monitoring state.'],
+    http: ['http — HTTP inspection', 'http <domain> [path]', 'Requests a simulated web record and reports headers, stack and health derived from the live web model.'],
+    inspect: ['inspect — host and service fingerprint', 'inspect <host|domain>', 'Fingerprints a target using its actual simulated OS, services, versions and authorization record.'],
+    debug: ['debug — simulated debugger', 'debug <source-file> | gdb <source-file>', 'Lists symbols and static faults in a local source file. No real code executes on the player\'s device.'],
+    openssl: ['openssl — certificate inspection', 'openssl x509 -in <domain> | openssl version', 'Reads the simulated PKI record for a domain: issuer, key, TLS version, validity and renewal policy.'],
   };
   const p = pages[name];
   if (!p) { ctx.print(`No manual entry for ${name}`, 'err'); ctx.dim('Try: help'); return; }
@@ -4086,6 +4137,1013 @@ COMMANDS.study = (ctx) => civStudy(ctx, ctx.args);
 COMMANDS.research = (ctx) => civResearch(ctx, ctx.args);
 COMMANDS.publish = (ctx) => civMedia(ctx, ['publish', ...ctx.args]);
 COMMANDS.country = (ctx) => ctx.args.length ? civCountry(ctx, ctx.args.join(' ')) : civCountries(ctx);
+
+/* ============================================================
+   SOFTWARE DEVELOPMENT WORKSPACE
+   ============================================================ */
+function projectRoot(ctx, arg) {
+  return arg ? pathFor(ctx.term, arg) : (ctx.term.cwd || ctx.home());
+}
+function textFileAt(ctx, file) {
+  if (!file) return null;
+  const abs = pathFor(ctx.term, file);
+  const node = getNode(ctx.fs(), abs);
+  if (!node || node.type !== 'file') return null;
+  return { abs, node, content: node.content || '' };
+}
+function printProblems(ctx, path, problems) {
+  if (!problems.length) { ctx.ok(`${path}: no problems`); return 0; }
+  for (const p of problems.slice(0, 40)) {
+    const loc = `${path}:${p.line}:${p.col}`;
+    const text = `${loc}  ${p.severity.padEnd(7)} ${p.message}  [${p.rule}]`;
+    if (p.severity === 'error') ctx.print(text, 'err');
+    else if (p.severity === 'warning') ctx.print(text, 'warn');
+    else ctx.print(text, 'dim');
+  }
+  if (problems.length > 40) ctx.dim(`… ${problems.length - 40} more`);
+  return problems.length;
+}
+
+COMMANDS.project = (ctx) => {
+  const root = projectRoot(ctx, ctx.args.find(a => !a.startsWith('-')));
+  if (!getNode(ctx.fs(), root)) { ctx.err(`project: ${root}: No such directory`); return; }
+  const report = analyzeProject(ctx.fs(), root);
+  ctx.head(`PROJECT · ${root}`);
+  ctx.print('');
+  ctx.print(`Files        ${report.files} (${report.textFiles} text)`);
+  ctx.print(`Lines        ${fmtNum(report.lines)}`);
+  ctx.print(`Size         ${fmtBytes(report.bytes)}`);
+  ctx.print(`Health       ${progressBar(report.health, 20)} ${report.health}/100`, report.health >= 70 ? 'ok' : report.health >= 45 ? 'warn' : 'err');
+  ctx.print(`Version ctl  ${report.hasGit ? 'git repository' : 'not initialised'} · tests ${report.hasTests ? 'present' : 'missing'} · README ${report.hasReadme ? 'present' : 'missing'}`);
+  ctx.print('');
+  if (report.languages.length) {
+    ctx.print('LANGUAGES', 'head');
+    for (const l of report.languages.slice(0, 10)) ctx.print(`  ${pad(l.name, 14)} ${padLeft(fmtNum(l.lines), 8)} lines  ${l.files} files`, 'accent');
+  }
+  if (report.testFiles.length) {
+    ctx.print('');
+    ctx.print('TESTS', 'head');
+    for (const t of report.testFiles.slice(0, 8)) ctx.dim(`  ${t}`);
+  }
+  if (report.manifests.length) {
+    ctx.print('');
+    ctx.print('MANIFESTS', 'head');
+    for (const m of report.manifests.slice(0, 8)) ctx.dim(`  ${m}`);
+  }
+  if (report.largest.length) {
+    ctx.print('');
+    ctx.print('LARGEST FILES', 'head');
+    for (const f of report.largest.slice(0, 6)) ctx.print(`  ${padLeft(fmtNum(f.lines), 7)} lines  ${pad(fmtBytes(f.bytes), 9)} ${f.path}`, 'dim');
+  }
+  ctx.print('');
+  ctx.print('NEXT', 'head');
+  if (!report.checks.length) ctx.ok('  The project is in reasonable shape.');
+  else for (const check of report.checks) ctx.print(`  · ${check}`, 'warn');
+  recordCoding(ctx.game, 'review', 1, `project ${root}`);
+};
+
+COMMANDS.init = (ctx) => {
+  const templates = projectTemplates();
+  const templateId = ctx.args[0];
+  if (!templateId || templateId === 'list' || templateId === '--list') {
+    ctx.head('PROJECT TEMPLATES');
+    for (const t of templates) ctx.print(`  ${pad(t.id, 10)} ${t.name.padEnd(18)} ${t.description}`, 'dim');
+    ctx.print('');
+    ctx.dim('Usage: init <template> [directory] [--force]');
+    return;
+  }
+  if (!templates.some(t => t.id === templateId)) {
+    ctx.err(`init: unknown template '${templateId}'. Try: ${templates.map(t => t.id).join(', ')}`);
+    return;
+  }
+  const dirArg = ctx.args.slice(1).find(a => !a.startsWith('-'));
+  const root = dirArg ? pathFor(ctx.term, dirArg) : ctx.term.cwd;
+  const force = ctx.args.includes('--force') || ctx.args.includes('-f');
+  if (!getNode(ctx.fs(), root)) {
+    if (!ensureDir(ctx.fs(), root, userOf(ctx.term))) { ctx.err(`init: cannot create ${root}`); return; }
+  }
+  const result = scaffoldProject(ctx.fs(), root, templateId, { force, owner: userOf(ctx.term), name: basename(root) });
+  if (!result.ok) { ctx.err(result.error); return; }
+  ctx.ok(`Initialised ${result.template.name} in ${root}`);
+  for (const f of result.files) ctx.print(`  create  ${f}`, 'ok');
+  for (const f of result.skipped) ctx.print(`  skip    ${f} (exists)`, 'dim');
+  if (result.startedGit) ctx.dim('  git repository initialised on branch main');
+  recordCoding(ctx.game, 'scaffold', 1, `${templateId} ${root}`);
+  ctx.app.refreshUI?.();
+};
+
+COMMANDS.templates = (ctx) => COMMANDS.init(ctx);
+COMMANDS.scaffold = (ctx) => COMMANDS.init(ctx);
+
+COMMANDS.lint = (ctx) => {
+  const targets = ctx.args.filter(a => !a.startsWith('-'));
+  if (!targets.length) {
+    const files = allFiles(ctx.fs(), ctx.term.cwd)
+      .filter(f => /\.(js|mjs|cjs|ts|tsx|py|pyw|c|h|cpp|rs|go|sql|json|html|css|sh|bash|yml|yaml|md)$/i.test(f.path) && (f.node.content || '').length < 120000)
+      .slice(0, 24);
+    if (!files.length) { ctx.err('lint: no source files in this directory'); return; }
+    let total = 0;
+    for (const file of files) {
+      const lang = languageFor(file.path, file.node.content);
+      const problems = lint(file.node.content, lang.id, file.path);
+      total += printProblems(ctx, file.path, problems);
+    }
+    recordCoding(ctx.game, 'review', Math.max(1, files.length / 4), 'directory lint');
+    if (total) ctx.print(''); ctx.print(`${total} problem${total === 1 ? '' : 's'} across ${files.length} file${files.length === 1 ? '' : 's'}`, total ? 'warn' : 'ok');
+    return;
+  }
+  for (const target of targets) {
+    const file = textFileAt(ctx, target);
+    if (!file) { ctx.err(`lint: ${target}: No such text file`); continue; }
+    const lang = languageFor(file.abs, file.content);
+    const problems = lint(file.content, lang.id, file.abs);
+    ctx.print(`${file.abs} · ${lang.name}`, 'head');
+    printProblems(ctx, file.abs, problems);
+    recordCoding(ctx.game, 'review', 1, file.abs);
+  }
+};
+
+COMMANDS.fmt = (ctx) => {
+  const target = ctx.args.find(a => !a.startsWith('-'));
+  const file = textFileAt(ctx, target);
+  if (!file) { ctx.err(`fmt: ${target || '<file>'}: No such text file`); return; }
+  const lang = languageFor(file.abs, file.content);
+  const formatted = formatCode(file.content, lang.id);
+  if (formatted === file.content) { ctx.print(`${file.abs}: already formatted`, 'dim'); return; }
+  if (ctx.args.includes('--check') || ctx.args.includes('-n')) {
+    ctx.warn(`${file.abs}: would be reformatted`);
+    return;
+  }
+  writeFile(ctx.fs(), file.abs, formatted, { owner: userOf(ctx.term) });
+  recordEdit(ctx.game, file.abs, file.content, formatted);
+  recordCoding(ctx.game, 'format', 1, file.abs);
+  ctx.ok(`Formatted ${file.abs} · ${lang.name}`);
+};
+COMMANDS.format = COMMANDS.fmt;
+
+COMMANDS.symbols = (ctx) => {
+  const file = textFileAt(ctx, ctx.args.find(a => !a.startsWith('-')));
+  if (!file) { ctx.err(`symbols: ${ctx.args[0] || '<file>'}: No such text file`); return; }
+  const lang = languageFor(file.abs, file.content);
+  const syms = outline(file.content, lang.id);
+  ctx.head(`${file.abs} · ${lang.name} · ${syms.length} symbols`);
+  if (!syms.length) { ctx.dim('  no symbols found'); return; }
+  for (const s of syms.slice(0, 120)) ctx.print(`  ${padLeft(s.line, 5)}  ${'  '.repeat(Math.min(6, s.indent / 2))}${s.kind.padEnd(9)} ${s.name}`);
+};
+COMMANDS.outline = COMMANDS.symbols;
+
+COMMANDS.rg = (ctx) => {
+  const query = ctx.args.find(a => !a.startsWith('-'));
+  if (!query) { ctx.err('usage: rg <pattern> [directory]'); return; }
+  const root = projectRoot(ctx, ctx.args.slice(1).find(a => !a.startsWith('-')));
+  const hits = findInProject(ctx.fs(), root, query, { max: 80 });
+  if (!hits.length) { ctx.dim(`No matches for '${query}'.`); return; }
+  for (const hit of hits) ctx.print(`${hit.path}:${hit.line}:${hit.col}  ${hit.text}`, 'dim');
+  ctx.print('');
+  ctx.print(`${hits.length} match${hits.length === 1 ? '' : 'es'} in ${root}`, 'accent');
+  recordCoding(ctx.game, 'review', 1, `search ${query}`);
+};
+
+COMMANDS.todo = (ctx) => {
+  const root = projectRoot(ctx, ctx.args.find(a => !a.startsWith('-')));
+  const report = analyzeProject(ctx.fs(), root);
+  if (!report.todos) { ctx.ok('No TODO/FIXME markers found.'); return; }
+  ctx.head(`UNFINISHED WORK · ${report.todos} marker${report.todos === 1 ? '' : 's'}`);
+  for (const item of report.todosByFile) ctx.print(`  ${padLeft(item.count, 5)}  ${item.path}`, 'warn');
+  ctx.dim('  Resolve markers, or convert them into tracked issues.');
+};
+
+async function runCaptured(ctx, command) {
+  const original = ctx.term.print;
+  const lines = [];
+  ctx.term.print = function (text, cls) {
+    lines.push({ text: String(text), cls: cls || '' });
+    return original.call(this, text, cls);
+  };
+  try { await execute(ctx.app, ctx.term, command); }
+  finally { ctx.term.print = original; }
+  const failed = lines.some(l => l.cls === 'err' || /\b(error|failed|failure|cannot|not found|undefined|traceback)\b/i.test(l.text));
+  return { failed, lines };
+}
+
+COMMANDS.run = async (ctx) => {
+  let target = ctx.args.find(a => !a.startsWith('-'));
+  if (!target) {
+    const candidates = allFiles(ctx.fs(), ctx.term.cwd).filter(f => /\.(py|js|mjs|cjs|ts|tsx|c|cpp|rs|go|sh|bash|sql|html)$/i.test(f.path));
+    target = candidates[0]?.path;
+  }
+  const file = textFileAt(ctx, target);
+  if (!file) { ctx.err(`run: ${target || '<file>'}: No such file`); return; }
+  const lang = languageFor(file.abs, file.content);
+  const spec = runCommandFor(file.abs, lang.id);
+  if (spec.kind === 'preview') {
+    ctx.app.openWindow?.('browser', { url: file.abs });
+    ctx.dim(`Previewing ${file.abs}`);
+    return;
+  }
+  if (!spec.command) { ctx.err(`run: no runtime configured for ${lang.name}`); return; }
+  ctx.dim(`$ ${spec.command}`);
+  const { failed } = await runCaptured(ctx, spec.command);
+  recordCoding(ctx.game, spec.kind === 'build' ? 'compile' : 'run', 1, file.abs);
+  recordCoding(ctx.game, failed ? 'fail' : 'pass', 1, file.abs);
+  ctx.app.refreshUI?.();
+};
+
+COMMANDS.build = async (ctx) => {
+  const file = textFileAt(ctx, ctx.args.find(a => !a.startsWith('-')));
+  if (!file) { ctx.err(`build: ${ctx.args[0] || '<file>'}: No such file`); return; }
+  const lang = languageFor(file.abs, file.content);
+  const spec = runCommandFor(file.abs, lang.id);
+  if (!spec.command) { ctx.err(`build: ${lang.name} has no build step`); return; }
+  ctx.dim(`$ ${spec.command}`);
+  const { failed } = await runCaptured(ctx, spec.command);
+  recordCoding(ctx.game, 'build', 1, file.abs);
+  recordCoding(ctx.game, failed ? 'fail' : 'pass', 1, file.abs);
+  ctx.app.refreshUI?.();
+};
+
+COMMANDS.test = async (ctx) => {
+  let target = ctx.args.find(a => !a.startsWith('-'));
+  if (!target) {
+    const report = analyzeProject(ctx.fs(), ctx.term.cwd);
+    target = report.testFiles[0];
+  }
+  const file = textFileAt(ctx, target);
+  const command = file ? testCommandFor(file.abs, languageFor(file.abs, file.content).id) : (target ? testCommandFor(target, languageFor(target)) : null);
+  if (!command) { ctx.err('test: no test runner for that file'); return; }
+  ctx.dim(`$ ${command}`);
+  const { failed } = await runCaptured(ctx, command);
+  recordCoding(ctx.game, 'test', 1, target || 'test suite');
+  recordCoding(ctx.game, failed ? 'fail' : 'pass', 1, target || 'test suite');
+  ctx.app.refreshUI?.();
+};
+
+COMMANDS.complete = (ctx) => {
+  const file = textFileAt(ctx, ctx.args[0]);
+  const prefix = ctx.args[1] || '';
+  if (!file) { ctx.err('usage: complete <file> [prefix]'); return; }
+  const lang = languageFor(file.abs, file.content);
+  const items = completions(file.content, lang.id, prefix);
+  if (!items.length) { ctx.dim('No completions.'); return; }
+  for (const item of items) ctx.print(`  ${pad(item.label, 22)} ${pad(item.kind, 10)} ${item.detail}`, 'dim');
+};
+
+/* ============================================================
+   INTERNET ARCHITECTURE
+   ============================================================ */
+function netAge(world, now) {
+  const mins = Math.max(0, (now || 0) - (world || 0));
+  if (mins < 60) return `${Math.round(mins)}m`;
+  if (mins < 1440) return `${Math.round(mins / 60)}h`;
+  return `${Math.round(mins / 1440)}d`;
+}
+function printEvent(ctx, e) {
+  const sev = e.severity === 'critical' ? 'err' : e.severity === 'high' ? 'warn' : 'dim';
+  ctx.print(`  ${pad(e.id, 12)} ${pad(e.category || e.kind || 'event', 14)} ${e.title || e.kind || ''}`, sev);
+}
+COMMANDS.net = (ctx) => {
+  const sub = (ctx.args[0] || 'status').toLowerCase();
+  const g = ctx.game;
+  const net = ensureInternet(g);
+  const ov = networkOverview(g);
+  const m = ov.metrics;
+  if (sub === 'map' || sub === 'topology') { ctx.app.openWindow?.('map'); return; }
+  if (sub === 'status' || sub === 'overview') {
+    ctx.head(`INTERNET · ${m.year} · health ${m.health}/100`);
+    ctx.print('');
+    ctx.print(`Traffic        ${fmtNum(m.trafficTbps)} Tbps across ${m.asnCount} autonomous systems`);
+    ctx.print(`Exchange pts   ${m.ixpCount} · long-haul cables ${m.cableCount} · data centers ${m.datacenterCount}`);
+    ctx.print(`Latency        ${m.avgLatencyMs} ms average · availability ${m.availability}%`);
+    ctx.print(`Web            ${m.siteCount} sites · ${m.apiCount} APIs · ${m.certCount} certificates`);
+    ctx.print(`Adoption       IPv6 ${m.ipv6Adoption}% · QUIC ${m.quicAdoption}% · HTTP/3 ${m.http3Adoption}% · TLS 1.3 ${m.tls13Share}%`);
+    ctx.print(`Development    ${m.packageCount} packages · ${m.releaseCount} releases · build success ${m.buildSuccessRate}%`);
+    ctx.print(`AI             ${m.aiModelCount} models · ${m.aiEndpointCount} endpoints · ${m.trainingRuns} training runs`);
+    ctx.print(`Security       ${m.advisoryCount} advisories · ${m.openIncidents} open incidents · zero-trust ${m.zeroTrustScore}/100`);
+    ctx.print('');
+    const protocols = ov.protocols.slice().sort((a, b) => b.adoption - a.adoption).slice(0, 8);
+    ctx.print('ADOPTION', 'head');
+    for (const p of protocols) ctx.print(`  ${pad(p.name, 22)} ${progressBar(p.adoption, 16)} ${Math.round(p.adoption)}%`, 'dim');
+    if (net.events.length) {
+      ctx.print('');
+      ctx.print('RECENT', 'head');
+      for (const e of net.events.slice(-6)) printEvent(ctx, e);
+    }
+    return;
+  }
+  if (sub === 'asns' || sub === 'asn') {
+    ctx.head('AUTONOMOUS SYSTEMS');
+    for (const a of ov.asns.slice(0, 40)) {
+      ctx.print(`  ${pad(a.id, 10)} ${pad(('AS' + a.asn), 9)} ${pad(a.type, 10)} ${pad(a.name, 26)} ${padLeft(fmtNum(a.trafficGbps), 7)} Gbps  ${a.status}`, a.status === 'operational' ? 'dim' : 'warn');
+    }
+    return;
+  }
+  if (sub === 'ixps' || sub === 'ixp') {
+    ctx.head('INTERNET EXCHANGE POINTS');
+    for (const x of ov.ixps.slice(0, 30)) ctx.print(`  ${pad(x.id, 10)} ${pad(x.name, 34)} ${padLeft(fmtNum(x.trafficGbps), 8)} Gbps  ${x.members.length} members  ${x.status}`, 'dim');
+    return;
+  }
+  if (sub === 'cables' || sub === 'cable') {
+    ctx.head('LONG-HAUL LINKS');
+    for (const c of ov.cables.slice(0, 30)) ctx.print(`  ${pad(c.id, 10)} ${pad(c.name, 30)} ${pad(c.kind, 12)} ${padLeft(fmtNum(c.capacityTbps), 6)} Tbps ${padLeft(Math.round(c.utilization), 3)}%  ${c.status}`, c.status === 'up' ? 'dim' : 'warn');
+    return;
+  }
+  if (sub === 'dc' || sub === 'datacenters' || sub === 'datacenter') {
+    ctx.head('DATA CENTERS');
+    for (const d of ov.datacenters.slice(0, 30)) ctx.print(`  ${pad(d.id, 10)} ${pad(d.name, 28)} ${pad(d.region || '', 9)} ${padLeft(d.racks, 6)} racks ${padLeft(Math.round(d.utilization), 3)}% PUE ${d.pue}  ${d.status}`, 'dim');
+    return;
+  }
+  if (sub === 'protocols' || sub === 'proto') {
+    const q = (ctx.args[1] || '').toLowerCase();
+    ctx.head('PROTOCOLS');
+    for (const p of ov.protocols.filter(p => !q || `${p.id} ${p.name} ${p.layer}`.toLowerCase().includes(q)).sort((a, b) => b.adoption - a.adoption)) {
+      ctx.print(`  ${pad(p.name, 28)} ${pad(p.layer, 12)} ${pad(p.status, 11)} ${progressBar(p.adoption, 12)} ${Math.round(p.adoption)}%  ${p.spec}`, 'dim');
+    }
+    return;
+  }
+  if (sub === 'events') {
+    ctx.head('NETWORK EVENTS');
+    for (const e of net.events.slice(-30).reverse()) printEvent(ctx, e);
+    return;
+  }
+  ctx.err(`net: '${sub}' is not a recognized subcommand. Try: net status|asns|ixps|cables|dc|protocols|events|map`);
+};
+COMMANDS.network = COMMANDS.net;
+
+COMMANDS.web = (ctx) => {
+  const g = ctx.game;
+  const net = ensureInternet(g);
+  const sub = (ctx.args[0] || '').toLowerCase();
+  if (!sub || sub === 'list') {
+    ctx.head('WORLD WIDE WEB');
+    for (const r of webList(g).slice(0, 32)) {
+      ctx.print(`  ${pad(r.domain, 28)} ${pad(r.kind || '', 10)} tls:${r.tls?.enabled ? (r.tls.version || 'yes') : 'no'}  ${padLeft(Math.round(r.availability), 3)}%  ${fmtNum(r.requestsPerMin)}/min  ${r.status}`, r.status === 'live' ? 'dim' : 'warn');
+    }
+    return;
+  }
+  if (sub === 'secure' || sub === 'harden') {
+    const r = playerHardenWebsite(g, ctx.args[1]);
+    if (!r.ok) { ctx.err(r.error); return; }
+    ctx.ok(`Hardened ${r.site.domain} for ${fmtMoney(r.cost)}. Security headers ${Math.round(r.record.securityHeaders)}/100.`);
+    ctx.app.refreshUI?.();
+    return;
+  }
+  if (sub === 'cert' || sub === 'renew') {
+    const r = playerRenewCertificate(g, ctx.args[1]);
+    if (!r.ok) { ctx.err(r.error); return; }
+    ctx.ok(`Certificate installed for ${r.site.domain} · ${r.cert.tlsVersion} · ${netAge(r.cert.validToWorld, g.worldMinutes)} remaining`);
+    return;
+  }
+  if (sub === 'api') {
+    const r = playerAttachApi(g, ctx.args[1], { protocol: ctx.args[2], auth: ctx.args[3] });
+    if (!r.ok) { ctx.err(r.error); return; }
+    ctx.ok(`Published ${r.api.protocol.toUpperCase()} API for ${r.site.domain} at ${r.api.path} (${fmtMoney(r.cost)}).`);
+    return;
+  }
+  if (sub === 'scan') {
+    const r = playerSecurityScan(g, ctx.args[1]);
+    if (!r.ok) { ctx.err(r.error); return; }
+    ctx.ok(`Scanned ${r.site.domain} for ${fmtMoney(r.cost)} · SBOM score ${r.sbom.score}/100`);
+    if (!r.findings.length) ctx.print('  No material findings.', 'dim');
+    for (const f of r.findings) ctx.print(`  ${f.severity.padEnd(7)} ${f.text}`, f.severity === 'high' ? 'err' : 'warn');
+    return;
+  }
+  if (sub === 'advisories' || sub === 'vulns') {
+    const sec = securityOverview(g);
+    ctx.head('SECURITY ADVISORIES');
+    for (const a of sec.advisories.slice(0, 24)) ctx.print(`  ${pad(a.cve, 15)} ${pad(a.severity, 9)} ${pad(a.status, 9)} ${a.title}`, a.severity === 'critical' ? 'err' : a.severity === 'high' ? 'warn' : 'dim');
+    return;
+  }
+  if (sub === 'incidents') {
+    const sec = securityOverview(g);
+    ctx.head(`OPEN SECURITY INCIDENTS · ${sec.incidents.filter(i => i.status !== 'resolved').length}`);
+    for (const i of sec.incidents.slice(0, 24)) ctx.print(`  ${pad(i.id, 12)} ${pad(i.severity, 9)} ${pad(i.kind, 20)} ${pad(i.targetName || '—', 22)} ${i.status}`, i.status === 'resolved' ? 'dim' : 'warn');
+    return;
+  }
+  if (sub === 'respond' || sub === 'mitigate') {
+    const r = playerMitigateIncident(g, ctx.args[1]);
+    if (!r.ok) { ctx.err(r.error); return; }
+    ctx.ok(`Resolved ${r.incident.id} for ${fmtMoney(r.cost)}.`);
+    ctx.app.refreshUI?.();
+    return;
+  }
+  if (sub === 'sbom') {
+    const sec = securityOverview(g);
+    const q = ctx.args[1];
+    const rows = q ? sec.sboms.filter(s => (s.domain || '').includes(q) || s.siteId === q) : sec.sboms;
+    ctx.head('SOFTWARE BILLS OF MATERIALS');
+    for (const s of rows.slice(0, 24)) ctx.print(`  ${pad(s.domain || s.siteId, 28)} ${padLeft(s.components, 4)} components  ${padLeft(s.critical, 2)} critical  score ${s.score}/100`, s.critical ? 'warn' : 'dim');
+    return;
+  }
+  if (sub === 'dev' || sub === 'packages') {
+    const dev = devEcosystem(g);
+    ctx.head('DEVELOPER ECOSYSTEM');
+    for (const p of dev.packages.slice(0, 24)) ctx.print(`  ${pad(p.registry, 10)} ${pad(p.name, 20)} ${pad(p.version, 10)} ${fmtNum(p.weeklyDownloads)}/wk  ${p.vulnerabilityCount ? `${p.vulnerabilityCount} vuln` : ''}`, 'dim');
+    return;
+  }
+  if (sub === 'platforms' || sub === 'social') {
+    const soc = socialOverview(g);
+    ctx.head('SOCIAL PLATFORMS');
+    for (const p of soc.platforms.slice(0, 20)) ctx.print(`  ${pad(p.name, 16)} ${pad(p.kind, 13)} ${padLeft(fmtNum(p.users), 9)} users  trust ${Math.round(p.trust)}  ${p.protocol}`, 'dim');
+    return;
+  }
+  if (sub === 'history') {
+    const rows = internetHistory(g, { query: ctx.args.slice(1).join(' '), limit: 40 });
+    ctx.head('INTERNET HISTORY');
+    for (const h of rows) ctx.print(`  ${h.year}  ${pad(h.category, 15)} ${h.title}`, h.major ? 'accent' : 'dim');
+    return;
+  }
+  const query = ctx.args.join(' ').toLowerCase();
+  const hit = resolveDomain(g, query) || webRecord(g, query);
+  if (!hit) { ctx.err(`web: no site matching '${ctx.args.join(' ')}'`); return; }
+  const r = hit.record;
+  const site = hit.site;
+  ctx.head(`${r.domain}`);
+  ctx.print(`  ${r.title} · ${r.kind} · ${r.status}`);
+  ctx.print(`  TLS        ${r.tls.enabled ? `${r.tls.version} · ${r.tls.issuer}${r.tls.hsts ? ' · HSTS' : ''}` : 'disabled'}`);
+  ctx.print(`  DNS        ${r.dns.a.join(', ')}${r.dns.aaaa.length ? ' · IPv6 ' + r.dns.aaaa.join(', ') : ''} · ttl ${r.dns.ttl}s · dnssec ${r.dns.dnssec ? 'signed' : 'unsigned'}`);
+  ctx.print(`  Stack      ${r.stack.join(', ')}${r.database ? ' · ' + r.database : ''}`);
+  ctx.print(`  CDN        ${r.cdn ? `${r.cdn.provider} · ${r.cdn.cacheHit}% hit · ${r.cdn.pops} PoPs` : 'none'}`);
+  ctx.print(`  APIs       ${r.apis.length ? r.apis.join(', ') : 'none advertised'}`);
+  ctx.print(`  Health     ${Math.round(r.availability)}% · ${r.latencyMs} ms · errors ${(r.errorRate * 100).toFixed(3)}% · ${fmtNum(r.requestsPerMin)} req/min`);
+  if (hit.cert) ctx.print(`  Cert       ${hit.cert.tlsVersion} · ${hit.cert.status} · expires in ${netAge(hit.cert.validToWorld, g.worldMinutes)}`);
+  if (hit.apis?.length) {
+    ctx.print('');
+    ctx.print('ENDPOINTS', 'head');
+    for (const a of hit.apis) ctx.print(`  ${pad(a.protocol, 10)} ${pad(a.path, 12)} ${pad(a.version, 5)} auth ${a.auth}  ${fmtNum(a.requests)} req  ${a.uptime.toFixed(2)}%`, 'dim');
+  }
+  if (site && site.ownerType === 'player') ctx.dim('  You control this site. Try: web secure, web cert, web api, web scan');
+};
+
+COMMANDS.registry = (ctx) => {
+  const g = ctx.game;
+  const net = ensureInternet(g);
+  const sub = (ctx.args[0] || 'list').toLowerCase();
+  if (sub === 'publish') {
+    const name = ctx.args[1];
+    const version = ctx.args[2] || '0.1.0';
+    const lang = ctx.args[3] || 'javascript';
+    if (!name) { ctx.err('usage: registry publish <name> [version] [language]'); return; }
+    const r = playerPublishPackage(g, name, version, lang);
+    if (!r.ok) { ctx.err(r.error); return; }
+    ctx.ok(`Published ${r.package.name}@${r.package.version} to ${r.package.registry} for ${fmtMoney(r.cost)}.`);
+    recordCoding(g, 'publish', 1, r.package.name);
+    ctx.app.refreshUI?.();
+    return;
+  }
+  if (sub === 'info') {
+    const name = ctx.args[1];
+    const pkg = net.packages.find(p => p.name === name || p.id === name);
+    if (!pkg) { ctx.err(`registry: no package '${name || ''}'`); return; }
+    ctx.head(`${pkg.name}@${pkg.version} · ${pkg.registry}`);
+    ctx.print(`  ${pkg.desc}`);
+    ctx.print(`  language     ${pkg.language} · license ${pkg.license} · maintainers ${pkg.maintainers}`);
+    ctx.print(`  downloads    ${fmtNum(pkg.weeklyDownloads)}/week · ${fmtNum(pkg.downloads)} total · ${fmtNum(pkg.stars)} stars`);
+    ctx.print(`  dependencies ${pkg.dependencies.length ? pkg.dependencies.join(', ') : 'none'}`);
+    ctx.print(`  security     ${pkg.vulnerabilityCount ? `${pkg.vulnerabilityCount} known vulnerabilit${pkg.vulnerabilityCount === 1 ? 'y' : 'ies'}` : 'no known vulnerabilities'}`);
+    ctx.print(`  versions     ${pkg.versions.join(', ')}`, 'dim');
+    return;
+  }
+  const q = sub === 'search' ? ctx.args.slice(1).join(' ').toLowerCase() : sub === 'list' ? '' : ctx.args.join(' ').toLowerCase();
+  ctx.head('PACKAGE REGISTRIES');
+  const rows = net.packages.filter(p => !q || `${p.name} ${p.desc} ${p.language}`.toLowerCase().includes(q)).sort((a, b) => b.weeklyDownloads - a.weeklyDownloads);
+  for (const p of rows.slice(0, 32)) ctx.print(`  ${pad(p.registry, 10)} ${pad(p.name, 20)} ${pad(p.version, 9)} ${padLeft(fmtNum(p.weeklyDownloads), 8)}/wk  ${p.desc.slice(0, 46)}`, 'dim');
+  ctx.dim('Try: registry info <name> | registry publish <name> [version] [language]');
+};
+
+COMMANDS.model = (ctx) => {
+  const g = ctx.game;
+  const sub = (ctx.args[0] || 'list').toLowerCase();
+  if (sub === 'train') {
+    const name = ctx.args[1] || 'operator-model';
+    const base = ctx.args[2] || '';
+    const hours = Number(ctx.args[3]) || 200;
+    const r = playerTrainModel(g, name, base, hours);
+    if (!r.ok) { ctx.err(r.error); return; }
+    ctx.ok(`Training ${r.run.modelName} from ${r.base.name} · ${r.run.computeHours} compute hours · ${fmtMoney(r.cost)}`);
+    ctx.dim('Training advances with world time. Use: model list to see the result.');
+    return;
+  }
+  if (sub === 'serve' || sub === 'deploy') {
+    const modelId = ctx.args[1] || '';
+    const siteId = ctx.args[2] || '';
+    const price = Number(ctx.args[3]) || 2;
+    const r = playerDeployEndpoint(g, modelId, siteId, price);
+    if (!r.ok) { ctx.err(r.error); return; }
+    ctx.ok(`Serving ${r.model.name} at ${r.site.domain} for ${fmtMoney(r.cost)} · ${r.endpoint.pricePerM}/M tokens`);
+    return;
+  }
+  if (sub === 'endpoints') {
+    const ai = aiEcosystem(g);
+    ctx.head('INFERENCE ENDPOINTS');
+    for (const e of ai.endpoints.slice(0, 24)) ctx.print(`  ${pad(e.id, 13)} ${pad(e.ownerName, 20)} ${pad(e.modelId, 16)} ${padLeft(e.pricePerM, 3)}/M  ${e.latencyMs}ms  ${e.uptime.toFixed(2)}%  ${e.status}`, 'dim');
+    return;
+  }
+  if (sub === 'training') {
+    const ai = aiEcosystem(g);
+    ctx.head('TRAINING RUNS');
+    for (const t of ai.training.slice(0, 20)) ctx.print(`  ${pad(t.id, 12)} ${pad(t.modelName, 22)} ${progressBar(t.progress, 14)} ${Math.round(t.progress)}%  ${t.status}`, 'dim');
+    return;
+  }
+  if (sub === 'vector') {
+    const ai = aiEcosystem(g);
+    ctx.head('VECTOR INFRASTRUCTURE');
+    for (const v of ai.vectorDbs) ctx.print(`  ${pad(v.name, 26)} ${fmtNum(v.vectors)} vectors · ${v.dimensions}d · ${v.latencyMs}ms · ${v.status}`, 'dim');
+    for (const r of ai.rag) ctx.print(`  ${pad(r.name, 26)} ${fmtNum(r.documents)} docs · freshness ${r.freshnessDays}d · ${r.status}`, 'dim');
+    return;
+  }
+  const q = sub === 'info' ? (ctx.args[1] || '').toLowerCase() : (sub === 'list' ? '' : ctx.args.join(' ').toLowerCase());
+  if (sub === 'info') {
+    const ai = aiEcosystem(g);
+    const m = ai.models.find(m => m.id === q || m.name.toLowerCase() === q);
+    if (!m) { ctx.err(`model: no model '${q}'`); return; }
+    ctx.head(`${m.name} · ${m.vendor}`);
+    ctx.print(`  quality      ${m.quality}/100 · ${m.params} parameters · ${m.modality}`);
+    ctx.print(`  context      ${fmtNum(m.context)} tokens · latency ${m.latencyMs} ms`);
+    ctx.print(`  pricing      ${m.costPerM ? '$' + m.costPerM + '/M tokens' : 'open weights'} · license ${m.license}`);
+    ctx.print(`  adoption     ${Math.round(m.adoption)}% · safety ${m.safety}/100 · ${m.status}`);
+    return;
+  }
+  const ai = aiEcosystem(g);
+  ctx.head('MODELS');
+  for (const m of ai.models.filter(m => !q || `${m.id} ${m.name} ${m.vendor} ${m.modality}`.toLowerCase().includes(q)).slice(0, 28)) {
+    ctx.print(`  ${pad(m.name, 20)} ${pad(m.vendor, 12)} ${pad(m.params, 7)} ${pad(m.modality, 11)} q${padLeft(Math.round(m.quality), 3)}  ${m.costPerM ? '$' + m.costPerM + '/M' : 'open'}  ${m.status}`, 'dim');
+  }
+  ctx.dim('Try: model info <id> | model train <name> [base] [hours] | model serve <model> <site> [price]');
+};
+
+COMMANDS.sec = (ctx) => {
+  const g = ctx.game;
+  const sub = (ctx.args[0] || 'status').toLowerCase();
+  if (sub === 'status' || sub === 'overview') {
+    const m = internetSummary(g).metrics;
+    const z = securityOverview(g).zeroTrust;
+    ctx.head(`SECURITY POSTURE · ${m.zeroTrustScore}/100`);
+    ctx.print(`  advisories   ${m.advisoryCount} · open incidents ${m.openIncidents}`);
+    ctx.print(`  identity     ${progressBar(z.identity, 14)} ${Math.round(z.identity)}`, 'dim');
+    ctx.print(`  devices      ${progressBar(z.device, 14)} ${Math.round(z.device)}`, 'dim');
+    ctx.print(`  network      ${progressBar(z.network, 14)} ${Math.round(z.network)}`, 'dim');
+    ctx.print(`  workloads    ${progressBar(z.workload, 14)} ${Math.round(z.workload)}`, 'dim');
+    ctx.print(`  data         ${progressBar(z.data, 14)} ${Math.round(z.data)}`, 'dim');
+    return;
+  }
+  if (sub === 'scan') {
+    const r = playerSecurityScan(g, ctx.args[1]);
+    if (!r.ok) { ctx.err(r.error); return; }
+    ctx.ok(`Scanned ${r.site.domain} for ${fmtMoney(r.cost)}`);
+    for (const f of r.findings) ctx.print(`  ${f.severity.padEnd(7)} ${f.text}`, f.severity === 'high' ? 'err' : 'warn');
+    if (!r.findings.length) ctx.dim('  No material findings.');
+    return;
+  }
+  if (sub === 'respond' || sub === 'mitigate') {
+    const r = playerMitigateIncident(g, ctx.args[1]);
+    if (!r.ok) { ctx.err(r.error); return; }
+    ctx.ok(`Resolved ${r.incident.id} for ${fmtMoney(r.cost)}.`);
+    return;
+  }
+  if (sub === 'advisories' || sub === 'incidents' || sub === 'sbom') return COMMANDS.web(ctx);
+  ctx.err('sec: try status|scan <site>|respond <id>|advisories|incidents|sbom');
+};
+COMMANDS.security = COMMANDS.sec;
+
+COMMANDS.social = (ctx) => {
+  const g = ctx.game;
+  const soc = socialOverview(g);
+  const q = ctx.args.join(' ').toLowerCase();
+  if (q) {
+    const p = soc.platforms.find(p => p.id === q || p.name.toLowerCase().includes(q));
+    if (!p) { ctx.err(`social: no platform '${q}'`); return; }
+    ctx.head(`${p.name} · ${p.kind}`);
+    ctx.print(`  ${p.desc}`);
+    ctx.print(`  users       ${fmtNum(p.users)} · growth ${(p.growth * 100).toFixed(2)}%/day`);
+    ctx.print(`  trust       ${Math.round(p.trust)}/100 · protocol ${p.protocol} · ${p.status}`);
+    ctx.print(`  founded     ${p.foundedYear}`);
+    return;
+  }
+  ctx.head('SOCIAL INTERNET');
+  for (const p of soc.platforms) ctx.print(`  ${pad(p.name, 16)} ${pad(p.kind, 13)} ${padLeft(fmtNum(p.users), 9)} users  trust ${padLeft(Math.round(p.trust), 2)}  ${p.protocol}`, 'dim');
+};
+
+COMMANDS.nethistory = (ctx) => {
+  const rows = internetHistory(ctx.game, { query: ctx.args.join(' '), limit: 60 });
+  ctx.head('INTERNET HISTORY');
+  for (const h of rows) {
+    ctx.print(`  ${String(h.year).padEnd(6)} ${pad(h.category, 15)} ${h.title}`, h.major ? 'accent' : '');
+    ctx.dim(`         ${h.body}`);
+  }
+};
+
+COMMANDS.coding = (ctx) => {
+  const s = codingSummary(ctx.game);
+  ctx.head(`CODING · level ${s.level} · ${s.xp} XP`);
+  ctx.print(`  streak       ${s.streak} day(s) · ${s.activeDays} active day(s)`);
+  ctx.print(`  progress     ${progressBar(s.progress * 100, 22)} ${Math.round(s.progress * 100)}% to level ${s.level + 1}`);
+  ctx.print(`  output       ${fmtNum(s.linesWritten)} lines written · ${fmtNum(s.linesRemoved)} removed · ${s.filesTouched} file edits`);
+  ctx.print(`  verification ${s.bugsFixed} passing checks · ${s.builds} builds · ${s.releases} releases · ${s.deployments} deployments`);
+  if (s.projects.length) {
+    ctx.print('');
+    ctx.print('PROJECTS', 'head');
+    for (const p of s.projects) ctx.print(`  ${pad(p.root, 40)} ${p.edits} edit${p.edits === 1 ? '' : 's'}`, 'dim');
+  }
+  const recent = s.history.slice(0, 10);
+  if (recent.length) {
+    ctx.print('');
+    ctx.print('RECENT', 'head');
+    for (const h of recent) ctx.print(`  ${pad(h.kind, 10)} ${pad(String(h.amount), 4)} ${h.memo || ''}`, 'dim');
+  }
+  ctx.print('');
+  ctx.dim('Open the Editor for the full workspace. Try: init node app && project app');
+};
+
+/* ============================================================
+   AUTONOMOUS DEVELOPMENT + SECURITY WORKSPACE
+   ============================================================ */
+function authRoll(ctx, key) {
+  return (hash32(`${ctx.game.seed}:${ctx.game.tickCount}:${key}`) % 100000) / 100000;
+}
+function checkAuth(ctx, asset, action, key) {
+  const result = evaluateAuthorization(ctx.game, { asset, action, roll: authRoll(ctx, key || (asset?.host || asset?.domain || '')) });
+  if (!result.allowed) {
+    for (const c of result.consequences) {
+      if (c.type === 'heat') addHeat(ctx.game, c.amount, c.reason);
+      else if (c.type === 'investigation') investigate(ctx.game, c.reason);
+    }
+    ctx.warn(`Authorization: ${result.reason}. ${result.detected ? 'The activity was logged by the target.' : 'The activity was not attributed.'}`);
+  } else ctx.dim(`Authorization: ${result.reason}.`);
+  return result;
+}
+
+COMMANDS.dev = (ctx) => {
+  const g = ctx.game;
+  const sub = (ctx.args[0] || 'status').toLowerCase();
+  const rest = ctx.args.slice(1);
+  const s = devOverview(g);
+  const m = s.metrics;
+  if (sub === 'developers' || sub === 'devs') {
+    ctx.head('DEVELOPERS');
+    for (const d of developerList(g, rest.join(' ')).slice(0, 40)) {
+      ctx.print(`  ${pad(d.handle, 12)} ${pad(d.role, 24)} skill ${padLeft(d.skill, 3)} rep ${padLeft(Math.round(d.reputation), 3)}  ${Object.keys(d.languages).join('/')}  ${d.status}`, d.status === 'active' ? 'dim' : 'warn');
+    }
+    return;
+  }
+  if (sub === 'projects' || sub === 'repos') {
+    ctx.head('DEVELOPER PROJECTS');
+    for (const p of projectList(g, rest.join(' ')).slice(0, 40)) {
+      ctx.print(`  ${pad(p.slug, 26)} ${pad(p.language, 11)} ${pad(p.kind, 10)} ${padLeft(fmtNum(p.metrics.lines), 6)} lines  ${padLeft(fmtNum(p.metrics.downloads), 7)} dl  ${p.status}`, p.status === 'abandoned' ? 'err' : 'dim');
+    }
+    return;
+  }
+  if (sub === 'events' || sub === 'history') {
+    ctx.head('DEVELOPMENT HISTORY');
+    for (const e of s.events.slice(0, 40)) ctx.print(`  ${pad(String(e.year), 6)} ${pad(e.category, 12)} ${e.title}`, e.severity === 'critical' || e.severity === 'high' ? 'warn' : 'dim');
+    return;
+  }
+  if (sub === 'contributions') {
+    ctx.head('CONTRIBUTIONS');
+    for (const c of contributionList(g).slice(0, 30)) ctx.print(`  ${pad(c.id, 12)} ${pad(c.handle, 12)} ${pad(c.status, 7)} ${c.change}`, 'dim');
+    return;
+  }
+  if (sub === 'publish' || sub === 'tool') {
+    const name = rest[0];
+    if (!name) { ctx.err('usage: dev publish <name> [language]'); return; }
+    const r = playerPublishTool(g, name, rest[1] || 'python');
+    if (!r.ok) { ctx.err(r.error); return; }
+    ctx.ok(`Published ${r.project.name} · ${r.project.files ? Object.keys(r.project.files).length : 0} source files · ${r.project.repoPath}`);
+    ctx.app.refreshUI?.();
+    return;
+  }
+  ctx.head('AUTONOMOUS DEVELOPMENT');
+  ctx.print(`Active developers   ${m.activeDevelopers} (${m.securityProfessionals} security professionals)`);
+  ctx.print(`Repositories        ${m.publishedProjects} published · ${m.detailedProjects} detailed`);
+  ctx.print(`Source              ${fmtNum(m.files)} files · ${fmtNum(m.lines)} lines`);
+  ctx.print(`Vulnerabilities     ${m.openVulns} open · ${m.patchedVulns} patched · ${m.advisories} advisories`);
+  ctx.print(`Quality             average security ${m.averageSecurity}/100 · ${m.contributions} contributions`);
+  ctx.print('');
+  ctx.print('RECENT', 'head');
+  for (const e of s.events.slice(0, 8)) ctx.print(`  ${pad(e.category, 12)} ${e.title}`, 'dim');
+  ctx.print('');
+  ctx.dim('Try: dev developers | dev projects | repo | vuln | lab');
+};
+
+COMMANDS.repo = (ctx) => {
+  const g = ctx.game;
+  const sub = (ctx.args[0] || 'list').toLowerCase();
+  const rest = ctx.args.slice(1);
+  if (sub === 'list' || sub === 'ls') return COMMANDS.dev(ctx);
+  if (sub === 'show' || sub === 'info') {
+    const hit = projectDetail(g, rest[0]);
+    if (!hit) { ctx.err(`repo: no project matching '${rest[0] || ''}'`); return; }
+    const p = hit.project, d = hit.developer;
+    ctx.head(`${p.name} · ${p.slug}`);
+    ctx.print(`  ${p.description}`);
+    ctx.print(`  maintainer  @${p.ownerHandle}${d ? ` (${d.role}, skill ${d.skill})` : ''}`);
+    ctx.print(`  language    ${p.language} · ${p.kind} · ${p.license} · ${p.status}`);
+    ctx.print(`  repository  ${p.repoPath} · ${p.published ? 'published' : 'unpublished'}`);
+    ctx.print(`  quality     sec ${p.quality.security} · tests ${p.quality.testing} · docs ${p.quality.documentation} · debt ${p.quality.debt}`);
+    ctx.print(`  metrics     ${fmtNum(p.metrics.lines)} lines · ${fmtNum(p.metrics.downloads)} downloads · ${p.metrics.stars} stars · ${p.metrics.forks} forks`);
+    ctx.print(`  releases    ${p.releases.map(r => r.version).join(', ') || 'none'} · ${p.metrics.contributions} contributions`);
+    ctx.print('');
+    ctx.print('ARCHITECTURE', 'head');
+    ctx.print(`  target ${p.architecture.target} · auth ${p.architecture.auth || 'none'} · api ${p.architecture.api || 'none'} · database ${p.architecture.database || 'none'}`);
+    for (const r of p.requirements) ctx.dim(`  · ${r}`);
+    if (p.dependencies.length) ctx.dim(`  dependencies: ${p.dependencies.map(d => `${d.name}@${d.version}${d.vulnerable ? ' (advisory)' : ''}`).join(', ')}`);
+    ctx.print('');
+    ctx.print('FILES', 'head');
+    for (const f of Object.keys(p.files)) ctx.dim(`  ${f}`);
+    ctx.print('');
+    ctx.print('GIT HISTORY', 'head');
+    for (const c of p.git.commits.slice(-12).reverse()) ctx.print(`  ${c.id}  ${c.world ? hhmm(c.world) : '—'}  ${c.message}`, 'dim');
+    if (p.issues.length) {
+      ctx.print('');
+      ctx.print('ISSUES', 'head');
+      for (const i of p.issues.slice(-8)) ctx.print(`  ${pad(i.status, 7)} ${pad(i.severity, 8)} ${i.title}`, i.status === 'open' ? 'warn' : 'dim');
+    }
+    if (hit.vulns.length) {
+      ctx.print('');
+      ctx.print('ADVISORIES', 'head');
+      for (const v of hit.vulns) ctx.print(`  ${pad(v.cve, 15)} ${pad(v.severity, 9)} ${pad(v.status, 8)} ${v.category}`, v.status === 'open' ? 'err' : 'dim');
+    }
+    return;
+  }
+  if (sub === 'source' || sub === 'cat') {
+    const hit = projectDetail(g, rest[0]);
+    if (!hit) { ctx.err('repo: no such project'); return; }
+    const files = hit.project.files;
+    if (!rest[1]) {
+      for (const [path, content] of Object.entries(files)) ctx.print(`  ${pad(path, 26)} ${padLeft(String(content).split('\n').length, 5)} lines`, 'dim');
+      ctx.dim(`Use: repo source ${hit.project.slug} <file>`);
+      return;
+    }
+    const path = rest.slice(1).join(' ');
+    const content = files[path] || files[Object.keys(files).find(f => f.endsWith('/' + path))];
+    if (content == null) { ctx.err(`repo: ${path}: no such file in ${hit.project.slug}`); return; }
+    ctx.print(content);
+    recordCoding(g, 'review', 1, `${hit.project.slug}/${path}`);
+    return;
+  }
+  if (sub === 'lint') {
+    const r = playerInspectSource(g, rest[0]);
+    if (!r.ok) { ctx.err(r.error); return; }
+    ctx.head(`${r.project.name} · ${r.problems.length} static finding(s)`);
+    for (const p of r.problems.slice(0, 60)) ctx.print(`  ${pad(p.path, 24)} ${padLeft(p.line, 4)}:${padLeft(p.col, 3)} ${pad(p.severity, 8)} ${p.message}`, p.severity === 'error' ? 'err' : p.severity === 'warning' ? 'warn' : 'dim');
+    recordCoding(g, 'review', 1, `lint ${r.project.slug}`);
+    return;
+  }
+  if (sub === 'clone') {
+    const r = playerCloneProject(g, rest[0]);
+    if (!r.ok) { ctx.err(r.error); return; }
+    const dir = rest[1] ? pathFor(ctx.term, rest[1]) : r.dest;
+    ensureDir(ctx.fs(), dir, userOf(ctx.term));
+    for (const [path, content] of Object.entries(r.files)) writeFile(ctx.fs(), joinPath(dir, path), content, { owner: userOf(ctx.term) });
+    ensureDir(ctx.fs(), joinPath(dir, '.git'), userOf(ctx.term));
+    writeFile(ctx.fs(), joinPath(dir, '.git/repo.json'), JSON.stringify({ branch: 'main', staged: [], commits: r.project.git.commits.slice(-5), remote: `git://git.nullnet/${r.project.ownerHandle}/${r.project.slug}.git` }, null, 2), { owner: userOf(ctx.term) });
+    ctx.ok(`Cloned ${r.project.name} into ${dir} · ${Object.keys(r.files).length} files`);
+    recordCoding(g, 'scaffold', 1, `clone ${r.project.slug}`);
+    ctx.app.refreshUI?.();
+    return;
+  }
+  if (sub === 'contribute' || sub === 'patch') {
+    const change = rest.slice(1).join(' ');
+    if (!change) { ctx.err('usage: repo contribute <project> <description>'); return; }
+    const r = playerContribute(g, rest[0], change);
+    if (!r.ok) { ctx.err(r.error); return; }
+    ctx.ok(`${r.contribution.id} submitted for review by @${r.project.ownerHandle}.`);
+    ctx.dim('The maintainer decides whether to merge. Contributions are recorded in developer memory.');
+    return;
+  }
+  if (sub === 'fork') {
+    const r = playerForkProject(g, rest[0]);
+    if (!r.ok) { ctx.err(r.error); return; }
+    ctx.ok(`Forked ${r.project.name} as ${r.fork.name} (${r.fork.slug}).`);
+    return;
+  }
+  if (sub === 'report') {
+    const r = playerReportVulnerability(g, rest[0], rest[1]);
+    if (!r.ok) { ctx.err(r.error); return; }
+    if (r.duplicate) ctx.print(`${r.vuln.cve} already records that category. Report count is now ${r.vuln.reports}.`, 'warn');
+    else ctx.ok(`Reported ${r.vuln.cve} · ${r.vuln.severity} · ${r.vuln.category}. An advisory was published.`);
+    return;
+  }
+  if (sub === 'issues') {
+    const hit = projectDetail(g, rest[0]);
+    if (!hit) { ctx.err('repo: no such project'); return; }
+    for (const i of hit.project.issues.slice(-20)) ctx.print(`  ${pad(i.status, 8)} ${pad(i.severity, 8)} ${i.title}`, i.status === 'open' ? 'warn' : 'dim');
+    return;
+  }
+  ctx.err(`repo: '${sub}' is not recognized. Try: list|show|source|lint|clone|contribute|fork|report|issues`);
+};
+COMMANDS.repos = COMMANDS.repo;
+
+COMMANDS.vuln = (ctx) => {
+  const g = ctx.game;
+  const sub = (ctx.args[0] || 'list').toLowerCase();
+  const rest = ctx.args.slice(1);
+  if (sub === 'info') {
+    const q = rest[0];
+    const v = vulnList(g).find(v => v.id === q || v.cve === q);
+    if (!v) { ctx.err(`vuln: no finding '${q || ''}'`); return; }
+    ctx.head(`${v.cve} · ${v.category}`);
+    ctx.print(`  target       ${v.projectName} · ${v.file}:${v.line} · ${v.affectedVersion}`);
+    ctx.print(`  severity     ${v.severity} · CVSS ${v.cvss} · exploitability ${v.exploitability}/100`);
+    ctx.print(`  discovered   world ${Math.round(v.discoveredWorld)} by ${v.discoveredBy}`);
+    ctx.print('');
+    for (const [label, text] of [['TECHNICAL', v.technical], ['PRECONDITIONS', v.preconditions], ['IMPACT', v.impact], ['DETECTION', v.detection], ['REMEDIATION', v.remediation]]) {
+      ctx.print(label, 'head'); ctx.print(`  ${text}`);
+    }
+    ctx.print('');
+    ctx.print(`Status: ${v.status}${v.patchAvailable ? ` · patch in ${v.projectName} @ ${v.patchWorld ? hhmm(v.patchWorld) : 'recent'}` : ' · no patch yet'}`, v.status === 'open' ? 'warn' : 'ok');
+    return;
+  }
+  if (sub === 'advisories') {
+    const dw = g.devworld;
+    for (const a of dw.advisories.slice(-30).reverse()) ctx.print(`  ${pad(a.cve, 15)} ${pad(a.severity, 9)} ${pad(a.status, 10)} ${a.title}`, a.severity === 'critical' ? 'err' : 'dim');
+    return;
+  }
+  if (sub === 'report') return COMMANDS.repo(ctx);
+  ctx.head('VULNERABILITY REGISTER');
+  const rows = vulnList(g, sub === 'list' ? '' : ctx.args.join(' '));
+  for (const v of rows.slice(0, 40)) ctx.print(`  ${pad(v.id, 9)} ${pad(v.cve, 15)} ${pad(v.severity, 9)} ${pad(v.status, 8)} ${pad(v.projectName, 22)} ${v.category}`, v.status === 'open' ? 'warn' : 'dim');
+  ctx.dim('Try: vuln info <cve|id> | vuln advisories | repo report <project> <category>');
+};
+
+COMMANDS.lab = (ctx) => {
+  const g = ctx.game;
+  const sub = (ctx.args[0] || 'list').toLowerCase();
+  const rest = ctx.args.slice(1);
+  const labs = labList(g);
+  if (sub === 'enter' || sub === 'leave') {
+    const r = playerLabSession(g, rest[0], sub);
+    if (!r.ok) { ctx.err(r.error); return; }
+    ctx.ok(r.message);
+    return;
+  }
+  if (sub === 'exploit' || sub === 'practice') {
+    const r = playerPracticeExploit(g, rest[0], rest[1]);
+    if (!r.ok) { ctx.err(r.error); return; }
+    ctx.ok(r.message);
+    return;
+  }
+  if (sub === 'targets') {
+    const lab = labs.find(l => l.id === rest[0] || l.domain === rest[0]);
+    if (!lab) { ctx.err('lab: no such laboratory'); return; }
+    for (const t of lab.targets) ctx.print(`  ${pad(t, 14)} in scope · ${lab.name}`, 'dim');
+    return;
+  }
+  ctx.head('AUTHORIZED LABORATORIES');
+  for (const l of labs) {
+    const authorized = l.authorizedHandles.includes(g.player.handle);
+    ctx.print(`  ${pad(l.id, 9)} ${pad(l.domain, 18)} ${pad(l.kind, 15)} ${l.targets.length} targets · ${l.sessions} sessions · ${authorized ? 'SESSION ACTIVE' : 'idle'}`, authorized ? 'ok' : 'dim');
+    ctx.dim(`      ${l.desc}`);
+  }
+  ctx.dim('Try: lab enter <lab> | lab targets <lab> | lab exploit <lab> <target> | lab leave <lab>');
+};
+
+COMMANDS.packets = (ctx) => {
+  const hostArg = ctx.args[0];
+  if (!hostArg) { ctx.err('usage: packets <host> [count]'); return; }
+  const server = getServer(ctx.game, hostArg);
+  if (!server) { ctx.err(`tcpdump: ${hostArg}: no such simulated host`); return; }
+  const count = clamp(Number(ctx.args[1]) || 12, 1, 40);
+  checkAuth(ctx, server, 'inspect', `packets:${server.id}`);
+  if (!Array.isArray(ctx.game.packetCaptures)) ctx.game.packetCaptures = [];
+  const rng = makeRngFor(ctx, `packets:${server.id}:${count}`);
+  const lines = [];
+  const local = ctx.game.player.ip || '10.0.0.42';
+  for (let i = 0; i < count; i++) {
+    const port = server.ports?.length ? server.ports[rng.int(0, server.ports.length - 1)] : 80;
+    const proto = port === 53 ? 'UDP' : [80,443,8080,8443].includes(port) ? 'TCP' : 'TCP';
+    const flags = proto === 'TCP' ? rng.pick(['S','S.','P.','F.','R.']) : '';
+    const src = rng.chance(.5) ? local : `${rng.int(10,223)}.${rng.int(0,255)}.${rng.int(0,255)}.${rng.int(1,254)}`;
+    const secs = String(rng.int(0,59)).padStart(2,'0');
+    lines.push(`${secs}.${String(rng.int(0,999999)).padStart(6,'0')} IP ${src}.${rng.int(1024,65535)} > ${server.ip}.${port}: ${flags}${proto.length ? ' ' + proto : ''} len=${rng.int(40,1460)}`);
+  }
+  const capture = { host: server.host, ip: server.ip, count, at: Date.now(), world: ctx.game.worldMinutes, lines: lines.slice() };
+  ctx.game.packetCaptures.unshift(capture);
+  if (ctx.game.packetCaptures.length > 40) ctx.game.packetCaptures.length = 40;
+  ctx.head(`tcpdump · ${server.host} (${server.ip}) · ${count} packets`);
+  for (const line of lines) ctx.print(line, 'dim');
+  ctx.print('');
+  ctx.dim(`${ctx.game.packetCaptures.length} capture(s) retained. Analysis is bounded; no real packets are handled.`);
+};
+function makeRngFor(ctx, key) {
+  let h = hash32(`${ctx.game.seed}:${ctx.game.tickCount}:${key}`) >>> 0;
+  return {
+    int(a, b) { h = (Math.imul(h ^ (h >>> 15), 2246822519) + 1013904223) >>> 0; return a + (h % (b - a + 1)); },
+    chance(p) { h = (Math.imul(h ^ (h >>> 13), 3266489917) + 668265263) >>> 0; return (h % 100000) / 100000 < p; },
+    pick(arr) { return arr[this.int(0, arr.length - 1)]; }
+  };
+}
+
+COMMANDS.forensics = (ctx) => {
+  const hostArg = ctx.args[0];
+  if (!hostArg) { ctx.err('usage: forensics <host>'); return; }
+  const server = getServer(ctx.game, hostArg);
+  if (!server) { ctx.err(`forensics: ${hostArg}: no such simulated host`); return; }
+  checkAuth(ctx, server, 'inspect', `forensics:${server.id}`);
+  if (!Array.isArray(ctx.game.evidence)) ctx.game.evidence = [];
+  const evidence = {
+    id: `EV-${String(ctx.game.evidence.length + 1).padStart(4, '0')}`,
+    host: server.host, ip: server.ip, world: ctx.game.worldMinutes, at: Date.now(),
+    classification: assetClassFor(ctx, server),
+    findings: [
+      `OS fingerprint: ${server.os || 'unknown'}`,
+      `Security posture: ${Math.round(server.security || 0)}/100 · monitoring ${Math.round(server.authz?.monitoring ?? 50)}/100`,
+      `Listening services: ${(server.ports || []).join(', ') || 'none recorded'}`,
+      `Recent host notes: ${(server.notes || []).slice(0, 3).join(' | ') || 'none'}`,
+      `Compromise indicator: ${server.compromised ? 'present' : 'not observed'}`,
+      `Authorization record: ${server.authz?.classification || 'unclassified'}`
+    ],
+    chain: [ctx.game.player.handle, ctx.game.worldMinutes, server.host, ctx.game.seed]
+  };
+  ctx.game.evidence.unshift(evidence);
+  if (ctx.game.evidence.length > 60) ctx.game.evidence.length = 60;
+  ctx.head(`FORENSIC REPORT · ${evidence.id}`);
+  for (const f of evidence.findings) ctx.print(`  ${f}`, 'dim');
+  ctx.print('');
+  ctx.dim(`Chain of custody recorded. ${ctx.game.evidence.length} report(s) retained.`);
+  recordCoding(ctx.game, 'review', 1, `forensics ${server.host}`);
+};
+function assetClassFor(ctx, asset) {
+  return asset?.authz?.classification || (asset?.owned ? 'player' : asset?.companyId ? 'company' : 'npc');
+}
+
+COMMANDS.http = (ctx) => {
+  const query = ctx.args[0];
+  if (!query) { ctx.err('usage: http <domain> [path]'); return; }
+  const hit = webRecord(ctx.game, query);
+  if (!hit?.record) { ctx.err(`http: ${query}: no web record`); return; }
+  const r = hit.record;
+  checkAuth(ctx, hit.site || { domain: r.domain }, 'http', `http:${r.domain}`);
+  ctx.game.flags.visited[r.domain] = ctx.game.worldMinutes;
+  const path = ctx.args[1] || '/';
+  ctx.print(`HTTP/1.1 ${r.status === 'live' ? '200 OK' : '503 Service Unavailable'}`);
+  ctx.print(`server: ${r.stack.join(' ') || 'unknown'}`);
+  ctx.print(`content-type: text/html; charset=utf-8`);
+  ctx.print(`x-tls: ${r.tls?.enabled ? r.tls.version : 'none'}`);
+  ctx.print(`x-cdn: ${r.cdn?.provider || 'none'}`);
+  ctx.print(`cache-control: ${r.cdn ? 'public, max-age=' + Math.round(r.cdn.cacheHit * 60) : 'no-store'}`);
+  ctx.print('');
+  ctx.print(`<title>${r.title}</title>`);
+  ctx.print(`<h1>${r.title}</h1>`);
+  ctx.print(`<p>${(hit.site?.desc || '').slice(0, 160)}</p>`);
+  ctx.print('');
+  ctx.dim(`GET ${path} · ${r.latencyMs} ms · ${fmtNum(r.requestsPerMin)} req/min · availability ${Math.round(r.availability)}%`);
+};
+
+COMMANDS.inspect = (ctx) => {
+  const query = ctx.args[0];
+  if (!query) { ctx.err('usage: inspect <host|domain>'); return; }
+  const server = getServer(ctx.game, query);
+  if (server) {
+    checkAuth(ctx, server, 'inspect', `inspect:${server.id}`);
+    ctx.head(`${server.host} · ${server.ip}`);
+    ctx.print(`  OS           ${server.os || 'unknown'} (fingerprinted from service banners)`);
+    ctx.print(`  role         ${server.role || 'unspecified'} · org ${server.org || 'unknown'}`);
+    ctx.print(`  ports        ${(server.ports || []).join(', ') || 'none'}`);
+    ctx.print(`  security     ${Math.round(server.security || 0)}/100 · status ${server.status}`);
+    ctx.print(`  vulnerabilities ${(server.vulns || []).filter(v => !v.patched).length} unpatched`);
+    ctx.print(`  authz        ${server.authz?.classification || 'unclassified'}`);
+    ctx.dim('  Findings are derived from simulated configuration, not generated success text.');
+    return;
+  }
+  const hit = webRecord(ctx.game, query);
+  if (!hit?.record) { ctx.err(`inspect: ${query}: no such host`); return; }
+  return COMMANDS.web(ctx);
+};
+COMMANDS.debug = (ctx) => {
+  const file = textFileAt(ctx, ctx.args.find(a => !a.startsWith('-')));
+  if (!file) { ctx.err('usage: debug <source-file>'); return; }
+  const lang = languageFor(file.abs, file.content);
+  const problems = lint(file.content, lang.id, file.abs);
+  const syms = outline(file.content, lang.id);
+  ctx.head(`gdb (simulated) · ${file.abs}`);
+  ctx.dim(`Language ${lang.name} · ${syms.length} symbols · ${problems.length} static findings`);
+  for (const s of syms.slice(0, 30)) ctx.print(`  breakpoint ${padLeft(s.line, 4)}  ${s.name} (${s.kind})`, 'dim');
+  for (const p of problems.filter(p => p.severity === 'error' || p.severity === 'warning').slice(0, 20)) ctx.print(`  ${padLeft(p.line, 4)}:${padLeft(p.col, 3)} ${p.severity} ${p.message}`, p.severity === 'error' ? 'err' : 'warn');
+  if (!problems.some(p => p.severity === 'error')) ctx.ok('No static faults detected. Runtime behaviour remains bounded by the simulated interpreter.');
+  recordCoding(ctx.game, 'debug', 1, file.abs);
+};
+COMMANDS.gdb = COMMANDS.debug;
+
+COMMANDS.openssl = (ctx) => {
+  if ((ctx.args[0] || '').toLowerCase() === 'version') { ctx.print('OpenSSL 3.4.1 (simulated)'); return; }
+  const idx = ctx.args.findIndex(a => /x509|s_client/i.test(a));
+  const domainArg = ctx.args.find(a => a && !a.startsWith('-') && !/x509|s_client/i.test(a));
+  if (idx < 0 || !domainArg) { ctx.err('usage: openssl x509 -in <domain> | openssl s_client -connect <domain>:443'); return; }
+  const q = domainArg.toLowerCase().replace(/:\d+$/, '');
+  const net = ensureInternet(ctx.game);
+  const cert = net.certs.find(c => c.domain.toLowerCase() === q || c.domain.toLowerCase().includes(q));
+  if (!cert) { ctx.err(`openssl: no certificate record for ${domainArg}`); return; }
+  const record = net.web.records[cert.siteId];
+  ctx.head(`X.509 certificate for ${cert.domain}`);
+  ctx.print(`  issuer       ${cert.issuer}`);
+  ctx.print(`  subject      CN=${cert.domain}`);
+  ctx.print(`  key          ${cert.keyType}`);
+  ctx.print(`  protocol     ${cert.tlsVersion}`);
+  ctx.print(`  valid        ${hhmm(cert.validFromWorld)} → ${hhmm(cert.validToWorld)} (world minutes)`);
+  ctx.print(`  status       ${cert.status} · auto-renew ${cert.autoRenew ? 'yes' : 'no'}`);
+  ctx.print(`  transport    HSTS ${record?.tls?.hsts ? 'enabled' : 'absent'} · DNSSEC ${record?.dns?.dnssec ? 'signed' : 'unsigned'}`);
+  ctx.dim('Certificate data comes from the simulated public key infrastructure.');
+};
 
 COMMANDS.save = (ctx) => {
   if (typeof ctx.app.saveGame === 'function') {
