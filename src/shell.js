@@ -1,5 +1,5 @@
 /* Terminal shell: parsing, pipes, virtual filesystem, networking and tools. */
-import { fmtMoney, fmtNum, fmtBytes, fmtDate, fmtTime, fmtDateTime, fmtDuration, esc, pad, padLeft, table, sleep, clamp, progressBar, lineWrap, titleCase, hash32 } from './util.js';
+import { fmtMoney, fmtNum, fmtBytes, fmtDate, fmtTime, fmtDateTime, fmtDuration, esc, pad, padLeft, table, sleep, clamp, progressBar, lineWrap, titleCase, hash32, slugify } from './util.js';
 import {
   HOME, resolvePath, getNode, listDir, readFile, writeFile, ensureDir, removeNode, moveNode,
   copyNode, exists, isDir, basename, dirname, joinPath, normalize, allFiles, findFiles, treeLines,
@@ -33,8 +33,16 @@ import {
 import {
   devOverview, developerList, projectList, projectDetail, vulnList, labList, contributionList,
   evaluateAuthorization, playerCloneProject, playerContribute, playerReportVulnerability,
-  playerPublishTool, playerLabSession, playerPracticeExploit, playerInspectSource, playerForkProject
+  playerPublishTool, playerLabSession, playerPracticeExploit, playerInspectSource, playerForkProject,
+  playerCreateProject, playerWriteFile, playerBuildProject, playerTestProject, playerPublishProject,
+  playerDeployProject, playerUpdateProject
 } from './devworld.js';
+import {
+  ensureInteraction, hardwareSummary, upgradeHardware, maintainHardware, HARDWARE_TIERS,
+  startOperation, cancelOperation, operationSpeed, operationSummary, contactNpc, relationshipSummary,
+  serverAdmin, issueInvoice, payInvoice, collectInvoice, transferFunds, placeOrder,
+  cancelOrder, financeSummary, interactionOverview
+} from './interaction.js';
 import {
   ensureInternet, internetSummary, protocolList, networkOverview, webList, webRecord,
   resolveDomain, devEcosystem, aiEcosystem, securityOverview, socialOverview, internetHistory,
@@ -357,6 +365,7 @@ COMMANDS.help = (ctx) => {
     ['CODING', 'project  init  templates  lint  fmt  symbols  rg  todo  run  build  test  coding'],
     ['INTERNET', 'net  web  registry  sec  social  nethistory  dig  curl  map'],
     ['DEV ECOSYSTEM', 'dev  repo  vuln  lab  packets  forensics  http  inspect  debug  openssl'],
+    ['INTERACTION', 'hw  ops  bg  contact  friends  pcreate  pwrite  pbuild  ptest  ppublish  pdeploy  prelease  srv  invoice  transfer  order  ln  tar  session  settings'],
     ['CLOUD', 'cloud  docker  kubectl'],
     ['AI', 'agent  model  company'],
     ['ECONOMY', 'bank  contracts  accept  submit  market  buy  deploy  domains  site  servers  company'],
@@ -421,6 +430,22 @@ function manPage(ctx, name) {
     inspect: ['inspect — host and service fingerprint', 'inspect <host|domain>', 'Fingerprints a target using its actual simulated OS, services, versions and authorization record.'],
     debug: ['debug — simulated debugger', 'debug <source-file> | gdb <source-file>', 'Lists symbols and static faults in a local source file. No real code executes on the player\'s device.'],
     openssl: ['openssl — certificate inspection', 'openssl x509 -in <domain> | openssl version', 'Reads the simulated PKI record for a domain: issuer, key, TLS version, validity and renewal policy.'],
+    hw: ['hw — workstation hardware', 'hw | hw upgrade <cpu|gpu|memory|storage|nic> <tier> | hw service', 'Inspect or upgrade physical hardware. CPU, memory, storage and health determine compile, VM and inference capacity.'],
+    ops: ['ops — background operations', 'ops | ops cancel <id> | bg <install|download|audit|compile|deploy> <target>', 'Long-running operations advance with world time and consume CPU and memory. Several can run at once.'],
+    contact: ['contact — NPC relationships', 'contact <handle> <message|help|collaborate|hire|negotiate|review> [text]', 'Messages are answered according to personality, trust, availability and reputation. Replies arrive as mail.'],
+    pcreate: ['pcreate — create a project', 'pcreate <name> [language] [kind]', 'Creates a real source tree, manifest, tests and git history in the developer economy.'],
+    pwrite: ['pwrite — edit project source', 'pwrite <project> <file> [content...] | pwrite <project> <file> --from=<localfile>', 'Modifies a generated source file and records a git commit. Only your own projects can be edited.'],
+    pbuild: ['pbuild — build your project', 'pbuild <project>', 'Runs static analysis, creates a release version and queues binary output as a background operation.'],
+    ptest: ['ptest — test your project', 'ptest <project>', 'Runs bounded simulated smoke tests. Failures open issues you can investigate.'],
+    ppublish: ['ppublish — publish your project', 'ppublish <project>', 'Publishes to git.nullnet so NPC developers can discover, star, fork, report and contribute.'],
+    pdeploy: ['pdeploy — deploy your project', 'pdeploy <project> <your-domain> [dir]', 'Deploys a published project to a live site on your server after the service is running.'],
+    srv: ['srv — server administration', 'srv <host> <service|user|dns|firewall|backup|config|package|restart> [args]', 'Operates a server you own. Stopping a web service takes its sites offline; backups restore actual configuration.'],
+    invoice: ['invoice — billing', 'invoice | invoice send <client> <amount> [days] | invoice pay <id> | invoice collect <id>', 'Creates, pays and collects fictional invoices. Overdue invoices affect reputation and cash flow.'],
+    order: ['order — simulated orders', 'order | order buy|sell <asset> <qty> <limit> | order cancel <id>', 'Places limit orders that fill as the market crosses. Holdings and profit/loss are tracked in a portfolio.'],
+    ln: ['ln — links', 'ln [-s] <target> <link>', 'Creates a hard copy or a symbolic link in the virtual filesystem. Symbolic links are followed by file reads.'],
+    tar: ['tar — archives', 'tar cf <archive> <dir> | tar xf <archive> [dir]', 'Packs and unpacks bounded virtual filesystem archives with ownership and mode metadata.'],
+    session: ['session — terminal sessions', 'session [1-4]', 'Opens another independent terminal session sharing the same persistent filesystem.'],
+    settings: ['settings — system preferences', 'settings | settings <fontSize|reducedMotion|sound|compact> <value>', 'Reads and writes persistent workstation preferences.'],
   };
   const p = pages[name];
   if (!p) { ctx.print(`No manual entry for ${name}`, 'err'); ctx.dim('Try: help'); return; }
@@ -5143,6 +5168,340 @@ COMMANDS.openssl = (ctx) => {
   ctx.print(`  status       ${cert.status} · auto-renew ${cert.autoRenew ? 'yes' : 'no'}`);
   ctx.print(`  transport    HSTS ${record?.tls?.hsts ? 'enabled' : 'absent'} · DNSSEC ${record?.dns?.dnssec ? 'signed' : 'unsigned'}`);
   ctx.dim('Certificate data comes from the simulated public key infrastructure.');
+};
+
+/* ============================================================
+   DEEP INTERACTION COMMANDS
+   ============================================================ */
+COMMANDS.hw = (ctx) => {
+  const st = ensureInteraction(ctx.game);
+  const sub = (ctx.args[0] || 'status').toLowerCase();
+  if (sub === 'upgrade') {
+    const component = ctx.args[1];
+    const tier = ctx.args[2];
+    if (!component || !tier) { ctx.err('usage: hw upgrade <cpu|gpu|memory|storage|nic> <tier>'); ctx.dim('Tiers: ' + Object.entries(HARDWARE_TIERS).map(([k, v]) => `${k}:${v.map(t => t.id).join('/')}`).join('  ')); return; }
+    const r = upgradeHardware(ctx.game, component, tier);
+    if (!r.ok) { ctx.err(r.error); return; }
+    ctx.ok(`Installed ${r.tier.name} for ${fmtMoney(r.tier.cost)}.`);
+    ctx.print(`  performance ${r.summary.performance} · VM slots ${r.summary.vmCapacity} · inference slots ${r.summary.inferenceCapacity}`);
+    ctx.app.refreshUI?.();
+    return;
+  }
+  if (sub === 'service' || sub === 'maintain') {
+    const r = maintainHardware(ctx.game);
+    if (!r.ok) { ctx.err(r.error); return; }
+    ctx.ok(r.message);
+    return;
+  }
+  const h = hardwareSummary(ctx.game);
+  ctx.head(`WORKSTATION · ${h.cpu.model}`);
+  ctx.print(`CPU         ${h.cpu.model} · ${h.cpu.cores} cores @ ${h.cpu.ghz} GHz`);
+  ctx.print(`GPU         ${h.gpu.model} · ${h.gpu.vramGb} GB VRAM`);
+  ctx.print(`Memory      ${h.memoryGb} GB · Storage ${Math.round(h.storageUsedGb)}/${h.storageGb} GB`);
+  ctx.print(` NIC         ${h.nic} · board ${h.motherboard}`);
+  ctx.print(`Power       ${h.powerW} W · temperature ${Math.round(h.temperature)}°C · health ${Math.round(h.health)}/100`);
+  ctx.print(`Performance ${h.performance} · VM slots ${h.vmCapacity} · inference slots ${h.inferenceCapacity} · ${h.status}`, h.status === 'healthy' ? 'ok' : 'warn');
+  if (h.upgrades.length) { ctx.print(''); ctx.print('UPGRADES', 'head'); for (const u of h.upgrades.slice(-8)) ctx.dim(`  ${hhmm(u.world)} ${u.component}:${u.tier} · ${fmtMoney(u.cost)}`); }
+  ctx.print('');
+  ctx.dim('hw upgrade <component> <tier> | hw service | ops');
+};
+COMMANDS.hardware = COMMANDS.hw;
+
+COMMANDS.ops = (ctx) => {
+  const sub = (ctx.args[0] || 'list').toLowerCase();
+  if (sub === 'cancel') {
+    const r = cancelOperation(ctx.game, ctx.args[1]);
+    if (!r.ok) { ctx.err(r.error); return; }
+    ctx.ok(`${r.operation.id} cancelled.`);
+    return;
+  }
+  const ops = operationSummary(ctx.game);
+  ctx.head('BACKGROUND OPERATIONS');
+  if (!ops.length) { ctx.dim('No operations started. Start one with: bg compile <file> | bg install <pkg> | bg download <url>'); return; }
+  for (const op of ops) {
+    const bar = progressBar(op.progress, 18);
+    const text = `${pad(op.id, 12)} ${bar} ${padLeft(op.progress, 3)}%  ${pad(op.status, 9)} ${op.label}`;
+    if (op.status === 'failed') ctx.print(text, 'err');
+    else if (op.status === 'done') ctx.print(text, 'ok');
+    else ctx.print(text, 'dim');
+    for (const log of op.logs.slice(-2)) ctx.dim(`      ${hhmm(log.world)} ${log.text}`);
+  }
+  ctx.dim('ops cancel <id>');
+};
+COMMANDS.bg = (ctx) => {
+  const kind = (ctx.args[0] || '').toLowerCase();
+  const target = ctx.args[1];
+  if (!kind || !target) { ctx.err('usage: bg <install|download|audit|compile|deploy> <target> [name]'); return; }
+  let opts = { kind, label: `${kind} ${target}`, work: 20 };
+  if (kind === 'install') opts = { kind, label: `install ${target}`, work: 14 + target.length * .8, meta: { package: target } };
+  else if (kind === 'download') {
+    const site = (ctx.game.sites || []).find(s => s.domain === target);
+    const content = site ? `${site.title}\n${site.desc}\n` : `Downloaded from ${target}\n`;
+    opts = { kind, label: `download ${target}`, work: 8 + content.length * .01, meta: { path: `/home/operator/downloads/${slugify(target) || 'download'}.txt`, content } };
+  } else if (kind === 'audit') opts = { kind, label: `audit ${target}`, work: 40, meta: {} };
+  else if (kind === 'compile') opts = { kind: 'compile', label: `compile ${target}`, work: 30, meta: { output: `/tmp/${slugify(basename(target)) || 'app'}`, lines: 40 } };
+  else if (kind === 'deploy') {
+    const domain = ctx.args[2] || target;
+    opts = { kind, label: `deploy ${domain}`, work: 26, meta: { domain, dir: ctx.args[3] || '.', serverId: null } };
+  } else { ctx.err(`bg: unknown operation '${kind}'`); return; }
+  const r = startOperation(ctx.game, opts);
+  if (!r.ok) { ctx.err(r.error); return; }
+  ctx.ok(`Started ${r.operation.id}: ${r.operation.label} · ~${r.operation.total} world minutes.`);
+  ctx.dim('You can switch applications while it runs. Use: ops');
+  ctx.app.refreshUI?.();
+};
+
+COMMANDS.contact = (ctx) => {
+  const handle = ctx.args[0];
+  const kind = (ctx.args[1] || 'message').toLowerCase();
+  const message = ctx.args.slice(2).join(' ');
+  if (!handle) { ctx.err('usage: contact <handle> <message|help|collaborate|hire|negotiate|review> [text]'); return; }
+  const r = contactNpc(ctx.game, handle, kind, message);
+  if (!r.ok) { ctx.err(r.error); return; }
+  ctx.ok(r.message);
+  ctx.dim('Responses depend on personality, trust, reputation and availability. Check your mail later.');
+  ctx.app.refreshUI?.();
+};
+COMMANDS.friends = (ctx) => {
+  const s = relationshipSummary(ctx.game);
+  ctx.head('RELATIONSHIPS');
+  for (const r of s.relationships.slice(0, 40)) {
+    ctx.print(`  ${pad('@' + r.handle, 14)} ${pad(r.status, 14)} trust ${padLeft(Math.round(r.trust), 3)}  ${r.role} · ${r.interactions.length} interactions`, r.status === 'collaborator' ? 'ok' : 'dim');
+    for (const i of r.interactions.slice(-2)) ctx.dim(`      ${i.status === 'pending' ? 'waiting' : i.response || i.status} · ${i.kind}: ${i.message.slice(0, 60)}`);
+  }
+  ctx.print('');
+  ctx.dim(`${s.pending} pending response(s) · ${s.collaborators} collaborator(s)`);
+};
+
+COMMANDS.pcreate = (ctx) => {
+  const name = ctx.args[0];
+  if (!name) { ctx.err('usage: pcreate <name> [language] [kind]'); return; }
+  const r = playerCreateProject(ctx.game, name, ctx.args[1] || 'python', ctx.args[2] || 'cli');
+  if (!r.ok) { ctx.err(r.error); return; }
+  ctx.ok(`Created ${r.project.name} · ${Object.keys(r.project.files).length} source files · ${r.project.repoPath}`);
+  ctx.dim('Edit with: pwrite <project> <file> <content>  ·  build with: pbuild <project>');
+  ctx.app.refreshUI?.();
+};
+COMMANDS.pwrite = (ctx) => {
+  const project = ctx.args[0];
+  const path = ctx.args[1];
+  if (!project || !path) { ctx.err('usage: pwrite <project> <file> [content...]  (or pipe content)'); return; }
+  let content = ctx.args.slice(2).join(' ');
+  if (!content && ctx.input) content = ctx.input;
+  const from = ctx.args.find(a => a.startsWith('--from='));
+  if (from) {
+    const p = pathFor(ctx.term, from.slice(7));
+    const node = getNode(ctx.fs(), p);
+    if (!node) { ctx.err(`pwrite: ${p}: no such local file`); return; }
+    content = node.content || '';
+  }
+  const r = playerWriteFile(ctx.game, project, path, content);
+  if (!r.ok) { ctx.err(r.error); return; }
+  ctx.ok(`Wrote ${r.path} (${r.lines} lines) in ${r.project.name}.`);
+  ctx.app.refreshUI?.();
+};
+COMMANDS.pbuild = (ctx) => {
+  const name = ctx.args[0];
+  const r = playerBuildProject(ctx.game, name);
+  if (!r.ok) { ctx.err(`${r.message} ${(r.errors || []).slice(0, 5).join(' | ')}`); return; }
+  const op = startOperation(ctx.game, { kind: 'compile', label: `build ${name} ${r.version}`, work: r.duration * operationSpeed(ctx.game), meta: { output: `/tmp/${slugify(name)}`, lines: 40 } });
+  ctx.ok(r.message);
+  if (op.ok) ctx.dim(`Build outputs queued as ${op.operation.id}. Use: ops`);
+  ctx.app.refreshUI?.();
+};
+COMMANDS.ptest = (ctx) => {
+  const r = playerTestProject(ctx.game, ctx.args[0]);
+  if (!r.ok) { ctx.err(r.error); return; }
+  if (r.pass) ctx.ok(`${r.message} (${r.cases} cases)`);
+  else ctx.warn(`${r.message} (${r.cases} cases) — check: repo show ${ctx.args[0]}`);
+  ctx.app.refreshUI?.();
+};
+COMMANDS.ppublish = (ctx) => {
+  const r = playerPublishProject(ctx.game, ctx.args[0]);
+  if (!r.ok) { ctx.err(r.error); return; }
+  ctx.ok(`${r.project.name} published to git.nullnet. NPCs can now discover it.`);
+  ctx.app.refreshUI?.();
+};
+COMMANDS.pdeploy = (ctx) => {
+  const project = ctx.args[0];
+  const domain = ctx.args[1];
+  if (!domain) { ctx.err('usage: pdeploy <project> <your-domain>'); return; }
+  const r = playerDeployProject(ctx.game, project, domain);
+  if (!r.ok) { ctx.err(r.error); return; }
+  const op = startOperation(ctx.game, { kind: 'deploy', label: `deploy ${r.project.name} to ${domain}`, work: r.duration * operationSpeed(ctx.game), meta: { domain, dir: ctx.args[2] || '.', serverId: r.server.id } });
+  ctx.ok(`Deployment started for ${domain} on ${r.server.host}.`);
+  if (op.ok) ctx.dim(`Tracked as ${op.operation.id}. Use: ops`);
+  ctx.app.refreshUI?.();
+};
+COMMANDS.prelease = (ctx) => {
+  const r = playerUpdateProject(ctx.game, ctx.args[0], ctx.args.slice(1).join(' '));
+  if (!r.ok) { ctx.err(r.error); return; }
+  ctx.ok(`Released ${r.version} of ${r.project.name}.`);
+  ctx.app.refreshUI?.();
+};
+
+COMMANDS.srv = (ctx) => {
+  const server = ctx.args[0];
+  const action = (ctx.args[1] || 'status').toLowerCase();
+  if (!server) { ctx.err('usage: srv <host|id> <service|user|dns|firewall|backup|config|package|restart> [args]'); return; }
+  const opts = {};
+  const rest = ctx.args.slice(2);
+  if (action === 'service') { opts.subaction = rest[1] || 'status'; opts.service = rest[0]; }
+  else if (['user','dns','firewall','package'].includes(action)) { opts.subaction = rest[0] || 'list'; opts.value = rest.slice(1).join(' '); if (action === 'firewall') opts.port = rest[1]; if (action === 'user') opts.name = rest[1]; }
+  else if (action === 'backup') { opts.subaction = rest[0] || 'create'; opts.value = rest[1]; }
+  else if (action === 'config') opts.value = rest.join(' ');
+  const r = serverAdmin(ctx.game, server, action, opts);
+  if (!r.ok) { ctx.err(r.error); return; }
+  ctx.ok(r.message);
+  if (r.service) ctx.print(`  ${r.service.name} ${r.service.state} · port ${r.service.port} · ${r.service.product} ${r.service.version}`, 'dim');
+  ctx.app.refreshUI?.();
+};
+COMMANDS.server = COMMANDS.srv;
+
+COMMANDS.invoice = (ctx) => {
+  const sub = (ctx.args[0] || 'list').toLowerCase();
+  if (sub === 'send') {
+    const r = issueInvoice(ctx.game, ctx.args[1], Number(ctx.args[2]) || 0, Number(ctx.args[3]) || 14);
+    if (!r.ok) { ctx.err(r.error); return; }
+    ctx.ok(`Invoice ${r.invoice.id} sent to ${r.invoice.client} for ${fmtMoney(r.invoice.amount)}.`);
+    return;
+  }
+  if (sub === 'pay') {
+    const r = payInvoice(ctx.game, ctx.args[1]);
+    if (!r.ok) { ctx.err(r.error); return; }
+    ctx.ok(`Paid ${r.invoice.id}.`);
+    return;
+  }
+  if (sub === 'collect') {
+    const r = collectInvoice(ctx.game, ctx.args[1]);
+    if (!r.ok) { ctx.err(r.error); return; }
+    ctx.ok(`Collected ${fmtMoney(r.invoice.amount)} for ${r.invoice.id}.`);
+    return;
+  }
+  const f = financeSummary(ctx.game);
+  ctx.head('INVOICES');
+  for (const i of f.invoices.slice(0, 30)) ctx.print(`  ${pad(i.id, 12)} ${pad(i.status, 9)} ${pad(i.client, 20)} ${padLeft(fmtMoney(i.amount), 10)} due ${hhmm(i.dueWorld)}`, i.status === 'overdue' ? 'err' : 'dim');
+  ctx.print(`Receivable ${fmtMoney(f.receivable)} · payable ${fmtMoney(f.payable)}`, 'accent');
+  ctx.dim('invoice send <client> <amount> [days] | invoice pay <id> | invoice collect <id>');
+};
+
+COMMANDS.transfer = (ctx) => {
+  const handle = ctx.args[0];
+  const amount = Number(ctx.args[1]) || 0;
+  const memo = ctx.args.slice(2).join(' ');
+  const r = transferFunds(ctx.game, handle, amount, memo);
+  if (!r.ok) { ctx.err(r.error); return; }
+  ctx.ok(r.message);
+  if (r.notification && Array.isArray(ctx.game.mail)) ctx.game.mail.push({ id: `mail-${Date.now()}`, time: Date.now(), world: ctx.game.worldMinutes, from: r.notification.from, to: r.notification.to, subject: r.notification.subject, body: r.notification.body, read: false, outbound: false });
+};
+
+COMMANDS.order = (ctx) => {
+  const sub = (ctx.args[0] || 'book').toLowerCase();
+  if (sub === 'buy' || sub === 'sell') {
+    const r = placeOrder(ctx.game, sub, ctx.args[1] || 'IDX', Number(ctx.args[2]) || 1, Number(ctx.args[3]) || 0);
+    if (!r.ok) { ctx.err(r.error); return; }
+    ctx.ok(`${r.order.id}: ${r.order.side} ${r.order.qty} ${r.order.asset} @ ${r.order.limit}.`);
+    ctx.dim('Orders fill as the index crosses your limit. Use: order book');
+    return;
+  }
+  if (sub === 'cancel') {
+    const r = cancelOrder(ctx.game, ctx.args[1]);
+    if (!r.ok) { ctx.err(r.error); return; }
+    ctx.ok(`${r.order.id} cancelled.`);
+    return;
+  }
+  const f = financeSummary(ctx.game);
+  ctx.head('ORDER BOOK');
+  ctx.print(`Index ${fmtNum(ctx.game.market.index)} · volume ${fmtNum(ctx.game.market.volume)} · sentiment ${ctx.game.market.sentiment}`);
+  for (const o of f.orders.slice(0, 30)) ctx.print(`  ${pad(o.id, 12)} ${pad(o.side, 5)} ${padLeft(o.qty, 6)} ${pad(o.asset, 8)} @ ${padLeft(o.limit, 6)}  ${Math.round(o.filled / o.qty * 100)}% ${o.status}`, o.status === 'filled' ? 'ok' : 'dim');
+  ctx.print('');
+  ctx.print('PORTFOLIO', 'head');
+  for (const h of f.holdings) ctx.print(`  ${pad(h.asset, 10)} ${padLeft(h.qty, 7)} @ ${padLeft(h.avgPrice, 6)} · value ${fmtMoney(h.value)} · P/L ${fmtMoney(h.pnl)}`, h.pnl >= 0 ? 'ok' : 'err');
+  if (!f.holdings.length) ctx.dim('  no holdings');
+  ctx.print(`Portfolio value ${fmtMoney(f.portfolioValue)}`, 'accent');
+  ctx.dim('order buy <asset> <qty> <limit> | order sell ... | order cancel <id>');
+};
+COMMANDS.portfolio = (ctx) => COMMANDS.order(ctx);
+
+COMMANDS.ln = (ctx) => {
+  const args = ctx.args;
+  const symbolic = args.includes('-s');
+  const parts = args.filter(a => !a.startsWith('-'));
+  if (parts.length < 2) { ctx.err('usage: ln [-s] <target> <link>'); return; }
+  const target = pathFor(ctx.term, parts[0]);
+  const link = pathFor(ctx.term, parts[1]);
+  if (getNode(ctx.fs(), link)) { ctx.err(`ln: ${parts[1]}: File exists`); return; }
+  if (symbolic) {
+    const rel = target.startsWith(ctx.term.cwd + '/') ? target.slice(ctx.term.cwd.length + 1) : target;
+    writeFile(ctx.fs(), link, '', { owner: userOf(ctx.term), meta: { symlink: rel } });
+    ctx.dim(`${parts[1]} -> ${parts[0]}`);
+  } else {
+    const node = getNode(ctx.fs(), target);
+    if (!node || node.type !== 'file') { ctx.err(`ln: ${parts[0]}: No such file`); return; }
+    writeFile(ctx.fs(), link, node.content || '', { owner: userOf(ctx.term), mode: node.mode, exec: node.exec });
+  }
+};
+
+COMMANDS.tar = (ctx) => {
+  const sub = ctx.args[0] || '';
+  const archive = ctx.args[1];
+  if (!archive) { ctx.err('usage: tar cf <archive> <dir> | tar xf <archive> [dir]'); return; }
+  const abs = pathFor(ctx.term, archive);
+  if (sub === 'cf') {
+    const dir = pathFor(ctx.term, ctx.args[2] || '.');
+    const files = allFiles(ctx.fs(), dir).filter(f => f.path.startsWith(dir === '/' ? '/' : dir + '/'));
+    if (!files.length) { ctx.err(`tar: ${ctx.args[2] || '.'}: directory is empty`); return; }
+    const entries = {};
+    for (const f of files.slice(0, 2000)) entries[f.path.slice(dir.length + 1)] = { content: f.node.content || '', mode: f.node.mode, owner: f.node.owner };
+    const payload = JSON.stringify({ format: 'nullnet-tar-1', root: dir, count: Object.keys(entries).length, entries });
+    writeFile(ctx.fs(), abs, payload, { owner: userOf(ctx.term) });
+    ctx.ok(`Archived ${Object.keys(entries).length} files into ${archive} (${fmtBytes(payload.length)}).`);
+    return;
+  }
+  if (sub === 'xf') {
+    const node = getNode(ctx.fs(), abs);
+    if (!node) { ctx.err(`tar: ${archive}: No such archive`); return; }
+    let data;
+    try { data = JSON.parse(node.content || ''); } catch { ctx.err('tar: not a nullnet archive'); return; }
+    if (data.format !== 'nullnet-tar-1' || !data.entries) { ctx.err('tar: unsupported archive format'); return; }
+    const dest = pathFor(ctx.term, ctx.args[2] || '.');
+    let count = 0;
+    for (const [path, entry] of Object.entries(data.entries)) {
+      if (writeFile(ctx.fs(), joinPath(dest, path), entry.content || '', { owner: userOf(ctx.term), mode: entry.mode })) count++;
+    }
+    ctx.ok(`Extracted ${count} files into ${ctx.args[2] || '.'}.`);
+    return;
+  }
+  ctx.err('tar: use cf or xf');
+};
+
+COMMANDS.session = (ctx) => {
+  const n = clamp(Number(ctx.args[0]) || 2, 1, 4);
+  const kind = n === 1 ? 'terminal' : `terminal${n}`;
+  ctx.app.openWindow?.(kind);
+  ctx.ok(`Opened terminal session ${n}. Filesystem state is shared; history is per session.`);
+};
+COMMANDS.term = COMMANDS.session;
+
+COMMANDS.settings = (ctx) => {
+  const s = ctx.game.settings || (ctx.game.settings = {});
+  const key = ctx.args[0];
+  if (!key) {
+    ctx.head('SYSTEM SETTINGS');
+    ctx.print(`  fontSize       ${s.fontSize || 10}px`);
+    ctx.print(`  reducedMotion  ${s.reducedMotion ? 'on' : 'off'}`);
+    ctx.print(`  sound          ${s.sound ? 'on' : 'off'}`);
+    ctx.print(`  compact        ${s.compact ? 'on' : 'off'}`);
+    ctx.dim('settings <key> <on|off|number>');
+    return;
+  }
+  if (!['fontSize','reducedMotion','sound','compact'].includes(key)) { ctx.err(`settings: unknown key '${key}'`); return; }
+  const value = ctx.args[1];
+  if (value == null) { ctx.print(`${key} = ${s[key]}`); return; }
+  if (key === 'fontSize') s[key] = clamp(Number(value) || 10, 7, 18);
+  else s[key] = /^(on|true|1|yes)$/i.test(value);
+  ctx.ok(`${key} = ${s[key]}`);
+  ctx.app.refreshUI?.();
 };
 
 COMMANDS.save = (ctx) => {

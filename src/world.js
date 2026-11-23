@@ -17,6 +17,9 @@ import {
 import { ensureCoding, recordCoding, codingSummary } from './coding.js';
 import { ensureInternet, tickInternet, internetSummary, recomputeMetrics } from './internet.js';
 import { ensureDevWorld, tickDevWorld, devOverview } from './devworld.js';
+import {
+  ensureInteraction, tickInteraction, collectOperations, interactionOverview
+} from './interaction.js';
 
 export const SAVE_KEY = 'internet-persistent-world.v1';
 export const WORLD_VERSION = 4;
@@ -155,6 +158,7 @@ export function reviveGame(game) {
   ensureCoding(game);
   ensureInternet(game);
   ensureDevWorld(game);
+  ensureInteraction(game);
   for (const s of game.servers || []) {
     if (!s.fsMeta) {
       s.fsMeta = {
@@ -264,6 +268,7 @@ export function createGame(seed = randomSeed()) {
   ensureCoding(game);
   ensureInternet(game);
   ensureDevWorld(game);
+  ensureInteraction(game);
 
   game.feed = [
     { id: game.seq.feed++, time: now - 90000, world: game.worldMinutes - 3, text: 'NullNet Collective restarted the public shell after maintenance.', kind: 'info' },
@@ -1644,6 +1649,42 @@ export function sendMailReply(game, pending, rng) {
 /* ============================================================
    TICK + OFFLINE SIMULATION
    ============================================================ */
+function applyInteractiveEvents(game, rng, events) {
+  for (const e of events) {
+    if (e.type === 'feed') addFeed(game, e.text, e.kind || 'info');
+    else if (e.type === 'mail') addMail(game, { from: e.from, subject: e.subject, body: e.body });
+    else if (e.type === 'news') addNews(game, rng, { headline: e.headline, body: e.body, source: e.source, silent: true });
+    else if (e.type === 'money') addMoney(game, e.amount, e.memo);
+  }
+  for (const op of collectOperations(game)) {
+    const meta = op.meta || {};
+    if (op.kind === 'install' && meta.package) {
+      if (!game.packages.includes(meta.package)) game.packages.push(meta.package);
+      if (!game.installed.includes(meta.package)) game.installed.push(meta.package);
+      addFeed(game, `${meta.package} installed after ${op.finishedWorld - op.startedWorld} world minutes.`, 'good');
+    } else if (op.kind === 'compile' && meta.output) {
+      const node = writeFile(game.fs, meta.output, 'ELF 64-bit executable (simulated build)', { owner: 'operator', exec: true, mode: '755' });
+      if (node) node.simOutput = meta.outputText || 'build complete';
+      game.stats.codeLines += Math.max(1, Math.round(meta.lines || 0));
+      addFeed(game, `Build finished: ${meta.output}`, 'good');
+    } else if (op.kind === 'download' && meta.path) {
+      writeFile(game.fs, meta.path, meta.content || '', { owner: 'operator' });
+      addFeed(game, `Downloaded ${basename(meta.path)}.`, 'info');
+    } else if (op.kind === 'deploy' && meta.domain) {
+      const r = deploySite(game, { domain: meta.domain, dir: meta.dir || '.', serverId: meta.serverId, title: meta.title || meta.domain });
+      addFeed(game, r.ok ? `Deployed ${meta.domain}.` : `Deployment failed: ${r.error}`, r.ok ? 'good' : 'bad');
+    } else if (op.kind === 'audit') {
+      game.stats.audits++;
+      addFeed(game, `Audit completed: ${op.label}`, 'good');
+    } else if (op.kind === 'train') {
+      if (game.coding?.counts) game.coding.counts.compile = (game.coding.counts.compile || 0) + 1;
+      addFeed(game, `Training run completed: ${op.label}`, 'good');
+    } else {
+      addFeed(game, `${op.label} finished.`, 'info');
+    }
+  }
+}
+
 export function tickWorld(game, minutes = 1, opts = {}) {
   ensureSystems(game);
   ensureCivilization(game);
@@ -1651,6 +1692,7 @@ export function tickWorld(game, minutes = 1, opts = {}) {
   ensureCoding(game);
   ensureInternet(game);
   ensureDevWorld(game);
+  ensureInteraction(game);
   const rng = makeRng((game.seed ^ Math.floor(game.worldMinutes * 2654435761) ^ (game.tickCount * 97)) >>> 0);
   minutes = Math.max(1, Math.round(minutes));
   game.worldMinutes += minutes;
@@ -1909,6 +1951,13 @@ export function tickWorld(game, minutes = 1, opts = {}) {
     }
   } catch (err) {
     console.error('developer tick failed', err);
+  }
+
+  // Background operations, workstation hardware, relationships and finance.
+  try {
+    applyInteractiveEvents(game, rng, tickInteraction(game, minutes, rng));
+  } catch (err) {
+    console.error('interaction tick failed', err);
   }
 
   updateDerived(game);

@@ -39,11 +39,16 @@ import {
 } from './coding.js';
 import {
   internetSummary, networkOverview, devEcosystem, aiEcosystem, securityOverview, socialOverview,
-  internetHistory, resolveDomain, playerHardenWebsite, playerRenewCertificate, playerAttachApi,
+  internetHistory, resolveDomain, webRecord, playerHardenWebsite, playerRenewCertificate, playerAttachApi,
   playerPublishPackage, playerTrainModel, playerDeployEndpoint, playerSecurityScan,
   playerMitigateIncident
 } from './internet.js';
 import { devOverview, playerPublishTool, playerLabSession, playerInspectSource } from './devworld.js';
+import {
+  interactionOverview, hardwareSummary, upgradeHardware, maintainHardware, HARDWARE_TIERS,
+  cancelOperation, contactNpc, relationshipSummary, serverAdmin, issueInvoice, payInvoice,
+  collectInvoice, placeOrder, cancelOrder, startOperation
+} from './interaction.js';
 import { execute, commandNames } from './shell.js';
 
 const $ = (sel, root = document) => root.querySelector(sel);
@@ -552,7 +557,7 @@ function tickLoop() {
 function softRefresh() {
   updateClock();
   updateMonitor();
-  for (const kind of ['market', 'servers', 'cloud', 'agents', 'processes', 'profile', 'map', 'dev', 'internet']) {
+  for (const kind of ['market', 'servers', 'cloud', 'agents', 'processes', 'profile', 'map', 'dev', 'internet', 'workstation']) {
     const win = app.windows.get(kind);
     if (win && !win.minimized && win.render) safe(() => win.render());
   }
@@ -561,6 +566,9 @@ function softRefresh() {
 /* ---------------- window manager ---------------- */
 const WINDOW_META = {
   terminal: { title: 'Terminal', sub: 'operator@voidbox', w: 760, h: 450 },
+  terminal2: { title: 'Terminal 2', sub: 'operator@voidbox', w: 760, h: 450 },
+  terminal3: { title: 'Terminal 3', sub: 'operator@voidbox', w: 760, h: 450 },
+  terminal4: { title: 'Terminal 4', sub: 'operator@voidbox', w: 760, h: 450 },
   files: { title: 'Files', sub: '~/', w: 730, h: 480 },
   editor: { title: 'Editor', sub: 'untitled', w: 750, h: 510 },
   map: { title: 'Network', sub: 'live topology', w: 840, h: 530 },
@@ -575,6 +583,8 @@ const WINDOW_META = {
   civ: { title: 'Civilization', sub: 'persistent world', w: 900, h: 600 },
   dev: { title: 'Developers', sub: 'autonomous software economy', w: 900, h: 600 },
   internet: { title: 'Internet', sub: 'architecture + ecosystem', w: 900, h: 600 },
+  workstation: { title: 'Workstation', sub: 'hardware + operations + finance', w: 900, h: 600 },
+  settings: { title: 'Settings', sub: 'system preferences', w: 620, h: 480 },
   help: { title: 'Manual', sub: 'field guide', w: 810, h: 550 }
 };
 
@@ -883,6 +893,9 @@ MOUNTS.terminal = function mountTerminal(win) {
   updateTerminalChrome(win);
   setTimeout(() => input.focus(), 80);
 };
+MOUNTS.terminal2 = MOUNTS.terminal;
+MOUNTS.terminal3 = MOUNTS.terminal;
+MOUNTS.terminal4 = MOUNTS.terminal;
 
 function appendTermLine(scroll, text, cls = '') {
   const nearBottom = scroll.scrollHeight - scroll.scrollTop - scroll.clientHeight < 48;
@@ -1796,32 +1809,61 @@ function renderMapSide(win) {
    BROWSER
    ============================================================ */
 MOUNTS.browser = function mountBrowser(win) {
-  win.state = { url: win.params.url || 'portal.nullnet', history: [], index: -1, query: '' };
+  if (!app.game.browser) app.game.browser = { bookmarks: [], history: [], cookies: {} };
+  const start = win.params.url || 'portal.nullnet';
+  win.state = { url: start, history: [], index: -1, query: '', tabs: [{ url: start }], activeTab: 0, showSource: false, devtools: false };
   win.body.innerHTML = `<div class="browser-layout">
     <div class="browser-bar">
       <button class="tbtn small" data-browser="back" title="Back">←</button>
       <button class="tbtn small" data-browser="forward" title="Forward">→</button>
       <button class="tbtn small" data-browser="reload" title="Reload">⟳</button>
+      <button class="tbtn small" data-browser="newtab" title="New tab">+</button>
       <div class="browser-url">${ic('globe')}<input data-browser-url autocomplete="off" spellcheck="false" aria-label="Address"></div>
       <button class="tbtn small" data-browser="go">Go</button>
+      <button class="tbtn small" data-browser="bookmark" title="Bookmark this page">★</button>
+      <button class="tbtn small" data-browser="source" title="View page source">&lt;/&gt;</button>
+      <button class="tbtn small" data-browser="devtools" title="Developer tools">{ }</button>
       <button class="tbtn small" data-browser="home">Home</button>
     </div>
+    <div class="browser-tabs" data-browser-tabs></div>
     <div class="browser-view" data-browser-view></div>
   </div>`;
   const input = win.body.querySelector('[data-browser-url]');
   const view = win.body.querySelector('[data-browser-view]');
-  win.browser = { input, view };
-  win.render = () => { if (win.browser) { win.browser.input.value = win.state.url === 'home' ? '' : win.state.url; updateBrowserStatus(win); } };
+  win.browser = { input, view, tabs: win.body.querySelector('[data-browser-tabs]') };
+  win.render = () => { if (win.browser) { win.browser.input.value = win.state.url === 'home' ? '' : win.state.url; renderBrowser(win); } };
   win.onParams = params => { if (params.url) navigateBrowser(win, params.url, true); };
   win.body.querySelector('.browser-bar').addEventListener('click', e => {
     const b = e.target.closest('[data-browser]');
     if (!b) return;
     const a = b.dataset.browser;
-    if (a === 'back') { if (win.state.index > 0) { win.state.index--; win.state.url = win.state.history[win.state.index]; renderBrowser(win); } }
-    else if (a === 'forward') { if (win.state.index < win.state.history.length - 1) { win.state.index++; win.state.url = win.state.history[win.state.index]; renderBrowser(win); } }
+    if (a === 'back') { if (win.state.index > 0) { win.state.index--; win.state.url = win.state.history[win.state.index]; switchTabUrl(win, win.state.url); renderBrowser(win); } }
+    else if (a === 'forward') { if (win.state.index < win.state.history.length - 1) { win.state.index++; win.state.url = win.state.history[win.state.index]; switchTabUrl(win, win.state.url); renderBrowser(win); } }
     else if (a === 'reload') renderBrowser(win);
+    else if (a === 'newtab') { win.state.tabs.push({ url: 'home' }); win.state.activeTab = win.state.tabs.length - 1; win.state.url = 'home'; win.state.showSource = false; renderBrowser(win); }
+    else if (a === 'bookmark') {
+      const bookmarks = app.game.browser.bookmarks;
+      if (!bookmarks.includes(win.state.url)) { bookmarks.push(win.state.url); toast('Bookmark added', win.state.url, 'g'); }
+      else { app.game.browser.bookmarks = bookmarks.filter(bm => bm !== win.state.url); toast('Bookmark removed', win.state.url, 'a'); }
+      renderBrowser(win);
+    } else if (a === 'source') { win.state.showSource = !win.state.showSource; renderBrowser(win); }
+    else if (a === 'devtools') { win.state.devtools = !win.state.devtools; renderBrowser(win); }
     else if (a === 'home') navigateBrowser(win, 'home', true);
     else if (a === 'go') navigateBrowser(win, input.value, true);
+  });
+  win.browser.tabs.addEventListener('click', e => {
+    const tab = e.target.closest('[data-browser-tab]');
+    if (!tab) return;
+    const idx = Number(tab.dataset.browserTab);
+    const close = e.target.closest('[data-browser-close]');
+    if (close) {
+      if (win.state.tabs.length <= 1) return;
+      win.state.tabs.splice(idx, 1);
+      if (win.state.activeTab >= win.state.tabs.length) win.state.activeTab = win.state.tabs.length - 1;
+    } else win.state.activeTab = idx;
+    win.state.url = win.state.tabs[win.state.activeTab]?.url || 'home';
+    win.state.showSource = false;
+    renderBrowser(win);
   });
   input.addEventListener('keydown', e => {
     if (e.key === 'Enter') { e.preventDefault(); navigateBrowser(win, input.value, true); }
@@ -1862,15 +1904,27 @@ MOUNTS.browser = function mountBrowser(win) {
   navigateBrowser(win, win.state.url, true);
 };
 
+function switchTabUrl(win, url) {
+  if (win.state.tabs[win.state.activeTab]) win.state.tabs[win.state.activeTab].url = url;
+}
 function navigateBrowser(win, url, push = true) {
   let u = String(url || '').trim().toLowerCase();
   u = u.replace(/^https?:\/\//, '').replace(/\/+$/, '');
   if (!u || u === 'about:home' || u === 'start') u = 'home';
   win.state.url = u;
+  switchTabUrl(win, u);
+  win.state.showSource = false;
   if (push) {
     win.state.history = win.state.history.slice(0, win.state.index + 1);
     if (win.state.history[win.state.history.length - 1] !== u) win.state.history.push(u);
     win.state.index = win.state.history.length - 1;
+  }
+  if (u !== 'home' && app.game.browser) {
+    if (!app.game.browser.history.includes(u)) app.game.browser.history.push(u);
+    if (app.game.browser.history.length > 120) app.game.browser.history.shift();
+    app.game.browser.cookies[u] = { visits: (app.game.browser.cookies[u]?.visits || 0) + 1, lastWorld: app.game.worldMinutes };
+    const site = getSite(app.game, u);
+    if (site) site.visits = (site.visits || 0) + 1;
   }
   if (win.browser) win.browser.input.value = u === 'home' ? '' : u;
   renderBrowser(win);
@@ -1878,8 +1932,11 @@ function navigateBrowser(win, url, push = true) {
 
 function renderBrowser(win) {
   if (!win.browser) return;
+  if (win.browser.tabs) {
+    win.browser.tabs.innerHTML = win.state.tabs.map((tab, i) => `<button class="browser-tab ${i === win.state.activeTab ? 'on' : ''}" data-browser-tab="${i}"><span>${esc(tab.url === 'home' ? 'home' : tab.url)}</span><b data-browser-close="1">×</b></button>`).join('');
+  }
   const view = win.browser.view;
-  view.innerHTML = renderBrowserPage(win);
+  view.innerHTML = renderBrowserPage(win) + (win.state.devtools ? browserDevtools(win) : '');
   updateBrowserStatus(win);
 }
 
@@ -1897,6 +1954,12 @@ function renderBrowserPage(win) {
   const u = win.state.url;
   if (u === 'home') return browserHome();
   const site = getSite(g, u);
+  if (win.state.showSource) {
+    const source = site
+      ? `<!doctype html>\n<html lang="en">\n<head>\n  <meta charset="utf-8">\n  <title>${esc(site.title)}</title>\n  <link rel="stylesheet" href="/styles.css">\n</head>\n<body>\n  <main data-site="${esc(site.domain)}">\n    <h1>${esc(site.title)}</h1>\n    <p>${esc(site.desc)}</p>\n${(site.sections || []).map(s => `    <section><h2>${esc(s.h)}</h2><p>${esc(s.p)}</p></section>`).join('\n')}\n  </main>\n  <script src="/app.js"></script>\n</body>\n</html>`
+      : `<!doctype html>\n<html><head><title>404</title></head><body><h1>No such site</h1></body></html>`;
+    return `<div class="browser-source"><div class="devtools-head">PAGE SOURCE <span>${esc(u)}</span></div><pre>${esc(source)}</pre></div>`;
+  }
   const forum = g.forums.find(f => f.domain === u);
   if (!site && forum) return browserForum(win, forum, null);
   if (!site) return browserError(u, 'The domain does not resolve to an indexed site. The network is not the web; not everything is public.');
@@ -1914,6 +1977,28 @@ function renderBrowserPage(win) {
   body.push(`<div class="site-list">${links}</div>`);
   body.push(`<div class="site-footer"><span>${esc(site.domain)}</span><span>served from ${server ? esc(server.ip) : 'unknown'} · ${fmtNum(site.visits)} visits</span></div>`);
   return `<div class="site-page">${body.join('')}</div>`;
+}
+
+function browserDevtools(win) {
+  const g = app.game;
+  const u = win.state.url;
+  const site = getSite(g, u);
+  const server = site ? serverOfSite(site) : null;
+  const record = site ? webRecord(g, u)?.record : null;
+  const cert = site ? (g.internet?.certs || []).find(c => c.siteId === site.id) : null;
+  return `<div class="browser-devtools">
+    <div class="devtools-head">DEVELOPER TOOLS <span>${esc(u)}</span></div>
+    <div class="devtools-grid">
+      <div><b>DNS</b><span>${record?.dns?.a?.join(', ') || (server ? server.ip : 'unresolved')}</span></div>
+      <div><b>TLS</b><span>${record?.tls?.enabled ? `${esc(record.tls.version)} · ${esc(record.tls.issuer)}` : 'none'}</span></div>
+      <div><b>Server</b><span>${server ? `${esc(server.host)} (${esc(server.ip)})` : '—'}</span></div>
+      <div><b>Stack</b><span>${record?.stack?.join(', ') || esc(site?.tech || '—')}</span></div>
+      <div><b>Status</b><span>${record?.status || (site ? site.status : '—')} · ${Math.round(record?.availability || 100)}% uptime</span></div>
+      <div><b>Certificate</b><span>${cert ? `${esc(cert.status)} · ${esc(cert.tlsVersion)}` : '—'}</span></div>
+      <div><b>Cookies</b><span>${g.browser?.cookies?.[u]?.visits || 0} visits recorded</span></div>
+      <div><b>Bookmarked</b><span>${g.browser?.bookmarks?.includes(u) ? 'yes' : 'no'}</span></div>
+    </div>
+  </div>`;
 }
 
 function browserHome() {
@@ -1934,6 +2019,8 @@ function browserHome() {
     <div class="site-hero"><div class="site-kicker">PUBLIC NETWORK</div><h1>The network is a population.</h1>
       <p>Not a search engine. A directory of places that still answer. Type a domain above, or start with one of these.</p></div>
     <div class="site-grid">${links.map(([u, t, d]) => `<div class="site-card"><div class="mini">${esc(u)}</div><h3><a href="#" data-nav="${esc(u)}">${esc(t)}</a></h3><p>${esc(d)}</p></div>`).join('')}</div>
+    ${(g.browser?.bookmarks || []).length ? `<div class="site-card" style="margin-bottom:10px"><div class="mini">BOOKMARKS</div><div class="site-list">${g.browser.bookmarks.map(bm => `<div class="site-list-item"><span class="n">★</span><div><b><a href="#" data-nav="${esc(bm)}">${esc(bm)}</a></b></div></div>`).join('')}</div></div>` : ''}
+    ${(g.browser?.history || []).length ? `<div class="site-card" style="margin-bottom:10px"><div class="mini">RECENT HISTORY</div><div class="site-list">${g.browser.history.slice(-8).reverse().map(h => `<div class="site-list-item"><span class="n">→</span><div><b><a href="#" data-nav="${esc(h)}">${esc(h)}</a></b></div></div>`).join('')}</div></div>` : ''}
     <div class="site-list">
       <div class="site-list-item"><span class="n">01</span><div><b>Tip</b><small>Use the terminal for nmap, whois, curl, and ssh. The browser is for what the network chooses to publish.</small></div></div>
       <div class="site-list-item"><span class="n">02</span><div><b>Warning</b><small>Everything here is fictional and simulated. No real network is reachable.</small></div></div>
@@ -3328,6 +3415,214 @@ function handleInternetClick(win, e) {
 }
 
 /* ============================================================
+   WORKSTATION / DEEP INTERACTION
+   ============================================================ */
+const WORK_TABS = [['hardware','Hardware'],['operations','Operations'],['people','People'],['finance','Finance'],['servers','Servers']];
+
+MOUNTS.workstation = function mountWork(win) {
+  win.workTab = win.workTab || 'hardware';
+  win.body.addEventListener('click', e => handleWorkClick(win, e));
+  win.render = () => renderWork(win);
+  renderWork(win);
+};
+
+function renderWork(win) {
+  const g = app.game;
+  const s = interactionOverview(g);
+  const m = s.metrics;
+  if (!WORK_TABS.some(t => t[0] === win.workTab)) win.workTab = 'hardware';
+  const tab = win.workTab;
+  const tabs = WORK_TABS.map(([id, label]) => `<button class="civ-tab ${id === tab ? 'on' : ''}" data-work-tab="${id}">${label}</button>`).join('');
+  let content = '';
+  if (tab === 'hardware') {
+    const h = s.hardware;
+    content = `<div class="civ-grid cols-4">
+      ${civStat('Performance', h.performance, `${h.cpu.cores} cores · ${h.cpu.ghz} GHz`, 'b')}
+      ${civStat('Memory / storage', `${h.memoryGb} GB`, `${Math.round(h.storageUsedGb)}/${h.storageGb} GB used`)}
+      ${civStat('VM / inference', `${h.vmCapacity} / ${h.inferenceCapacity}`, `${h.gpu.vramGb} GB VRAM`)}
+      ${civStat('Temperature', `${Math.round(h.temperature)}°C`, `health ${Math.round(h.health)}/100`, h.temperature > 80 ? 'r' : 'ok')}
+    </div>
+    ${civSection('Installed hardware', `<div class="civ-row"><div><b>${esc(h.cpu.model)}</b><small>processor</small></div><div class="civ-row-right"><button class="tbtn small primary" data-work-upgrade="cpu">Upgrade</button></div></div>
+      <div class="civ-row"><div><b>${esc(h.gpu.model)}</b><small>${h.gpu.vramGb} GB VRAM · accelerator</small></div><div class="civ-row-right"><button class="tbtn small primary" data-work-upgrade="gpu">Upgrade</button></div></div>
+      <div class="civ-row"><div><b>${h.memoryGb} GB memory</b><small>${h.nic} network adapter</small></div><div class="civ-row-right"><button class="tbtn small primary" data-work-upgrade="memory">Upgrade</button></div></div>
+      <div class="civ-row"><div><b>${h.storageGb} GB storage</b><small>${h.motherboard} motherboard · ${h.powerW} W</small></div><div class="civ-row-right"><button class="tbtn small primary" data-work-upgrade="storage">Upgrade</button></div></div>
+      <div class="civ-row"><div><b>Maintenance</b><small>Failures ${h.failures} · status ${esc(h.status)}</small></div><div class="civ-row-right"><button class="tbtn small" data-work-action="maintain">Service · $45</button></div></div>`, 'physical machine')}`;
+  } else if (tab === 'operations') {
+    content = civSection('Background operations', s.operations.map(o => `<div class="civ-row"><div><b>${esc(o.label)}</b><small>${esc(o.id)} · ${esc(o.kind)} · ${o.elapsed} world min · ${o.logs.length ? esc(o.logs[o.logs.length - 1].text) : ''}</small></div><div class="civ-row-right"><div class="bar" style="width:110px"><i style="width:${o.progress}%"></i></div><span class="tag">${o.progress}%</span><span class="tag ${o.status === 'done' ? 'g' : o.status === 'failed' ? 'r' : 'a'}">${esc(o.status)}</span>${o.status === 'running' ? `<button class="tbtn small danger" data-work-cancel="${esc(o.id)}">Cancel</button>` : ''}</div></div>`).join('') || '<div class="empty-state">No operations running. Use the terminal: bg install curl</div>', `${m.runningOperations} running · ${m.completedOperations} completed`) +
+      civSection('Activity', s.events.slice(0, 20).map(e => `<div class="civ-row"><div><b>${esc(e.title)}</b><small>${esc(e.body)}</small></div><div class="civ-row-right"><span class="tag">${esc(e.category)}</span></div></div>`).join(''));
+  } else if (tab === 'people') {
+    content = civSection('Relationships', s.relationships.map(r => {
+      const last = r.interactions[r.interactions.length - 1];
+      return `<div class="civ-row"><div><b>@${esc(r.handle)} · ${esc(r.name)}</b><small>${esc(r.role)} · ${esc(r.personality)} · ${r.interactions.length} interactions${last ? ` · last: ${esc(last.kind)} ${esc(last.response || last.status)}` : ''}</small></div><div class="civ-row-right"><span class="tag ${r.status === 'collaborator' ? 'g' : ''}">${esc(r.status)}</span><span class="tag">trust ${Math.round(r.trust)}</span><button class="tbtn small" data-work-contact="${esc(r.handle)}">Message</button></div></div>`;
+    }).join('') || '<div class="empty-state">Use: contact &lt;handle&gt; help</div>', `${s.relationships.length} people · ${m.pendingReplies} pending`) +
+      civSection('New conversation', `<div class="civ-row"><div><b>Contact an indexed operator</b><small>Requests are answered by real NPC state, not scripted replies</small></div><div class="civ-row-right"><button class="tbtn small primary" data-work-action="contact">Open</button></div></div>`);
+  } else if (tab === 'finance') {
+    const f = s.finance;
+    content = `<div class="civ-grid cols-3">${civStat('Receivable', fmtMoney(f.receivable), `${f.invoices.length} invoices`, 'ok')}${civStat('Portfolio', fmtMoney(f.portfolioValue), `${f.holdings.length} holdings`, 'b')}${civStat('Open orders', m.openOrders, `index ${fmtNum(app.game.market.index)}`)}</div>` +
+      civSection('Invoices', f.invoices.slice(0, 24).map(i => `<div class="civ-row"><div><b>${esc(i.id)} · ${esc(i.client)}</b><small>${fmtMoney(i.amount)} · due ${fmtDateTime(i.dueWorld * 60000 + app.game.createdAt)}</small></div><div class="civ-row-right"><span class="tag ${i.status === 'overdue' ? 'r' : i.status === 'paid' ? 'g' : 'a'}">${esc(i.status)}</span>${i.status === 'sent' || i.status === 'overdue' ? `<button class="tbtn small" data-work-invoice="pay" data-work-id="${esc(i.id)}">Pay</button><button class="tbtn small primary" data-work-invoice="collect" data-work-id="${esc(i.id)}">Collect</button>` : ''}</div></div>`).join('') || '<div class="empty-state">No invoices yet.</div>') +
+      civSection('Orders and holdings', f.orders.slice(0, 20).map(o => `<div class="civ-row"><div><b>${esc(o.id)} · ${esc(o.side)} ${o.qty} ${esc(o.asset)}</b><small>limit ${fmtNum(o.limit)} · ${o.status}</small></div><div class="civ-row-right"><span class="tag">${Math.round(o.filled / o.qty * 100)}%</span>${o.status === 'open' ? `<button class="tbtn small danger" data-work-order-cancel="${esc(o.id)}">Cancel</button>` : ''}</div></div>`).join('')) +
+      `<div class="civ-row"><div><b>New activity</b><small>Issue an invoice or place a limit order</small></div><div class="civ-row-right"><button class="tbtn small" data-work-action="invoice">Invoice</button><button class="tbtn small primary" data-work-action="order">Order</button></div></div>`;
+  } else {
+    const mine = ownedServers(g);
+    content = civSection('Your servers', mine.map(srv => {
+      const web = (srv.services || []).find(v => [80,443].includes(v.port));
+      return `<div class="civ-row"><div><b>${esc(srv.host)} · ${esc(srv.ip)}</b><small>${esc(srv.role)} · ${esc(srv.os)} · sec ${Math.round(srv.security)} · web ${web ? esc(web.state) : 'none'}</small></div><div class="civ-row-right">
+        <button class="tbtn small" data-work-srv="${esc(srv.id)}" data-work-srv-action="service" data-work-service="${web ? esc(web.name) : ''}" data-work-state="${web?.state === 'running' ? 'stop' : 'start'}">${web?.state === 'running' ? 'Stop web' : 'Start web'}</button>
+        <button class="tbtn small" data-work-srv="${esc(srv.id)}" data-work-srv-action="backup">Backup</button>
+        <button class="tbtn small" data-work-srv="${esc(srv.id)}" data-work-srv-action="firewall" data-work-port="443">Firewall 443</button>
+        <button class="tbtn small" data-work-srv="${esc(srv.id)}" data-work-srv-action="restart">Restart</button>
+      </div></div>`;
+    }).join('') || '<div class="empty-state">Buy a server with: buy vps-std</div>', `${mine.length} owned hosts`);
+  }
+  win.body.innerHTML = `<div class="civ-tabs">${tabs}</div><div class="win-scroll">${content}</div>`;
+  win.status.innerHTML = `<span>${m.hardwareHealth}% hardware health · ${m.temperature}°C</span><span>${m.runningOperations} running ops · ${m.pendingReplies} pending replies</span><span class="st-right"><b>${fmtMoney(app.game.player.money)}</b><span>${m.openInvoices} invoices</span></span>`;
+}
+
+function handleWorkClick(win, e) {
+  const tab = e.target.closest('[data-work-tab]');
+  if (tab) { win.workTab = tab.dataset.workTab; renderWork(win); return; }
+  const up = e.target.closest('[data-work-upgrade]');
+  if (up) {
+    const component = up.dataset.workUpgrade;
+    const tiers = HARDWARE_TIERS[component];
+    formModal({
+      title: `Upgrade ${component}`, eyebrow: 'WORKSTATION',
+      fields: [{ name: 'tier', label: 'OPTION', type: 'select', value: tiers[0].id, options: tiers.map(t => ({ value: t.id, label: `${t.name} · ${fmtMoney(t.cost)}` })) }],
+      submit: 'Install',
+      onSubmit: vals => {
+        const r = upgradeHardware(app.game, component, vals.tier);
+        toast(r.ok ? 'Hardware upgraded' : 'Upgrade failed', r.ok ? `${r.tier.name} installed.` : r.error, r.ok ? 'g' : 'r');
+        if (r.ok) refreshUI();
+      }
+    });
+    return;
+  }
+  const action = e.target.closest('[data-work-action]');
+  if (action) {
+    const kind = action.dataset.workAction;
+    if (kind === 'maintain') {
+      const r = maintainHardware(app.game);
+      toast('Maintenance', r.ok ? r.message : r.error, r.ok ? 'g' : 'r');
+      refreshUI();
+    } else if (kind === 'contact') {
+      formModal({
+        title: 'Contact an operator', eyebrow: 'RELATIONSHIPS',
+        fields: [
+          { name: 'handle', label: 'HANDLE', placeholder: 'relay' },
+          { name: 'kind', label: 'PURPOSE', type: 'select', value: 'message', options: ['message','help','collaborate','hire','negotiate','review'].map(v => ({ value: v, label: v })) },
+          { name: 'message', label: 'MESSAGE', type: 'textarea', rows: 3 }
+        ],
+        submit: 'Send',
+        onSubmit: vals => {
+          const r = contactNpc(app.game, vals.handle, vals.kind, vals.message);
+          toast(r.ok ? 'Message queued' : 'Cannot send', r.ok ? r.message : r.error, r.ok ? 'g' : 'r');
+          if (r.ok) refreshUI();
+        }
+      });
+    } else if (kind === 'invoice') {
+      formModal({
+        title: 'Issue an invoice', eyebrow: 'FINANCE',
+        fields: [{ name: 'client', label: 'CLIENT' }, { name: 'amount', label: 'AMOUNT', type: 'number', value: '150' }, { name: 'days', label: 'DUE IN DAYS', type: 'number', value: '14' }],
+        submit: 'Send invoice',
+        onSubmit: vals => {
+          const r = issueInvoice(app.game, vals.client, Number(vals.amount), Number(vals.days));
+          toast(r.ok ? 'Invoice sent' : 'Cannot invoice', r.ok ? `${r.invoice.id} · ${fmtMoney(r.invoice.amount)}` : r.error, r.ok ? 'g' : 'r');
+          if (r.ok) refreshUI();
+        }
+      });
+    } else if (kind === 'order') {
+      formModal({
+        title: 'Place a market order', eyebrow: 'FINANCE',
+        fields: [
+          { name: 'side', label: 'SIDE', type: 'select', value: 'buy', options: [{ value: 'buy', label: 'buy' }, { value: 'sell', label: 'sell' }] },
+          { name: 'asset', label: 'ASSET', value: 'IDX' },
+          { name: 'qty', label: 'QUANTITY', type: 'number', value: '10' },
+          { name: 'price', label: 'LIMIT', type: 'number', value: String(Math.round(app.game.market.index)) }
+        ],
+        submit: 'Place order',
+        onSubmit: vals => {
+          const r = placeOrder(app.game, vals.side, vals.asset, Number(vals.qty), Number(vals.price));
+          toast(r.ok ? 'Order placed' : 'Cannot place order', r.ok ? `${r.order.id} · ${r.order.side} ${r.order.qty}` : r.error, r.ok ? 'g' : 'r');
+          if (r.ok) refreshUI();
+        }
+      });
+    }
+    return;
+  }
+  const cancelOp = e.target.closest('[data-work-cancel]');
+  if (cancelOp) { const r = cancelOperation(app.game, cancelOp.dataset.workCancel); toast('Operation', r.ok ? r.message || 'Cancelled' : r.error, r.ok ? 'a' : 'r'); refreshUI(); return; }
+  const inv = e.target.closest('[data-work-invoice]');
+  if (inv) {
+    const r = inv.dataset.workInvoice === 'pay' ? payInvoice(app.game, inv.dataset.workId) : collectInvoice(app.game, inv.dataset.workId);
+    toast('Invoice', r.ok ? `${r.invoice.id} settled` : r.error, r.ok ? 'g' : 'r'); refreshUI(); return;
+  }
+  const oc = e.target.closest('[data-work-order-cancel]');
+  if (oc) { const r = cancelOrder(app.game, oc.dataset.workOrderCancel); toast('Order', r.ok ? `${r.order.id} cancelled` : r.error, r.ok ? 'a' : 'r'); refreshUI(); return; }
+  const contact = e.target.closest('[data-work-contact]');
+  if (contact) {
+    formModal({
+      title: `Message @${contact.dataset.workContact}`, eyebrow: 'RELATIONSHIPS',
+      fields: [{ name: 'kind', label: 'PURPOSE', type: 'select', value: 'message', options: ['message','help','collaborate','hire','negotiate','review'].map(v => ({ value: v, label: v })) }, { name: 'message', label: 'MESSAGE', type: 'textarea', rows: 3 }],
+      submit: 'Send',
+      onSubmit: vals => {
+        const r = contactNpc(app.game, contact.dataset.workContact, vals.kind, vals.message);
+        toast(r.ok ? 'Message queued' : 'Cannot send', r.ok ? r.message : r.error, r.ok ? 'g' : 'r');
+        if (r.ok) refreshUI();
+      }
+    });
+    return;
+  }
+  const srv = e.target.closest('[data-work-srv]');
+  if (srv) {
+    const opts = { subaction: srv.dataset.workSrvAction };
+    if (opts.subaction === 'service') { opts.service = srv.dataset.workService; opts.state = srv.dataset.workState; }
+    if (opts.subaction === 'firewall') { opts.subaction = 'allow'; opts.port = srv.dataset.workPort; }
+    const r = serverAdmin(app.game, srv.dataset.workSrv, opts.subaction, opts);
+    toast('Server', r.ok ? r.message : r.error, r.ok ? 'g' : 'r'); refreshUI();
+  }
+}
+
+/* ============================================================
+   SETTINGS
+   ============================================================ */
+function applySettings() {
+  const s = app.game?.settings || {};
+  const root = document.documentElement;
+  root.style.fontSize = `${clamp(Number(s.fontSize) || 10, 7, 18)}px`;
+  root.classList.toggle('reduced-motion', !!s.reducedMotion);
+  root.classList.toggle('compact-ui', !!s.compact);
+}
+
+MOUNTS.settings = function mountSettings(win) {
+  win.body.addEventListener('click', e => {
+    const b = e.target.closest('[data-setting]');
+    if (!b) return;
+    const key = b.dataset.setting;
+    const s = app.game.settings || (app.game.settings = {});
+    if (key === 'save') { saveGame(true); toast('World saved', 'Local state written.', 'g'); return; }
+    if (key === 'fontSize') s.fontSize = clamp(Number(b.dataset.value) || 10, 7, 18);
+    else s[key] = !s[key];
+    applySettings();
+    renderSettings(win);
+    scheduleSave();
+    toast('Setting changed', `${key}: ${s[key]}`, 'b');
+  });
+  win.render = () => renderSettings(win);
+  renderSettings(win);
+};
+
+function renderSettings(win) {
+  const s = app.game.settings || (app.game.settings = {});
+  const toggle = (key, label, note) => `<div class="civ-row"><div><b>${esc(label)}</b><small>${esc(note)}</small></div><div class="civ-row-right"><button class="tbtn small ${s[key] ? 'primary' : ''}" data-setting="${key}">${s[key] ? 'enabled' : 'disabled'}</button></div></div>`;
+  win.body.innerHTML = `<div class="win-scroll">
+    ${civSection('Display', toggle('reducedMotion', 'Reduced motion', 'Minimise background animation and sparkline updates.') + toggle('compact', 'Compact interface', 'Tighter panels and smaller controls for small screens.'))}
+    ${civSection('Text size', `<div class="civ-row"><div><b>Terminal and panel text</b><small>Applies everywhere and persists with the world save.</small></div><div class="civ-row-right">${[8,9,10,11,12,14].map(n => `<button class="tbtn small ${Number(s.fontSize || 10) === n ? 'primary' : ''}" data-setting="fontSize" data-value="${n}">${n}px</button>`).join('')}</div></div>`)}
+    ${civSection('Persistence', `<div class="civ-row"><div><b>Local save</b><small>Stored in this browser under internet-persistent-world.v1. Autosave runs every few ticks.</small></div><div class="civ-row-right"><button class="tbtn small primary" data-setting="save">Save now</button></div></div>`)}
+  </div>`;
+  win.status.innerHTML = `<span>font ${s.fontSize || 10}px</span><span>motion ${s.reducedMotion ? 'reduced' : 'full'}</span><span class="st-right"><b>saved locally</b></span>`;
+}
+
+/* ============================================================
    HELP / MANUAL
    ============================================================ */
 const CMD_HELP = {
@@ -3470,6 +3765,26 @@ const CMD_HELP = {
   inspect: 'Fingerprint a host from simulated configuration.',
   debug: 'Inspect symbols and static faults in local code.',
   openssl: 'Inspect a simulated TLS certificate.',
+  hw: 'Inspect and upgrade workstation hardware.',
+  ops: 'List background operations and their progress.',
+  bg: 'Start an install, download, audit, compile or deploy job.',
+  contact: 'Contact an NPC; replies depend on trust and personality.',
+  friends: 'Review relationships and pending replies.',
+  pcreate: 'Create a real source project in the developer economy.',
+  pwrite: 'Edit a source file in one of your projects.',
+  pbuild: 'Build and version your project.',
+  ptest: 'Run simulated smoke tests.',
+  ppublish: 'Publish your project for NPCs to discover.',
+  pdeploy: 'Deploy your project to a site you control.',
+  prelease: 'Release an update to your project.',
+  srv: 'Administer a server you own.',
+  invoice: 'Create, pay and collect invoices.',
+  transfer: 'Transfer funds to another operator.',
+  order: 'Place and inspect simulated market orders.',
+  ln: 'Create hard or symbolic links.',
+  tar: 'Create and extract virtual filesystem archives.',
+  session: 'Open an additional terminal session.',
+  settings: 'Read or change persistent system settings.',
   save: 'Save the persistent world.',
   reset: 'Erase the world and start over.'
 };
@@ -3618,6 +3933,7 @@ function helpContent(section) {
 function init() {
   const loaded = readSave();
   app.game = reviveGame(loaded.game);
+  applySettings();
   const elapsed = Date.now() - (app.game.lastSaved || app.game.lastActive || Date.now());
   if (loaded.loaded && elapsed > 120000) {
     try {
