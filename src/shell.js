@@ -1,5 +1,5 @@
 /* Terminal shell: parsing, pipes, virtual filesystem, networking and tools. */
-import { fmtMoney, fmtNum, fmtBytes, fmtDate, fmtTime, fmtDateTime, fmtDuration, esc, pad, padLeft, table, sleep, clamp, progressBar, lineWrap, titleCase, hash32, slugify } from './util.js';
+import { fmtMoney, fmtNum, fmtBytes, fmtDate, fmtTime, fmtDateTime, fmtDuration, esc, pad, padLeft, table, sleep, clamp, progressBar, lineWrap, titleCase } from './util.js';
 import {
   HOME, resolvePath, getNode, listDir, readFile, writeFile, ensureDir, removeNode, moveNode,
   copyNode, exists, isDir, basename, dirname, joinPath, normalize, allFiles, findFiles, treeLines,
@@ -26,52 +26,17 @@ import {
   AGENT_ROLES, PRODUCT_TEMPLATES
 } from './data.js';
 import {
-  analyzeProject, findInProject, lint, formatCode, outline, completions, languages,
-  projectTemplates, scaffoldProject, runCommandFor, testCommandFor, snippetsFor,
-  languageFor, languageName, codingSummary, recordCoding, recordEdit, codingSkillBonus
-} from './coding.js';
-import {
-  devOverview, developerList, projectList, projectDetail, vulnList, labList, contributionList,
-  evaluateAuthorization, playerCloneProject, playerContribute, playerReportVulnerability,
-  playerPublishTool, playerLabSession, playerPracticeExploit, playerInspectSource, playerForkProject,
-  playerCreateProject, playerWriteFile, playerBuildProject, playerTestProject, playerPublishProject,
-  playerDeployProject, playerUpdateProject
-} from './devworld.js';
-import {
-  ensureInteraction, hardwareSummary, upgradeHardware, maintainHardware, HARDWARE_TIERS,
-  startOperation, cancelOperation, operationSpeed, operationSummary, contactNpc, relationshipSummary,
-  serverAdmin, issueInvoice, payInvoice, collectInvoice, transferFunds, placeOrder,
-  cancelOrder, financeSummary, interactionOverview
-} from './interaction.js';
-import {
-  ensureSociety, societyOverview, citizenProfile, contentDetail,
-  playerMeetNpc, playerPurchaseContent, playerPublishContent, playerReviewContent,
-  playerIdentity, testContent
-} from './society.js';
-import {
-  ensureIT, itOverview, componentCatalog, assembleRig, selectRig, setBios, stressTest,
-  partitionDisk, installOS, bootRig, configureOS, publishDistro, createCircuit, testCircuit,
-  createNetwork, addNetworkNode, connectNodes, configNode, testNetwork, createStudio,
-  hireDeveloper, createGameProject, testGame, publishGame, createAIExperiment, benchmarkAI,
-  deployAgent as itDeployAgent, generateTickets, diagnoseTicket, resolveTicket, generateChallenges,
-  attemptChallenge, marketplace, buyCollectible, sellCollectible, skillOverview, takeCertification,
-  partName
-} from './ituniverse.js';
-import {
-  ensureInternet, internetSummary, protocolList, networkOverview, webList, webRecord,
-  resolveDomain, devEcosystem, aiEcosystem, securityOverview, socialOverview, internetHistory,
-  playerHardenWebsite, playerRenewCertificate, playerAttachApi, playerPublishPackage,
-  playerDeploySite, playerTrainModel, playerDeployEndpoint, playerSecurityScan,
-  playerMitigateIncident
-} from './internet.js';
-import {
   civilizationSummary, civHistory, civEventList, educationFields, researchFields, lawDomains,
   playerStudy, playerStartResearch, playerFundResearch, playerPublish, playerBuyProperty,
-  playerSellProperty, playerInsureProperty, playerRelease, playerLobby, playerRelocate, playerAdoptTech, playerProperties,
+  playerSellProperty, playerLobby, playerRelocate, playerAdoptTech, playerProperties,
   playerCredentials, playerCompliance, getCivCountry, getCivCity, playerCountry, playerCity,
   outletFor, researchField, civKnowledge, validateLedger, sharedSnapshot, joinSharedWorld,
-  disconnectSharedPlayer, applyRemoteAction, activeLegalDisputes, playerLegalAction, careerSnapshot, jobMatch, playerApplyJob,
-  playerInterviewJob, playerNegotiateJob, playerAcceptJob, playerDeclineJob, playerQuitJob
+  disconnectSharedPlayer, activeLegalDisputes, careerSnapshot, jobMatch, playerApplyJob,
+  playerInterviewJob, playerNegotiateJob, playerAcceptJob, playerDeclineJob, playerQuitJob,
+  playerFileDispute, playerHireLawyer, playerRespondDispute, playerDevelopTech, playerFundTech,
+  playerProcureComponent, playerSellComponent, playerAcquireFacility, playerFoundCulture,
+  playerPublishGame, playerReleaseMusic, playerCreateCommunity, playerHostEvent, playerSetHome,
+  playerTeach
 } from './civilization.js';
 
 const CMD_ALIASES = {
@@ -79,8 +44,6 @@ const CMD_ALIASES = {
   cls: 'clear', logout: 'exit', quit: 'exit', h: 'history', '?': 'help',
   inbox: 'mail', jobs: 'contracts', gigs: 'contracts', board: 'contracts',
   shop: 'market', store: 'market', topology: 'map', netmap: 'map',
-  tcpdump: 'packets', wireshark: 'packets', dns: 'dig', trace: 'traceroute',
-  webtest: 'http', sast: 'lint', reverse: 'debug',
   whoami: 'whoami', sysinfo: 'neofetch', fetch: 'neofetch'
 };
 
@@ -220,9 +183,7 @@ export async function execute(app, term, rawLine) {
 
   if (term.pending) return handlePending(app, term, line);
 
-  const firstToken = line.split(/\s+/)[0] || '';
-  const aliased = CMD_ALIASES[line] ? CMD_ALIASES[line]
-    : CMD_ALIASES[firstToken] ? CMD_ALIASES[firstToken] + line.slice(firstToken.length) : line;
+  const aliased = CMD_ALIASES[line] ? CMD_ALIASES[line] : line;
   const controls = splitControl(aliased);
   let lastCode = 0;
   for (const control of controls) {
@@ -374,16 +335,10 @@ COMMANDS.help = (ctx) => {
     ['SYSTEM', 'whoami  id  hostname  uname  date  uptime  ps  top  kill  free  systemctl  sudo  su'],
     ['PACKAGES', 'apt update  apt install <pkg>  apt list --installed'],
     ['NETWORK', 'ip  ifconfig  ping  traceroute  dig  whois  curl  wget  ssh  scp  nc  netstat  ss'],
-    ['SECURITY', 'nmap  vulnscan  audit  exploit  patch  hydra  heat  legal  sec'],
+    ['SECURITY', 'nmap  vulnscan  audit  exploit  patch  hydra  heat  legal'],
     ['DEVELOP', 'python3  bash  gcc  make  git  sqlite3  node  docker  kubectl'],
-    ['CODING', 'project  init  templates  lint  fmt  symbols  rg  todo  run  build  test  coding'],
-    ['INTERNET', 'net  web  registry  sec  social  nethistory  dig  curl  map'],
-    ['DEV ECOSYSTEM', 'dev  repo  vuln  lab  packets  forensics  http  inspect  debug  openssl'],
-    ['INTERACTION', 'hw  ops  bg  contact  friends  pcreate  pwrite  pbuild  ptest  ppublish  pdeploy  prelease  srv  invoice  transfer  order  ln  tar  session  settings'],
-    ['INHABITANTS', 'society  citizens  citizen  culture  content  meet'],
-    ['IT UNIVERSE', 'it  parts  rig  circuit  netlab  studio  ailab  tickets  challenge  skills  cert  collect'],
     ['CLOUD', 'cloud  docker  kubectl'],
-    ['AI', 'agent  model  company'],
+    ['AI', 'agent  agent models  agent deploy  company'],
     ['ECONOMY', 'bank  contracts  accept  submit  market  buy  deploy  domains  site  servers  company'],
     ['SOCIAL', 'mail  send  read  forum  thread  post  news  profile  search  whois'],
     ['CIVILIZATION', 'civ  country  study  research  publish  civ laws  civ legal  civ identity  civ property  civ tech  civ supply  civ history  civ events  civ mp'],
@@ -418,65 +373,7 @@ function manPage(ctx, name) {
     kubectl: ['kubectl — orchestration', 'kubectl create cluster <name> [node...] | get pods|nodes|deploy | apply -f <manifest> | scale deployment/<name> --replicas N', 'A small Kubernetes-style control plane over your own nodes. Manifests are read from the virtual filesystem.'],
     agent: ['agent — autonomous AI agents', 'agent list [--all] | models | roles | deploy <name> --role <role> --model <model> | inspect <name> | start|stop|pause <name> | assign <name> <domain>', 'Agents perform bounded work on your infrastructure. They cost money, remember what they did, and pause when something looks wrong.'],
     company: ['company — organizations', 'company list | inspect <name> | register <name> | launch <product> | products | mine', 'Register and operate your own technology company. Products generate recurring revenue based on subscribers and reputation.'],
-    civ: ['civ — civilization interface', 'civ [status|countries|country <q>|cities|laws|legal|identity|study|research|media|tech|supply|property|society|diplomacy|release|history|events|mp|relocate|lobby]', 'Inspect and act on the persistent civilization: governments, regulation, education, research, media, infrastructure, property, supply chains, technology, culture, identity and shared-world authority. The simulation runs whether or not you participate.'],
-    project: ['project — analyse a workspace', 'project [directory]', 'Reports file counts, language mix, size, test and manifest coverage, TODOs and a bounded health score. Uses only the virtual filesystem.'],
-    init: ['init — scaffold a project', 'init [list] | init <template> [directory] [--force]', 'Creates a real project tree with source files, tests, a manifest and an optional git repository. Templates: blank, web, python, node, api, game, library, c, docs.'],
-    lint: ['lint — static analysis', 'lint [file...]', 'Parses source without executing it. Reports bracket errors, unsafe constructs, hard-coded credentials, style issues and unfinished work.'],
-    fmt: ['fmt — format source', 'fmt <file> [--check]', 'Normalises indentation, trailing whitespace, blank lines and JSON layout. Writes the result back to the virtual filesystem.'],
-    symbols: ['symbols — code outline', 'symbols <file>', 'Lists functions, classes, types and selectors with line numbers.'],
-    rg: ['rg — project search', 'rg <pattern> [directory]', 'Searches text files in a project, skipping build output, dependencies and binary assets.'],
-    run: ['run — execute a file', 'run [file]', 'Chooses a runtime from the file type, runs it in the simulated machine and records the attempt. HTML launches the site preview.'],
-    build: ['build — compile a project file', 'build <file>', 'Runs the build path for C, C++, Rust, Go, TypeScript or other compiled languages.'],
-    test: ['test — run tests', 'test [file]', 'Chooses the test runner for the language and records a pass or failure against your coding record.'],
-    coding: ['coding — developer record', 'coding', 'Shows coding level, XP, streak, line output, builds, releases and recent activity.'],
-    net: ['net — internet architecture', 'net [status|asns|ixps|cables|dc|protocols|events|map]', 'Inspects the simulated internet: autonomous systems, exchange points, long-haul links, data centers, protocol adoption and network events.'],
-    web: ['web — world wide web', 'web [list|<domain>|secure <site>|cert <site>|api <site> [protocol]|scan <site>|advisories|incidents|respond <id>|sbom|dev|platforms|history]', 'Inspects DNS, TLS, CDN, stack, API and health records for websites. Owners can harden, re-certify, publish APIs and scan their own sites.'],
-    registry: ['registry — package registries', 'registry [list|search <q>|info <name>|publish <name> [version] [language]]', 'The public package ecosystem. Publishing a package costs money and enters the shared registry.'],
-    model: ['model — AI ecosystem', 'model [list|info <id>|train <name> [base] [hours]|serve <model> <site> [price]|endpoints|training|vector]', 'Inspect models, train a new one on rented compute, and serve inference through a site you control.'],
-    sec: ['sec — security posture', 'sec [status|advisories|incidents|scan <site>|respond <id>|sbom]', 'Zero-trust scores, advisories, open incidents and remediation. Scanning works only on your own infrastructure.'],
-    social: ['social — social platforms', 'social [name]', 'Lists the simulated social internet and its trust, user and protocol characteristics.'],
-    nethistory: ['nethistory — internet history', 'nethistory [query]', 'Chronological internet history, from early packet switching to current adoption shifts.'],
-    dev: ['dev — autonomous developer economy', 'dev [status|developers|projects|events|contributions|publish <name> [language]]', 'Inspects NPC developers, their repositories, technical decisions and published tools. Developers write and maintain actual source code in the simulation.'],
-    repo: ['repo — repositories and source', 'repo [list|show <project>|source <project> [file]|lint <project>|clone <project> [dir]|contribute <project> <change>|fork <project>|report <project> [category]|issues <project>]', 'Reads real generated source files, git history and advisories. Cloning writes the project into your virtual filesystem.'],
-    vuln: ['vuln — vulnerability register', 'vuln [list|info <cve|id>|advisories|report <project> [category]]', 'Findings originate in generated code, dependencies and configuration decisions. Each includes preconditions, impact, detection and remediation.'],
-    lab: ['lab — authorized cyber ranges', 'lab [list|enter <lab>|targets <lab>|exploit <lab> <target>|leave <lab>]', 'Isolated fictional environments for authorized practice. Exploits outside scope are not permitted.'],
-    packets: ['packets — traffic capture', 'packets <host> [count]', 'Builds a bounded capture from the target\'s simulated ports, addresses and traffic. Captures are stored locally as evidence.'],
-    forensics: ['forensics — incident evidence', 'forensics <host>', 'Produces a chain-of-custody report from simulated host notes, configuration and monitoring state.'],
-    http: ['http — HTTP inspection', 'http <domain> [path]', 'Requests a simulated web record and reports headers, stack and health derived from the live web model.'],
-    inspect: ['inspect — host and service fingerprint', 'inspect <host|domain>', 'Fingerprints a target using its actual simulated OS, services, versions and authorization record.'],
-    debug: ['debug — simulated debugger', 'debug <source-file> | gdb <source-file>', 'Lists symbols and static faults in a local source file. No real code executes on the player\'s device.'],
-    openssl: ['openssl — certificate inspection', 'openssl x509 -in <domain> | openssl version', 'Reads the simulated PKI record for a domain: issuer, key, TLS version, validity and renewal policy.'],
-    hw: ['hw — workstation hardware', 'hw | hw upgrade <cpu|gpu|memory|storage|nic> <tier> | hw service', 'Inspect or upgrade physical hardware. CPU, memory, storage and health determine compile, VM and inference capacity.'],
-    ops: ['ops — background operations', 'ops | ops cancel <id> | bg <install|download|audit|compile|deploy> <target>', 'Long-running operations advance with world time and consume CPU and memory. Several can run at once.'],
-    contact: ['contact — NPC relationships', 'contact <handle> <message|help|collaborate|hire|negotiate|review> [text]', 'Messages are answered according to personality, trust, availability and reputation. Replies arrive as mail.'],
-    pcreate: ['pcreate — create a project', 'pcreate <name> [language] [kind]', 'Creates a real source tree, manifest, tests and git history in the developer economy.'],
-    pwrite: ['pwrite — edit project source', 'pwrite <project> <file> [content...] | pwrite <project> <file> --from=<localfile>', 'Modifies a generated source file and records a git commit. Only your own projects can be edited.'],
-    pbuild: ['pbuild — build your project', 'pbuild <project>', 'Runs static analysis, creates a release version and queues binary output as a background operation.'],
-    ptest: ['ptest — test your project', 'ptest <project>', 'Runs bounded simulated smoke tests. Failures open issues you can investigate.'],
-    ppublish: ['ppublish — publish your project', 'ppublish <project>', 'Publishes to git.nullnet so NPC developers can discover, star, fork, report and contribute.'],
-    pdeploy: ['pdeploy — deploy your project', 'pdeploy <project> <your-domain> [dir]', 'Deploys a published project to a live site on your server after the service is running.'],
-    srv: ['srv — server administration', 'srv <host> <service|user|dns|firewall|backup|config|package|restart> [args]', 'Operates a server you own. Stopping a web service takes its sites offline; backups restore actual configuration.'],
-    invoice: ['invoice — billing', 'invoice | invoice send <client> <amount> [days] | invoice pay <id> | invoice collect <id>', 'Creates, pays and collects fictional invoices. Overdue invoices affect reputation and cash flow.'],
-    order: ['order — simulated orders', 'order | order buy|sell <asset> <qty> <limit> | order cancel <id>', 'Places limit orders that fill as the market crosses. Holdings and profit/loss are tracked in a portfolio.'],
-    ln: ['ln — links', 'ln [-s] <target> <link>', 'Creates a hard copy or a symbolic link in the virtual filesystem. Symbolic links are followed by file reads.'],
-    tar: ['tar — archives', 'tar cf <archive> <dir> | tar xf <archive> [dir]', 'Packs and unpacks bounded virtual filesystem archives with ownership and mode metadata.'],
-    session: ['session — terminal sessions', 'session [1-4]', 'Opens another independent terminal session sharing the same persistent filesystem.'],
-    settings: ['settings — system preferences', 'settings | settings <fontSize|reducedMotion|sound|compact> <value>', 'Reads and writes persistent workstation preferences.'],
-    society: ['society — autonomous civilization', 'society [status|feed|content]', 'Observes inhabitants, their content economy and the chronological record of their independent activities.'],
-    citizens: ['citizens — inhabitant index', 'citizens [query]', 'Lists persistent identities with simulation detail level, employment, funds and dominant need.'],
-    citizen: ['citizen — personal profile', 'citizen <handle>', 'Shows identity, emotions with causes, needs, memories, created content and explainable decisions.'],
-    culture: ['culture — content index', 'culture [query]', 'Lists actual content objects with creator, price and recorded usage, tests and reviews.'],
-    content: ['content — content economy', 'content list|show <id>|buy <id>|test <id>|review <id> <text>|publish <type> <title> <text>', 'Every usage count comes from a recorded consumption event; reviews require a prior test.'],
-    meet: ['meet — interpersonal contact', 'meet <handle> [note]', 'Creates a relationship event with an NPC. Trust and memory change as a result.'],
-    rig: ['rig — PC building laboratory', 'rig list|build <name> <preset>|select <id>|show|bios <key> <value>|stress|part <scheme>|os <distro> [dual]|boot|config|publish', 'Assembles component-level machines with compatibility checks, BIOS tuning, partitioning and real boot logs.'],
-    netlab: ['netlab — network construction', 'netlab list|create <name>|<net> node|link|config|test|show', 'Builds a topology and tests actual connectivity with VLAN, DHCP, DNS, firewall and routing checks.'],
-    circuit: ['circuit — electronics workbench', 'circuit list|build <name> <board> <sensors> <firmware>|test <id>', 'Builds boards with real pin and power constraints, then tests stored firmware.'],
-    studio: ['studio — game studio', 'studio list|create <name>|<studio> hire|game|test|publish', 'Runs a game studio: staff, projects, simulated test suites and releases into the shared content economy.'],
-    ailab: ['ailab — AI playground', 'ailab list|train <name> [base]|bench <model>|agent <model> <tools> <budget>', 'Trains models using real background operations and GPU capacity, benchmarks them and deploys permissioned agents.'],
-    tickets: ['tickets — IT support desk', 'tickets [list|scan|diagnose <id>|fix <id> <action>]', 'Tickets are generated from actual broken state. A fix is accepted only when the underlying state recovers.'],
-    challenge: ['challenge — optional challenges', 'challenge [list|scan|try <id>]', 'Challenges require real activities and pay out from the shared economy.'],
-    skills: ['skills — independent skill trees', 'skills', 'Shows ten independent disciplines and professional certifications earned through real actions.'],
-    collect: ['collect — technology collecting', 'collect [list|buy <id>|sell <id>]', 'A marketplace for vintage and rare hardware with condition, rarity and changing demand.'],
+    civ: ['civ — civilization interface', 'civ [status|countries|country <q>|cities|laws|legal|identity|study|research|media|tech|supply|property|history|events|mp|relocate|lobby]', 'Inspect and act on the persistent civilization: governments, regulation, education, research, media, infrastructure, property, supply chains, technology, culture, identity and shared-world authority. The simulation runs whether or not you participate.'],
   };
   const p = pages[name];
   if (!p) { ctx.print(`No manual entry for ${name}`, 'err'); ctx.dim('Try: help'); return; }
@@ -3519,18 +3416,53 @@ function civLaws(ctx, query) {
 }
 function civLegal(ctx, args = []) {
   const g = ctx.game;
+  const sub = (args[0] || '').toLowerCase();
   const s = civilizationSummary(g);
-  const c = s.country;
-  const compliance = playerCompliance(g);
-  const action = (args[0] || '').toLowerCase();
-  if (action === 'settle' || action === 'contest') {
-    if (!args[1]) { ctx.err(`usage: civ legal ${action} <case-id>`); return; }
-    const r = playerLegalAction(g, args[1], action);
+  const civ = s.civ;
+  if (sub === 'file') {
+    let claim = 5000, against = 'counterparty', kind = 'civil', isPublic = true;
+    const words = [];
+    for (let i = 1; i < args.length; i++) {
+      const a = args[i];
+      if (a === '--claim' && args[i + 1]) claim = Number(args[++i]);
+      else if (a === '--against' && args[i + 1]) against = args[++i];
+      else if (a === '--kind' && args[i + 1]) kind = args[++i];
+      else if (a === '--sealed') isPublic = false;
+      else words.push(a);
+    }
+    const issue = words.join(' ').trim();
+    if (!issue) { ctx.err('usage: civ file <issue> [--claim N] [--against party] [--kind civil] [--sealed]'); return; }
+    const r = playerFileDispute(g, issue, { claim, against, kind, public: isPublic });
     if (!r.ok) { ctx.err(r.error); return; }
-    ctx.ok(action === 'settle' ? `Settled ${r.dispute.id} for ${fmtMoney(r.amount)}.` : `Contesting ${r.dispute.id}; counsel retained for ${fmtMoney(r.fee)}.`);
+    ctx.ok(`Filed ${r.dispute.id} in ${r.dispute.courtName} for ${fmtMoney(r.fee)}.`);
+    ctx.print(`  claim ${fmtMoney(r.dispute.claim)} · against ${r.dispute.defendant} · hearing in ${Math.max(1, Math.ceil((r.dispute.hearingWorld - civ.worldMinutes) / 1440))} days`, 'accent');
+    ctx.dim('Counsel raises the odds: civ counsel <case>. Settlement ends it early: civ defend <case> --settle');
     return;
   }
-  const disputes = activeLegalDisputes(g).filter(d => d.subject === 'player-company' || d.subject === 'player');
+  if (sub === 'counsel' || sub === 'lawyer') {
+    if (!args[1]) { ctx.err('usage: civ counsel <case>'); return; }
+    const r = playerHireLawyer(g, args[1]);
+    if (!r.ok) { ctx.err(r.error); return; }
+    ctx.ok(`Counsel retained in ${r.dispute.id} for ${fmtMoney(r.fee)}.`);
+    return;
+  }
+  if (sub === 'defend' || sub === 'respond' || sub === 'settle') {
+    const caseId = args[1] && !args[1].startsWith('--') ? args[1] : args[0];
+    if (!caseId) { ctx.err('usage: civ defend <case> [--settle|--evidence|--lawyer|--written]'); return; }
+    const r = playerRespondDispute(g, caseId, {
+      settle: sub === 'settle' || args.includes('--settle'),
+      evidence: args.includes('--evidence'),
+      lawyer: args.includes('--lawyer')
+    });
+    if (!r.ok) { ctx.err(r.error); return; }
+    if (r.settled) { ctx.ok(`Settled ${r.dispute.id} for ${fmtMoney(r.settlement)}.`); return; }
+    if (r.evidence) { ctx.ok(`Evidence filed in ${r.dispute.id}; strength now ${r.evidence}/100 for ${fmtMoney(r.cost)}.`); return; }
+    ctx.ok(`Defense entered in ${r.dispute.id}.`);
+    return;
+  }
+  const c = s.country;
+  const compliance = playerCompliance(g);
+  const disputes = activeLegalDisputes(g);
   ctx.head('LEGAL STANDING');
   ctx.print(`${c.name} · ${c.cyberPolicy} cyber policy · compliance ${compliance.score}/100`, compliance.score < 50 ? 'warn' : 'ok');
   ctx.print('');
@@ -3544,26 +3476,25 @@ function civLegal(ctx, args = []) {
     for (const r of compliance.records.slice(-8).reverse()) ctx.print(`  ${r.status.padEnd(10)} ${r.issue} · ${fmtMoney(r.fine || 0)}`, r.status === 'fined' ? 'err' : 'warn');
   }
   if (disputes.length) {
-    ctx.print('OPEN CASES AGAINST YOU', 'head');
-    for (const d of disputes.slice(0, 8)) {
-      const hearing = Math.max(0, Math.ceil((d.hearingWorld - g.worldMinutes) / 1440));
-      ctx.print(`  ${d.id} ${d.domainName} · ${d.issue} · ${d.status}${d.contested ? ' · represented' : ''}`, 'warn');
-      ctx.dim(`      evidence ${d.evidence}/100 · claimed ${fmtMoney(d.claimedFine)} · hearing ${hearing}d · civ legal settle ${d.id} | contest ${d.id}`);
+    ctx.print('OPEN DISPUTES', 'head');
+    for (const d of disputes.slice(0, 8)) ctx.print(`  ${d.id} ${d.subject} · ${d.issue || d.kind} · ${d.status}`, 'warn');
+  } else ctx.dim('No open disputes against this operator.');
+  const mine = civ.disputes.filter(d => ['player', 'player-company'].includes(d.subject) || d.plaintiff === 'player').slice(-8).reverse();
+  if (mine.length) {
+    ctx.print('YOUR CASES', 'head');
+    for (const d of mine) {
+      const left = ['filed', 'hearing'].includes(d.status) ? ` · decision in ${Math.max(0, Math.ceil((d.decisionWorld - civ.worldMinutes) / 1440))}d` : '';
+      ctx.print(`  ${pad(d.id, 9)} ${pad(d.status, 9)} ${pad(d.kind, 20)} ${d.issue}${left}`, d.status === 'decided' && d.outcome === 'upheld' ? 'err' : 'accent');
+      ctx.dim(`      claim ${fmtMoney(d.claim)} · evidence ${Math.round(d.evidence)} · ${d.lawyer ? 'counsel retained' : 'no counsel'}${d.outcome ? ' · ' + d.outcome : ''}`);
     }
-  } else ctx.dim('No open cases against this operator.');
-  const other = activeLegalDisputes(g).filter(d => d.subject !== 'player-company' && d.subject !== 'player');
-  if (other.length) {
-    ctx.print('');
-    ctx.print('COURT DOCKET — OTHER PARTIES', 'head');
-    for (const d of other.slice(0, 6)) ctx.print(`  ${d.id} ${pad(d.subjectName || d.subject, 22)} ${d.domainName} · ${d.status}`, 'dim');
   }
   if (g.legal.length) {
-    ctx.print('');
     ctx.print('ENFORCEMENT HISTORY', 'head');
     for (const l of g.legal.slice(-6).reverse()) ctx.print(`  ${fmtDate(l.time)} · ${l.authority} · ${fmtMoney(l.fine)} · ${l.reason}`, 'err');
   }
   ctx.print('');
-  ctx.dim('Regulators, courts, and fines are simulated per jurisdiction. Contest with counsel, settle, or accept the hearing outcome.');
+  ctx.dim('civ file <issue> [--claim N] · civ counsel <case> · civ defend <case> [--settle|--evidence]');
+  ctx.dim('Regulators, courts, and fines are simulated per jurisdiction. Conduct and evidence change the outcome.');
 }
 function civIdentity(ctx) {
   const g = ctx.game;
@@ -3738,12 +3669,52 @@ function civMedia(ctx, args) {
 function civTech(ctx, args) {
   const g = ctx.game;
   const civ = civilizationSummary(g).civ;
-  if (args[0] === 'adopt') {
+  const sub = (args[0] || '').toLowerCase();
+  if (sub === 'adopt') {
     if (!args[1]) { ctx.err('usage: civ tech adopt <name|id>'); return; }
     const r = playerAdoptTech(g, args.slice(1).join(' '));
     if (!r.ok) { ctx.err(r.error); return; }
     ctx.ok(`Adopted ${r.tech.name} ${r.tech.version} from ${r.tech.vendorName} for ${fmtMoney(r.cost)}.`);
     ctx.print(`  category ${r.tech.category} · license ${r.tech.license} · adoption ${r.tech.adoption.toFixed(1)}%`);
+    return;
+  }
+  if (sub === 'start' || sub === 'develop') {
+    let category = 'devtools', funding = null, open = false, ambition = 1;
+    const words = [];
+    for (let i = 1; i < args.length; i++) {
+      const a = args[i];
+      if (a === '--category' && args[i + 1]) category = args[++i];
+      else if (a === '--fund' && args[i + 1]) funding = Number(args[++i]);
+      else if (a === '--ambition' && args[i + 1]) ambition = Number(args[++i]);
+      else if (a === '--open') open = true;
+      else words.push(a);
+    }
+    const name = words.join(' ').trim();
+    if (!name) { ctx.err('usage: civ tech start <name> [--category os|ai|database|security|devtools|framework] [--fund N] [--open]'); return; }
+    const r = playerDevelopTech(g, name, { category, funding, open, ambition });
+    if (!r.ok) { ctx.err(r.error); return; }
+    ctx.ok(`Started ${r.project.name} (${r.project.category}) for ${fmtMoney(r.seed)}.`);
+    ctx.print(`  ${r.project.id} · needs ${fmtMoney(r.fundingNeeded)} · field ${r.field} · eta ${Math.max(1, Math.ceil((r.project.etaWorld - civ.worldMinutes) / 1440))} days`, 'accent');
+    ctx.dim('Fund it as it develops: civ tech fund <project> <amount>');
+    return;
+  }
+  if (sub === 'fund') {
+    if (!args[1]) { ctx.err('usage: civ tech fund <project> <amount>'); return; }
+    const amount = Number(args[args.length - 1]);
+    const r = playerFundTech(g, args.slice(1, -1).join(' '), amount);
+    if (!r.ok) { ctx.err(r.error); return; }
+    ctx.ok(`Committed ${fmtMoney(r.amount)} to ${r.project.name}. Progress ${Math.round(r.project.progress)}%.`);
+    return;
+  }
+  if (sub === 'projects') {
+    ctx.head('TECHNOLOGY PROJECTS');
+    const projects = civ.tech.projects.slice().sort((a, b) => b.progress - a.progress);
+    for (const p of projects.slice(0, 28)) {
+      const mine = p.ownerType === 'player' ? '> ' : '  ';
+      ctx.print(`${mine}${pad(p.id, 12)} ${pad(p.name, 26)} ${pad(p.category, 12)} ${progressBar(p.progress, 10)} ${padLeft(Math.round(p.progress) + '%', 4)} ${pad(p.status, 9)}`, p.ownerType === 'player' ? 'ok' : 'accent');
+      ctx.dim(`      ${p.ownerName} · funding ${fmtMoney(p.funding)}/${fmtMoney(p.fundingNeeded)} · ${p.license}`);
+    }
+    ctx.dim('civ tech start <name> [--category X] [--fund N]   ·   civ tech fund <project> <amount>');
     return;
   }
   const q = args.join(' ').toLowerCase();
@@ -3753,12 +3724,54 @@ function civTech(ctx, args) {
     ctx.print(`${pad(t.name, 28)} ${pad(t.category, 12)} ${pad(t.license, 16)} ${padLeft(t.version, 6)} adoption ${padLeft(t.adoption.toFixed(1) + '%', 6)}${t.standard ? ' STANDARD' : ''}`, t.standard ? 'ok' : 'accent');
     ctx.dim(`    ${t.vendorName} · docs ${t.documentation} · security ${t.security} · ecosystem ${t.ecosystem} · ${t.compatibility.join(', ')}`);
   }
-  ctx.dim('civ tech adopt <name>   ·   standards emerge from adoption, not from a script.');
+  ctx.dim('civ tech adopt <name> · civ tech projects · civ tech start <name>   ·   standards emerge from adoption, not from a script.');
 }
-function civSupply(ctx) {
+function civSupply(ctx, args = []) {
   const g = ctx.game;
   const civ = civilizationSummary(g).civ;
   const s = civ.supply;
+  const sub = (args[0] || '').toLowerCase();
+  const industrial = civ.player.industrial || { inventory: {}, facilityIds: [] };
+  if (sub === 'procure' || sub === 'buy') {
+    if (args.length < 3) { ctx.err('usage: civ procure <component> <quantity>'); return; }
+    const r = playerProcureComponent(g, args[1], args[2], { spot: args.includes('--spot') });
+    if (!r.ok) { ctx.err(r.error); return; }
+    ctx.ok(`Procured ${r.quantity} ${r.component.name.toLowerCase()} for ${fmtMoney(r.total)} (${fmtMoney(r.unit)}/unit).`);
+    return;
+  }
+  if (sub === 'sell') {
+    if (!args[1]) { ctx.err('usage: civ sell <component> [quantity]'); return; }
+    const r = playerSellComponent(g, args[1], args[2]);
+    if (!r.ok) { ctx.err(r.error); return; }
+    ctx.ok(`Sold ${r.quantity} ${r.component.name.toLowerCase()} for ${fmtMoney(r.total)}.`);
+    return;
+  }
+  if (sub === 'acquire') {
+    if (!args[1]) { ctx.err('usage: civ acquire <factory|warehouse-id>'); return; }
+    const r = playerAcquireFacility(g, args[1]);
+    if (!r.ok) { ctx.err(r.error); return; }
+    ctx.ok(`Acquired ${r.facility.name} for ${fmtMoney(r.cost)}.`);
+    ctx.dim('Owned facilities convert inputs into inventory while you are away.');
+    return;
+  }
+  if (sub === 'industry' || sub === 'inventory') {
+    ctx.head('YOUR INDUSTRIAL OPERATIONS');
+    const items = Object.entries(industrial.inventory).filter(([, qty]) => qty > 0);
+    if (items.length) {
+      ctx.print('INVENTORY', 'head');
+      for (const [id, qty] of items) {
+        const comp = s.components[id];
+        ctx.print(`  ${pad(comp?.name || id, 22)} ${padLeft(fmtNum(qty), 7)} units · spot ${fmtMoney(comp?.price || 0)}`);
+      }
+    } else ctx.dim('No component inventory. civ procure <component> <qty>');
+    const owned = [...s.factories.filter(f => f.ownerId === 'player'), ...s.warehouses.filter(w => w.ownerId === 'player')];
+    ctx.print('');
+    ctx.print('OWNED FACILITIES', 'head');
+    if (!owned.length) ctx.dim('  None. civ acquire <factory-id>');
+    for (const f of owned) ctx.print(`  ${pad(f.id, 12)} ${pad(f.name, 26)} ${f.output || 'storage'} · utilization ${Math.round(f.utilization || 0)}% · ${f.status}`, 'ok');
+    ctx.dim('civ procure <component> <qty> · civ sell <component> [qty] · civ acquire <facility>');
+    return;
+  }
   ctx.head('GLOBAL SUPPLY CHAIN');
   ctx.print(`Hardware index ${s.hardwareIndex} / 100 · energy index ${s.energyIndex} / 100 · factories ${s.factories.length} · warehouses ${s.warehouses.length}`, 'accent');
   ctx.print('');
@@ -3779,28 +3792,44 @@ function civSupply(ctx) {
     const eta = Math.max(0, Math.ceil((x.etaWorld - civ.worldMinutes) / 60));
     ctx.print(`  ${pad(x.cargo, 18)} ${padLeft(fmtNum(x.quantity), 6)} units · ${x.status} · eta ${eta}h`, x.status === 'delayed' ? 'warn' : 'accent');
   }
+  const held = Object.values(industrial.inventory || {}).reduce((n, q) => n + (q > 0 ? 1 : 0), 0);
+  ctx.print('');
+  ctx.dim(`You hold ${held} component type(s) across ${industrial.facilityIds?.length || 0} owned facilit(ies). civ supply industry`);
+  ctx.dim('civ procure <component> <qty> · civ sell <component> [qty] · civ acquire <factory-id>');
 }
 function civProperty(ctx, args) {
   const g = ctx.game;
   const civ = civilizationSummary(g).civ;
   const sub = (args[0] || '').toLowerCase();
-  if (sub === 'buy' || sub === 'sell' || sub === 'insure') {
+  if (sub === 'home') {
+    if (!args[1]) {
+      const house = civ.households.find(h => h.id === 'house-player');
+      if (!house) { ctx.err('No household record.'); return; }
+      ctx.head('YOUR HOUSEHOLD');
+      ctx.print(`${house.housing.label} · ${house.housing.tenure} · rent ${fmtMoney(house.housing.rent)}/mo · quality ${house.housing.quality}`, 'accent');
+      civLine(ctx, 'Monthly income', fmtMoney(house.monthlyIncome));
+      civLine(ctx, 'Monthly costs', fmtMoney(house.expenses));
+      for (const key of ['housing', 'income', 'connectivity', 'security', 'community']) civLine(ctx, key, progressBar(house.needs[key] || 0, 18) + ' ' + Math.round(house.needs[key] || 0));
+      civLine(ctx, 'Satisfaction', progressBar(house.satisfaction, 18) + ' ' + Math.round(house.satisfaction));
+      ctx.dim('civ home <owned-property-id> sets your primary residence.');
+      return;
+    }
+    const r = playerSetHome(g, args[1]);
+    if (!r.ok) { ctx.err(r.error); return; }
+    ctx.ok(`Primary residence set to ${r.property.label} in ${r.city.name}.`);
+    return;
+  }
+  if (sub === 'buy' || sub === 'sell') {
     const id = args[1];
     if (!id) { ctx.err(`usage: civ property ${sub} <property-id>`); return; }
-    const r = sub === 'buy'
-      ? playerBuyProperty(g, id, { rented: args.includes('--rented'), mortgage: args.includes('--mortgage'), insure: args.includes('--insure') })
-      : sub === 'sell' ? playerSellProperty(g, id) : playerInsureProperty(g, id);
+    const r = sub === 'buy' ? playerBuyProperty(g, id, { rented: args.includes('--rented') }) : playerSellProperty(g, id);
     if (!r.ok) { ctx.err(r.error); return; }
     if (sub === 'buy') {
-      ctx.ok(`Acquired ${r.property.label} for ${fmtMoney(r.downPayment)}${r.mortgage ? ' down' : ''}.`);
+      ctx.ok(`Acquired ${r.property.label} for ${fmtMoney(r.price)}.`);
       ctx.print(`  ${r.property.cityId} · occupancy ${r.property.occupancy} · rent ${fmtMoney(r.property.rent)}/mo · maintenance ${fmtMoney(r.property.maintenance)}/mo`);
-      if (r.mortgage) ctx.print(`  mortgage ${fmtMoney(r.mortgage.principal)} at ${(r.mortgage.rate * 100).toFixed(1)}% · ${fmtMoney(r.mortgage.payment)}/mo`, 'accent');
-      if (r.property.insurance) ctx.print(`  insured at ${fmtMoney(r.property.insurance)}/mo`, 'accent');
-      ctx.dim('Property charges, mortgage payments and rental income settle as world days pass.');
-    } else if (sub === 'sell') {
-      ctx.ok(`Sold ${r.property.label} for ${fmtMoney(r.sale)}${r.payoff ? ` after ${fmtMoney(r.payoff)} mortgage payoff` : ''}.`);
+      ctx.dim('Property charges and rental income settle as world days pass.');
     } else {
-      ctx.ok(`${r.already ? 'Already insured' : 'Insured'}: ${r.property.label} at ${fmtMoney(r.property.insurance)}/mo.`);
+      ctx.ok(`Sold ${r.property.label} for ${fmtMoney(r.sale)}.`);
     }
     return;
   }
@@ -3826,108 +3855,88 @@ function civProperty(ctx, args) {
     ctx.print(`  ${p.id} ${pad(p.label, 22)} ${pad(city?.name || p.cityId, 13)} value ${fmtMoney(p.price)} · ${p.occupancy}${p.occupancy === 'rented' ? ' · rent ' + fmtMoney(p.rent) + '/mo' : ''}`, 'ok');
   }
   ctx.print('');
-  ctx.dim('civ property available   ·   civ property buy <id> [--rented]   ·   civ property sell <id>');
+  ctx.dim('civ home [property] · civ property available   ·   civ property buy <id> [--rented]   ·   civ property sell <id>');
 }
-function civSociety(ctx) {
+function civCulture(ctx, args = []) {
   const g = ctx.game;
   const civ = civilizationSummary(g).civ;
-  const society = civ.society;
-  ctx.head('SOCIETY — HOUSEHOLDS AND INDIVIDUALS');
-  if (!society || !society.households.length) {
-    ctx.dim('No households have formed in this world yet.');
+  const sub = (args[0] || '').toLowerCase();
+  const words = () => args.slice(1).filter(a => !a.startsWith('--')).join(' ').trim();
+  const flag = (name, fallback) => args.includes(name) ? args[args.indexOf(name) + 1] : fallback;
+  if (sub === 'found' || sub === 'studio') {
+    const name = words();
+    if (!name) { ctx.err('usage: civ found <name> [--kind studio|label|influencer]'); return; }
+    const r = playerFoundCulture(g, name, flag('--kind', 'studio'));
+    if (!r.ok) { ctx.err(r.error); return; }
+    ctx.ok(`Founded ${r.org.name} for ${fmtMoney(r.cost)}.`);
     return;
   }
-  const households = society.households;
-  const avg = key => households.reduce((s, h) => s + (h[key] || 0), 0) / households.length;
-  const owned = households.filter(h => h.tenure === 'own').length;
-  const negative = households.filter(h => h.savings < 0).length;
-  ctx.print(`${households.length} households · ${society.moves || 0} moves recorded · ${society.decisions.length} recent individual decisions`, 'accent');
-  ctx.print(`Average morale ${Math.round(avg('morale'))}/100 · home ownership ${Math.round(owned / households.length * 100)}% · households in arrears ${negative}`);
-  ctx.print('');
-  const city = playerCity(g);
-  const local = households.filter(h => h.cityId === city?.id).slice(0, 6);
-  if (local.length) {
-    ctx.print(`HOUSEHOLDS IN ${city.name.toUpperCase()}`, 'head');
-    for (const h of local) {
-      const members = h.memberIds.map(id => civ.identities.find(i => i.id === id)).filter(Boolean);
-      ctx.print(`  ${pad(h.id, 12)} ${pad(h.tenure, 5)} income ${fmtMoney(h.income)}/mo · housing ${fmtMoney(h.housingCost)} · morale ${Math.round(h.morale)}`, h.morale < 40 ? 'warn' : 'accent');
-      ctx.dim(`      ${members.map(m => '@' + m.handle).join(' ') || 'no recorded members'} · savings ${fmtMoney(h.savings)}`);
-    }
-  }
-  const recent = society.decisions.slice(-8).reverse();
-  if (recent.length) {
-    ctx.print('');
-    ctx.print('RECENT INDIVIDUAL DECISIONS', 'head');
-    for (const d of recent) {
-      const identity = civ.identities.find(i => i.id === d.agentId);
-      ctx.print(`  @${identity?.handle || d.agentId} ${d.action} · ${d.detail}`);
-    }
-  }
-  ctx.print('');
-  ctx.dim('Households respond to income, rent, employment and opportunity. They move, buy homes and change morale without the player.');
-}
-function civDiplomacy(ctx) {
-  const g = ctx.game;
-  const civ = civilizationSummary(g).civ;
-  const relations = civ.relations;
-  const pairs = [];
-  for (const a of civ.countries) {
-    for (const b of civ.countries) {
-      if (a.id >= b.id) continue;
-      const rel = a.relations[b.id];
-      if (rel) pairs.push({ a, b, rel });
-    }
-  }
-  pairs.sort((x, y) => (y.rel.tension - y.rel.trust) - (x.rel.tension - x.rel.trust));
-  ctx.head('GEOPOLITICS AND DIPLOMACY');
-  for (const { a, b, rel } of pairs.slice(0, 8)) {
-    ctx.print(`${pad(a.name, 16)} ${pad(b.name, 16)} ${pad(rel.stance || 'neutral', 12)} trade ${padLeft(Math.round(rel.trade), 3)} tension ${padLeft(Math.round(rel.tension), 3)}${rel.sanctioned ? ' SANCTIONED' : ''}`, rel.stance === 'hostile' ? 'warn' : 'accent');
-  }
-  ctx.print('');
-  const talks = relations.negotiations.filter(n => n.status === 'active');
-  if (talks.length) {
-    ctx.print('ACTIVE NEGOTIATIONS', 'head');
-    for (const n of talks) {
-      const a = civ.countries.find(c => c.id === n.a), b = civ.countries.find(c => c.id === n.b);
-      ctx.print(`  ${pad(n.topic, 32)} ${a?.name || n.a} — ${b?.name || n.b} · ${n.stage} ${Math.round(n.progress)}%`, 'accent');
-    }
-  } else ctx.dim('No active negotiations.');
-  const sanctions = relations.sanctions.filter(s => s.status === 'active');
-  if (sanctions.length) {
-    ctx.print('');
-    ctx.print('SANCTIONS IN FORCE', 'head');
-    for (const s of sanctions.slice(0, 6)) {
-      const a = civ.countries.find(c => c.id === s.a), b = civ.countries.find(c => c.id === s.b);
-      ctx.print(`  ${a?.name || s.a} → ${b?.name || s.b} · ${s.scope}`);
-    }
-  }
-  if (relations.blocs.length) {
-    ctx.print('');
-    ctx.print('REGIONAL BLOCS', 'head');
-    for (const bloc of relations.blocs) ctx.print(`  ${pad(bloc.name, 32)} cohesion ${Math.round(bloc.cohesion)} · ${bloc.focus} · ${bloc.members.length} members`);
-  }
-  ctx.print('');
-  ctx.dim(`${relations.treaties.length} treaties · ${sanctions.length} sanctions · ${talks.length} negotiations. Diplomacy continues while you are offline.`);
-}
-function civRelease(ctx, args) {
-  const g = ctx.game;
-  const kind = (args[0] || '').toLowerCase();
-  const titleParts = [];
-  let price = null;
-  for (let i = 1; i < args.length; i++) {
-    if (args[i] === '--price' && args[i + 1]) price = Number(args[++i]);
-    else titleParts.push(args[i]);
-  }
-  const title = titleParts.join(' ').trim();
-  if (!['game', 'music', 'event'].includes(kind) || !title) {
-    ctx.err('usage: civ release <game|music|event> <title> [--price <amount>]');
+  if (sub === 'game' || sub === 'publishgame') {
+    const name = words();
+    if (!name) { ctx.err('usage: civ game <title> [--genre X] [--price N] [--budget N]'); return; }
+    const r = playerPublishGame(g, name, { genre: flag('--genre', 'simulation'), price: Number(flag('--price', NaN)) || undefined, budget: Number(flag('--budget', NaN)) || undefined });
+    if (!r.ok) { ctx.err(r.error); return; }
+    ctx.ok(`Released ${r.game.title} for ${fmtMoney(r.budget)} · quality ${Math.round(r.quality)}.`);
+    ctx.print(`  price ${fmtMoney(r.game.price)} · ${fmtNum(r.game.players)} players · rating ${r.game.rating.toFixed(1)}/5`, 'accent');
+    ctx.dim('Revenue accrues as world time passes. Revenue is paid to your operator account.');
     return;
   }
-  const r = playerRelease(g, kind, title, price == null ? {} : { price });
+  if (sub === 'music' || sub === 'release') {
+    const name = words();
+    if (!name) { ctx.err('usage: civ music <title> [--budget N]'); return; }
+    const r = playerReleaseMusic(g, name, { budget: Number(flag('--budget', NaN)) || undefined });
+    if (!r.ok) { ctx.err(r.error); return; }
+    ctx.ok(`Released ${r.track.title} for ${fmtMoney(r.cost)}.`);
+    ctx.print(`  ${fmtNum(r.track.streams)} streams at release · royalties settle over time.`, 'accent');
+    return;
+  }
+  if (sub === 'community') {
+    const name = words();
+    if (!name) { ctx.err('usage: civ community <name> [--topic X]'); return; }
+    const r = playerCreateCommunity(g, name, { topic: flag('--topic', 'independent technology') });
+    if (!r.ok) { ctx.err(r.error); return; }
+    ctx.ok(`Opened ${r.community.name} with ${fmtNum(r.community.members)} members.`);
+    return;
+  }
+  if (sub === 'event') {
+    const name = words();
+    if (!name) { ctx.err('usage: civ event <name> [--type conference] [--days N] [--budget N] [--ticket N]'); return; }
+    const r = playerHostEvent(g, name, {
+      type: flag('--type', 'conference'), days: Number(flag('--days', 30)) || 30,
+      budget: Number(flag('--budget', NaN)) || undefined, ticketPrice: Number(flag('--ticket', NaN)) || undefined
+    });
+    if (!r.ok) { ctx.err(r.error); return; }
+    ctx.ok(`Scheduled ${r.event.name} in ${r.city.name} for ${fmtMoney(r.cost)}.`);
+    ctx.print(`  ${fmtNum(r.event.attendance)} expected · ${r.event.type} · in ${Math.max(1, Math.round((r.event.world - civ.worldMinutes) / 1440))} days`, 'accent');
+    return;
+  }
+  ctx.head('ENTERTAINMENT AND DIGITAL CULTURE');
+  const orgs = civ.culture.organizations;
+  ctx.print(`Organizations ${orgs.length} · games ${civ.culture.games.length} · releases ${civ.culture.music.length} · communities ${civ.culture.communities.length} · events ${civ.culture.events.length}`, 'accent');
+  ctx.print('');
+  for (const o of orgs.slice(0, 18)) {
+    ctx.print(`${pad(o.name, 26)} ${pad(o.kind, 11)} audience ${padLeft(fmtNum(o.audience), 8)} reputation ${padLeft(Math.round(o.reputation || 0), 3)}${o.ownerId === 'player' ? ' YOURS' : ''}`, o.ownerId === 'player' ? 'ok' : '');
+  }
+  ctx.print('');
+  ctx.print('RECENT RELEASES', 'head');
+  for (const item of civ.culture.games.slice(-6).reverse()) {
+    ctx.print(`  ${pad(item.title, 26)} ${pad(item.studioName, 22)} ${padLeft(fmtNum(item.players), 7)} players ${item.rating.toFixed(1)}★${item.ownerId === 'player' ? ' YOURS' : ''}`, item.ownerId === 'player' ? 'ok' : 'dim');
+  }
+  for (const track of civ.culture.music.slice(-4).reverse()) {
+    ctx.print(`  ${pad(track.title, 26)} ${pad(track.artist, 22)} ${padLeft(fmtNum(track.streams), 7)} streams${track.ownerId === 'player' ? ' YOURS' : ''}`, track.ownerId === 'player' ? 'ok' : 'dim');
+  }
+  ctx.print('');
+  ctx.dim('civ found <name> · civ game <title> · civ music <title> · civ community <name> · civ event <name>');
+}
+function civTeach(ctx, args = []) {
+  const g = ctx.game;
+  if (!args[0]) { ctx.err('usage: civ teach <field> [hours]'); return; }
+  let hours = 2;
+  for (const a of args.slice(1)) if (/^\d+$/.test(a)) hours = Number(a);
+  const r = playerTeach(g, args[0], { hours });
   if (!r.ok) { ctx.err(r.error); return; }
-  ctx.ok(`Released ${kind} "${title}" through ${r.studio.name}.`);
-  ctx.print(`  quality ${Math.round(r.quality)}/100 · production ${fmtMoney(r.cost)} · title ${r.work.id}`, r.quality >= 65 ? 'ok' : 'accent');
-  ctx.dim('Audience, revenue and reputation evolve with the simulation.');
+  ctx.ok(`Taught ${r.hours}h of ${r.field.name}${r.institution ? ' at ' + r.institution.name : ''} for ${fmtMoney(r.pay)}.`);
+  ctx.dim('Teaching raises academic standing and helps students progress.');
 }
 function civJobs(ctx, query) {
   const g = ctx.game;
@@ -4033,16 +4042,6 @@ function civMultiplayer(ctx, args) {
     ctx.ok(`@${r.player.handle} disconnected. The world continues without them.`);
     return;
   }
-  if (sub === 'action') {
-    const [handle, action, amount, ...memo] = args.slice(1);
-    if (!handle || !action) { ctx.err('usage: civ mp action <handle> <trade|property|contracts|company|research|publish|sync> [amount] [memo]'); return; }
-    const r = applyRemoteAction(g, handle, action, { amount: Number(amount) || 0, memo: memo.join(' ') || action });
-    if (!r.ok) { ctx.err(r.error); return; }
-    if (r.duplicate) ctx.warn(`Duplicate request replayed; ledger entry ${r.accepted.id} was not applied twice.`);
-    else ctx.ok(`${action} accepted for @${handle}${r.accepted?.amount ? ' · ' + fmtMoney(r.accepted.amount) : ''} · ledger ${r.accepted?.id || ''}`);
-    if (typeof r.balance === 'number') ctx.dim(`Authoritative balance: ${fmtMoney(r.balance)}`);
-    return;
-  }
   if (sub === 'validate') {
     const r = validateLedger(g);
     if (r.ok) ctx.ok(`Ledger valid · ${r.entries} entries · head ${r.head}`);
@@ -4061,11 +4060,12 @@ function civMultiplayer(ctx, args) {
   ctx.print(`Year ${snap.year} · ${snap.countries.length} countries · ledger ${snap.ledgerHead} (${ledger.ok ? 'valid' : 'BROKEN'})`, ledger.ok ? 'ok' : 'err');
   ctx.print('');
   for (const p of civ.multiplayer.players) {
-    ctx.print(`  ${pad(p.handle, 18)} ${pad(p.role, 10)} ${p.connected ? 'connected' : 'offline'} · ${p.lastSeen ? fmtDate(p.lastSeen) : 'unknown'}`, p.connected ? 'ok' : 'dim');
+    const bal = civ.multiplayer.accounts?.[p.id]?.balance ?? p.balance ?? 0;
+    ctx.print(`  ${pad(p.handle, 18)} ${pad(p.role, 10)} ${p.connected ? 'connected' : 'offline'} · ${fmtMoney(bal)} · ${p.lastSeen ? fmtDate(p.lastSeen) : 'unknown'}`, p.connected ? 'ok' : 'dim');
   }
   ctx.print('');
   ctx.print(`Anti-cheat rejected ${civ.multiplayer.antiCheat.rejected} action(s) · permissions are role-scoped.`, 'dim');
-  ctx.dim('civ mp join <handle> · civ mp leave <handle> · civ mp action <handle> trade 100 · civ mp validate · civ mp snapshot');
+  ctx.dim('civ mp join <handle> · civ mp leave <handle> · civ mp validate · civ mp snapshot');
 }
 COMMANDS.civ = (ctx) => {
   const g = ctx.game;
@@ -4076,19 +4076,20 @@ COMMANDS.civ = (ctx) => {
   if (sub === 'cities' || sub === 'city') return civCities(ctx, rest.join(' '));
   if (sub === 'laws' || sub === 'law' || sub === 'regulation') return civLaws(ctx, rest.join(' '));
   if (sub === 'legal' || sub === 'court' || sub === 'courts') return civLegal(ctx, rest);
+  if (sub === 'sue' || sub === 'file' || sub === 'counsel' || sub === 'defend' || sub === 'settle') return civLegal(ctx, [sub === 'sue' ? 'file' : sub, ...rest]);
+  if (sub === 'teach') return civTeach(ctx, rest);
+  if (sub === 'culture' || sub === 'entertainment' || sub === 'studio' || sub === 'game' || sub === 'music' || sub === 'community' || sub === 'host' || sub === 'found') return civCulture(ctx, [sub === 'culture' || sub === 'entertainment' ? 'list' : sub === 'host' ? 'event' : sub, ...rest]);
   if (sub === 'identity' || sub === 'id') return civIdentity(ctx);
   if (sub === 'study' || sub === 'learn') return civStudy(ctx, rest);
   if (sub === 'courses' || sub === 'course') return civCourses(ctx, rest.join(' '));
   if (sub === 'research' || sub === 'science') return civResearch(ctx, rest);
   if (sub === 'media' || sub === 'news') return civMedia(ctx, rest);
   if (sub === 'tech' || sub === 'technology') return civTech(ctx, rest);
-  if (sub === 'supply' || sub === 'logistics') return civSupply(ctx);
+  if (sub === 'supply' || sub === 'logistics' || sub === 'procure' || sub === 'acquire' || sub === 'sell') return civSupply(ctx, sub === 'supply' || sub === 'logistics' ? rest : [sub, ...rest]);
   if (sub === 'property' || sub === 'properties' || sub === 'realestate') return civProperty(ctx, rest);
+  if (sub === 'home' || sub === 'household') return civProperty(ctx, ['home', ...rest]);
   if (sub === 'jobs' || sub === 'jobmarket' || sub === 'hiring') return civJobs(ctx, rest.join(' '));
   if (sub === 'career' || sub === 'employment' || sub === 'work') return civCareer(ctx);
-  if (sub === 'society' || sub === 'households' || sub === 'population') return civSociety(ctx);
-  if (sub === 'diplomacy' || sub === 'relations' || sub === 'geopolitics') return civDiplomacy(ctx);
-  if (sub === 'release' || sub === 'publishwork') return civRelease(ctx, rest);
   if (sub === 'apply') {
     if (!rest.length) { ctx.err('usage: civ apply <job>'); return; }
     const r = playerApplyJob(g, rest.join(' '));
@@ -4166,22 +4167,22 @@ COMMANDS.civ = (ctx) => {
     ctx.print('  civ countries | civ country <name|code>');
     ctx.print('  civ cities [country]');
     ctx.print('  civ laws [country|domain]       active and proposed instruments');
-    ctx.print('  civ legal | civ legal settle <case> | civ legal contest <case>');
+    ctx.print('  civ legal                       compliance, disputes and enforcement');
+    ctx.print('  civ file <issue> [--claim N] | civ counsel <case> | civ defend <case> [--settle|--evidence]');
     ctx.print('  civ identity                    contextual professional/social/financial record');
-    ctx.print('  civ study [field] [hours] [--course id]');
+    ctx.print('  civ study [field] [hours] [--course id] | civ teach <field> [hours]');
     ctx.print('  civ courses [field]');
     ctx.print('  civ research [field] | civ research start <field> [funding] | civ research fund <project> <amount>');
     ctx.print('  civ media [outlet] | civ publish <headline> [--outlet name] [--investigation] [--evidence]');
-    ctx.print('  civ tech [query] | civ tech adopt <name>');
-    ctx.print('  civ supply                      materials, components and shipments');
-    ctx.print('  civ property [available|buy id [--rented|--mortgage|--insure]|sell id|insure id]');
-    ctx.print('  civ society                     households, morale, migration and individual decisions');
-    ctx.print('  civ diplomacy                   relations, negotiations, sanctions and blocs');
-    ctx.print('  civ release <game|music|event> <title> [--price n]');
+    ctx.print('  civ tech [query] | civ tech adopt <name> | civ tech projects');
+    ctx.print('  civ tech start <name> [--category X] [--fund N] | civ tech fund <project> <amount>');
+    ctx.print('  civ supply [industry] | civ procure <component> <qty> | civ sell <component> [qty] | civ acquire <facility>');
+    ctx.print('  civ property [available|buy id|sell id] | civ home [property-id]');
+    ctx.print('  civ culture | civ found <name> | civ game <title> | civ music <title> | civ community <name> | civ host <name>');
     ctx.print('  civ jobs [query] | civ career');
     ctx.print('  civ apply <job> | civ interview <job> | civ negotiate <job> <salary> | civ accept <job> | civ decline <job> | civ quit');
     ctx.print('  civ history [query] | civ events [active|all]');
-    ctx.print('  civ mp [status|join handle|leave handle|action handle action amount|validate|snapshot]');
+    ctx.print('  civ mp [status|join handle|leave handle|validate|snapshot]');
     ctx.print('  civ relocate <country> [city] | civ lobby <country> [domain]');
     return;
   }
@@ -4193,1879 +4194,6 @@ COMMANDS.study = (ctx) => civStudy(ctx, ctx.args);
 COMMANDS.research = (ctx) => civResearch(ctx, ctx.args);
 COMMANDS.publish = (ctx) => civMedia(ctx, ['publish', ...ctx.args]);
 COMMANDS.country = (ctx) => ctx.args.length ? civCountry(ctx, ctx.args.join(' ')) : civCountries(ctx);
-
-/* ============================================================
-   SOFTWARE DEVELOPMENT WORKSPACE
-   ============================================================ */
-function projectRoot(ctx, arg) {
-  return arg ? pathFor(ctx.term, arg) : (ctx.term.cwd || ctx.home());
-}
-function textFileAt(ctx, file) {
-  if (!file) return null;
-  const abs = pathFor(ctx.term, file);
-  const node = getNode(ctx.fs(), abs);
-  if (!node || node.type !== 'file') return null;
-  return { abs, node, content: node.content || '' };
-}
-function printProblems(ctx, path, problems) {
-  if (!problems.length) { ctx.ok(`${path}: no problems`); return 0; }
-  for (const p of problems.slice(0, 40)) {
-    const loc = `${path}:${p.line}:${p.col}`;
-    const text = `${loc}  ${p.severity.padEnd(7)} ${p.message}  [${p.rule}]`;
-    if (p.severity === 'error') ctx.print(text, 'err');
-    else if (p.severity === 'warning') ctx.print(text, 'warn');
-    else ctx.print(text, 'dim');
-  }
-  if (problems.length > 40) ctx.dim(`… ${problems.length - 40} more`);
-  return problems.length;
-}
-
-COMMANDS.project = (ctx) => {
-  const root = projectRoot(ctx, ctx.args.find(a => !a.startsWith('-')));
-  if (!getNode(ctx.fs(), root)) { ctx.err(`project: ${root}: No such directory`); return; }
-  const report = analyzeProject(ctx.fs(), root);
-  ctx.head(`PROJECT · ${root}`);
-  ctx.print('');
-  ctx.print(`Files        ${report.files} (${report.textFiles} text)`);
-  ctx.print(`Lines        ${fmtNum(report.lines)}`);
-  ctx.print(`Size         ${fmtBytes(report.bytes)}`);
-  ctx.print(`Health       ${progressBar(report.health, 20)} ${report.health}/100`, report.health >= 70 ? 'ok' : report.health >= 45 ? 'warn' : 'err');
-  ctx.print(`Version ctl  ${report.hasGit ? 'git repository' : 'not initialised'} · tests ${report.hasTests ? 'present' : 'missing'} · README ${report.hasReadme ? 'present' : 'missing'}`);
-  ctx.print('');
-  if (report.languages.length) {
-    ctx.print('LANGUAGES', 'head');
-    for (const l of report.languages.slice(0, 10)) ctx.print(`  ${pad(l.name, 14)} ${padLeft(fmtNum(l.lines), 8)} lines  ${l.files} files`, 'accent');
-  }
-  if (report.testFiles.length) {
-    ctx.print('');
-    ctx.print('TESTS', 'head');
-    for (const t of report.testFiles.slice(0, 8)) ctx.dim(`  ${t}`);
-  }
-  if (report.manifests.length) {
-    ctx.print('');
-    ctx.print('MANIFESTS', 'head');
-    for (const m of report.manifests.slice(0, 8)) ctx.dim(`  ${m}`);
-  }
-  if (report.largest.length) {
-    ctx.print('');
-    ctx.print('LARGEST FILES', 'head');
-    for (const f of report.largest.slice(0, 6)) ctx.print(`  ${padLeft(fmtNum(f.lines), 7)} lines  ${pad(fmtBytes(f.bytes), 9)} ${f.path}`, 'dim');
-  }
-  ctx.print('');
-  ctx.print('NEXT', 'head');
-  if (!report.checks.length) ctx.ok('  The project is in reasonable shape.');
-  else for (const check of report.checks) ctx.print(`  · ${check}`, 'warn');
-  recordCoding(ctx.game, 'review', 1, `project ${root}`);
-};
-
-COMMANDS.init = (ctx) => {
-  const templates = projectTemplates();
-  const templateId = ctx.args[0];
-  if (!templateId || templateId === 'list' || templateId === '--list') {
-    ctx.head('PROJECT TEMPLATES');
-    for (const t of templates) ctx.print(`  ${pad(t.id, 10)} ${t.name.padEnd(18)} ${t.description}`, 'dim');
-    ctx.print('');
-    ctx.dim('Usage: init <template> [directory] [--force]');
-    return;
-  }
-  if (!templates.some(t => t.id === templateId)) {
-    ctx.err(`init: unknown template '${templateId}'. Try: ${templates.map(t => t.id).join(', ')}`);
-    return;
-  }
-  const dirArg = ctx.args.slice(1).find(a => !a.startsWith('-'));
-  const root = dirArg ? pathFor(ctx.term, dirArg) : ctx.term.cwd;
-  const force = ctx.args.includes('--force') || ctx.args.includes('-f');
-  if (!getNode(ctx.fs(), root)) {
-    if (!ensureDir(ctx.fs(), root, userOf(ctx.term))) { ctx.err(`init: cannot create ${root}`); return; }
-  }
-  const result = scaffoldProject(ctx.fs(), root, templateId, { force, owner: userOf(ctx.term), name: basename(root) });
-  if (!result.ok) { ctx.err(result.error); return; }
-  ctx.ok(`Initialised ${result.template.name} in ${root}`);
-  for (const f of result.files) ctx.print(`  create  ${f}`, 'ok');
-  for (const f of result.skipped) ctx.print(`  skip    ${f} (exists)`, 'dim');
-  if (result.startedGit) ctx.dim('  git repository initialised on branch main');
-  recordCoding(ctx.game, 'scaffold', 1, `${templateId} ${root}`);
-  ctx.app.refreshUI?.();
-};
-
-COMMANDS.templates = (ctx) => COMMANDS.init(ctx);
-COMMANDS.scaffold = (ctx) => COMMANDS.init(ctx);
-
-COMMANDS.lint = (ctx) => {
-  const targets = ctx.args.filter(a => !a.startsWith('-'));
-  if (!targets.length) {
-    const files = allFiles(ctx.fs(), ctx.term.cwd)
-      .filter(f => /\.(js|mjs|cjs|ts|tsx|py|pyw|c|h|cpp|rs|go|sql|json|html|css|sh|bash|yml|yaml|md)$/i.test(f.path) && (f.node.content || '').length < 120000)
-      .slice(0, 24);
-    if (!files.length) { ctx.err('lint: no source files in this directory'); return; }
-    let total = 0;
-    for (const file of files) {
-      const lang = languageFor(file.path, file.node.content);
-      const problems = lint(file.node.content, lang.id, file.path);
-      total += printProblems(ctx, file.path, problems);
-    }
-    recordCoding(ctx.game, 'review', Math.max(1, files.length / 4), 'directory lint');
-    if (total) ctx.print(''); ctx.print(`${total} problem${total === 1 ? '' : 's'} across ${files.length} file${files.length === 1 ? '' : 's'}`, total ? 'warn' : 'ok');
-    return;
-  }
-  for (const target of targets) {
-    const file = textFileAt(ctx, target);
-    if (!file) { ctx.err(`lint: ${target}: No such text file`); continue; }
-    const lang = languageFor(file.abs, file.content);
-    const problems = lint(file.content, lang.id, file.abs);
-    ctx.print(`${file.abs} · ${lang.name}`, 'head');
-    printProblems(ctx, file.abs, problems);
-    recordCoding(ctx.game, 'review', 1, file.abs);
-  }
-};
-
-COMMANDS.fmt = (ctx) => {
-  const target = ctx.args.find(a => !a.startsWith('-'));
-  const file = textFileAt(ctx, target);
-  if (!file) { ctx.err(`fmt: ${target || '<file>'}: No such text file`); return; }
-  const lang = languageFor(file.abs, file.content);
-  const formatted = formatCode(file.content, lang.id);
-  if (formatted === file.content) { ctx.print(`${file.abs}: already formatted`, 'dim'); return; }
-  if (ctx.args.includes('--check') || ctx.args.includes('-n')) {
-    ctx.warn(`${file.abs}: would be reformatted`);
-    return;
-  }
-  writeFile(ctx.fs(), file.abs, formatted, { owner: userOf(ctx.term) });
-  recordEdit(ctx.game, file.abs, file.content, formatted);
-  recordCoding(ctx.game, 'format', 1, file.abs);
-  ctx.ok(`Formatted ${file.abs} · ${lang.name}`);
-};
-COMMANDS.format = COMMANDS.fmt;
-
-COMMANDS.symbols = (ctx) => {
-  const file = textFileAt(ctx, ctx.args.find(a => !a.startsWith('-')));
-  if (!file) { ctx.err(`symbols: ${ctx.args[0] || '<file>'}: No such text file`); return; }
-  const lang = languageFor(file.abs, file.content);
-  const syms = outline(file.content, lang.id);
-  ctx.head(`${file.abs} · ${lang.name} · ${syms.length} symbols`);
-  if (!syms.length) { ctx.dim('  no symbols found'); return; }
-  for (const s of syms.slice(0, 120)) ctx.print(`  ${padLeft(s.line, 5)}  ${'  '.repeat(Math.min(6, s.indent / 2))}${s.kind.padEnd(9)} ${s.name}`);
-};
-COMMANDS.outline = COMMANDS.symbols;
-
-COMMANDS.rg = (ctx) => {
-  const query = ctx.args.find(a => !a.startsWith('-'));
-  if (!query) { ctx.err('usage: rg <pattern> [directory]'); return; }
-  const root = projectRoot(ctx, ctx.args.slice(1).find(a => !a.startsWith('-')));
-  const hits = findInProject(ctx.fs(), root, query, { max: 80 });
-  if (!hits.length) { ctx.dim(`No matches for '${query}'.`); return; }
-  for (const hit of hits) ctx.print(`${hit.path}:${hit.line}:${hit.col}  ${hit.text}`, 'dim');
-  ctx.print('');
-  ctx.print(`${hits.length} match${hits.length === 1 ? '' : 'es'} in ${root}`, 'accent');
-  recordCoding(ctx.game, 'review', 1, `search ${query}`);
-};
-
-COMMANDS.todo = (ctx) => {
-  const root = projectRoot(ctx, ctx.args.find(a => !a.startsWith('-')));
-  const report = analyzeProject(ctx.fs(), root);
-  if (!report.todos) { ctx.ok('No TODO/FIXME markers found.'); return; }
-  ctx.head(`UNFINISHED WORK · ${report.todos} marker${report.todos === 1 ? '' : 's'}`);
-  for (const item of report.todosByFile) ctx.print(`  ${padLeft(item.count, 5)}  ${item.path}`, 'warn');
-  ctx.dim('  Resolve markers, or convert them into tracked issues.');
-};
-
-async function runCaptured(ctx, command) {
-  const original = ctx.term.print;
-  const lines = [];
-  ctx.term.print = function (text, cls) {
-    lines.push({ text: String(text), cls: cls || '' });
-    return original.call(this, text, cls);
-  };
-  try { await execute(ctx.app, ctx.term, command); }
-  finally { ctx.term.print = original; }
-  const failed = lines.some(l => l.cls === 'err' || /\b(error|failed|failure|cannot|not found|undefined|traceback)\b/i.test(l.text));
-  return { failed, lines };
-}
-
-COMMANDS.run = async (ctx) => {
-  let target = ctx.args.find(a => !a.startsWith('-'));
-  if (!target) {
-    const candidates = allFiles(ctx.fs(), ctx.term.cwd).filter(f => /\.(py|js|mjs|cjs|ts|tsx|c|cpp|rs|go|sh|bash|sql|html)$/i.test(f.path));
-    target = candidates[0]?.path;
-  }
-  const file = textFileAt(ctx, target);
-  if (!file) { ctx.err(`run: ${target || '<file>'}: No such file`); return; }
-  const lang = languageFor(file.abs, file.content);
-  const spec = runCommandFor(file.abs, lang.id);
-  if (spec.kind === 'preview') {
-    ctx.app.openWindow?.('browser', { url: file.abs });
-    ctx.dim(`Previewing ${file.abs}`);
-    return;
-  }
-  if (!spec.command) { ctx.err(`run: no runtime configured for ${lang.name}`); return; }
-  ctx.dim(`$ ${spec.command}`);
-  const { failed } = await runCaptured(ctx, spec.command);
-  recordCoding(ctx.game, spec.kind === 'build' ? 'compile' : 'run', 1, file.abs);
-  recordCoding(ctx.game, failed ? 'fail' : 'pass', 1, file.abs);
-  ctx.app.refreshUI?.();
-};
-
-COMMANDS.build = async (ctx) => {
-  const file = textFileAt(ctx, ctx.args.find(a => !a.startsWith('-')));
-  if (!file) { ctx.err(`build: ${ctx.args[0] || '<file>'}: No such file`); return; }
-  const lang = languageFor(file.abs, file.content);
-  const spec = runCommandFor(file.abs, lang.id);
-  if (!spec.command) { ctx.err(`build: ${lang.name} has no build step`); return; }
-  ctx.dim(`$ ${spec.command}`);
-  const { failed } = await runCaptured(ctx, spec.command);
-  recordCoding(ctx.game, 'build', 1, file.abs);
-  recordCoding(ctx.game, failed ? 'fail' : 'pass', 1, file.abs);
-  ctx.app.refreshUI?.();
-};
-
-COMMANDS.test = async (ctx) => {
-  let target = ctx.args.find(a => !a.startsWith('-'));
-  if (!target) {
-    const report = analyzeProject(ctx.fs(), ctx.term.cwd);
-    target = report.testFiles[0];
-  }
-  const file = textFileAt(ctx, target);
-  const command = file ? testCommandFor(file.abs, languageFor(file.abs, file.content).id) : (target ? testCommandFor(target, languageFor(target)) : null);
-  if (!command) { ctx.err('test: no test runner for that file'); return; }
-  ctx.dim(`$ ${command}`);
-  const { failed } = await runCaptured(ctx, command);
-  recordCoding(ctx.game, 'test', 1, target || 'test suite');
-  recordCoding(ctx.game, failed ? 'fail' : 'pass', 1, target || 'test suite');
-  ctx.app.refreshUI?.();
-};
-
-COMMANDS.complete = (ctx) => {
-  const file = textFileAt(ctx, ctx.args[0]);
-  const prefix = ctx.args[1] || '';
-  if (!file) { ctx.err('usage: complete <file> [prefix]'); return; }
-  const lang = languageFor(file.abs, file.content);
-  const items = completions(file.content, lang.id, prefix);
-  if (!items.length) { ctx.dim('No completions.'); return; }
-  for (const item of items) ctx.print(`  ${pad(item.label, 22)} ${pad(item.kind, 10)} ${item.detail}`, 'dim');
-};
-
-/* ============================================================
-   INTERNET ARCHITECTURE
-   ============================================================ */
-function netAge(world, now) {
-  const mins = Math.max(0, (now || 0) - (world || 0));
-  if (mins < 60) return `${Math.round(mins)}m`;
-  if (mins < 1440) return `${Math.round(mins / 60)}h`;
-  return `${Math.round(mins / 1440)}d`;
-}
-function printEvent(ctx, e) {
-  const sev = e.severity === 'critical' ? 'err' : e.severity === 'high' ? 'warn' : 'dim';
-  ctx.print(`  ${pad(e.id, 12)} ${pad(e.category || e.kind || 'event', 14)} ${e.title || e.kind || ''}`, sev);
-}
-COMMANDS.net = (ctx) => {
-  const sub = (ctx.args[0] || 'status').toLowerCase();
-  const g = ctx.game;
-  const net = ensureInternet(g);
-  const ov = networkOverview(g);
-  const m = ov.metrics;
-  if (sub === 'map' || sub === 'topology') { ctx.app.openWindow?.('map'); return; }
-  if (sub === 'status' || sub === 'overview') {
-    ctx.head(`INTERNET · ${m.year} · health ${m.health}/100`);
-    ctx.print('');
-    ctx.print(`Traffic        ${fmtNum(m.trafficTbps)} Tbps across ${m.asnCount} autonomous systems`);
-    ctx.print(`Exchange pts   ${m.ixpCount} · long-haul cables ${m.cableCount} · data centers ${m.datacenterCount}`);
-    ctx.print(`Latency        ${m.avgLatencyMs} ms average · availability ${m.availability}%`);
-    ctx.print(`Web            ${m.siteCount} sites · ${m.apiCount} APIs · ${m.certCount} certificates`);
-    ctx.print(`Adoption       IPv6 ${m.ipv6Adoption}% · QUIC ${m.quicAdoption}% · HTTP/3 ${m.http3Adoption}% · TLS 1.3 ${m.tls13Share}%`);
-    ctx.print(`Development    ${m.packageCount} packages · ${m.releaseCount} releases · build success ${m.buildSuccessRate}%`);
-    ctx.print(`AI             ${m.aiModelCount} models · ${m.aiEndpointCount} endpoints · ${m.trainingRuns} training runs`);
-    ctx.print(`Security       ${m.advisoryCount} advisories · ${m.openIncidents} open incidents · zero-trust ${m.zeroTrustScore}/100`);
-    ctx.print('');
-    const protocols = ov.protocols.slice().sort((a, b) => b.adoption - a.adoption).slice(0, 8);
-    ctx.print('ADOPTION', 'head');
-    for (const p of protocols) ctx.print(`  ${pad(p.name, 22)} ${progressBar(p.adoption, 16)} ${Math.round(p.adoption)}%`, 'dim');
-    if (net.events.length) {
-      ctx.print('');
-      ctx.print('RECENT', 'head');
-      for (const e of net.events.slice(-6)) printEvent(ctx, e);
-    }
-    return;
-  }
-  if (sub === 'asns' || sub === 'asn') {
-    ctx.head('AUTONOMOUS SYSTEMS');
-    for (const a of ov.asns.slice(0, 40)) {
-      ctx.print(`  ${pad(a.id, 10)} ${pad(('AS' + a.asn), 9)} ${pad(a.type, 10)} ${pad(a.name, 26)} ${padLeft(fmtNum(a.trafficGbps), 7)} Gbps  ${a.status}`, a.status === 'operational' ? 'dim' : 'warn');
-    }
-    return;
-  }
-  if (sub === 'ixps' || sub === 'ixp') {
-    ctx.head('INTERNET EXCHANGE POINTS');
-    for (const x of ov.ixps.slice(0, 30)) ctx.print(`  ${pad(x.id, 10)} ${pad(x.name, 34)} ${padLeft(fmtNum(x.trafficGbps), 8)} Gbps  ${x.members.length} members  ${x.status}`, 'dim');
-    return;
-  }
-  if (sub === 'cables' || sub === 'cable') {
-    ctx.head('LONG-HAUL LINKS');
-    for (const c of ov.cables.slice(0, 30)) ctx.print(`  ${pad(c.id, 10)} ${pad(c.name, 30)} ${pad(c.kind, 12)} ${padLeft(fmtNum(c.capacityTbps), 6)} Tbps ${padLeft(Math.round(c.utilization), 3)}%  ${c.status}`, c.status === 'up' ? 'dim' : 'warn');
-    return;
-  }
-  if (sub === 'dc' || sub === 'datacenters' || sub === 'datacenter') {
-    ctx.head('DATA CENTERS');
-    for (const d of ov.datacenters.slice(0, 30)) ctx.print(`  ${pad(d.id, 10)} ${pad(d.name, 28)} ${pad(d.region || '', 9)} ${padLeft(d.racks, 6)} racks ${padLeft(Math.round(d.utilization), 3)}% PUE ${d.pue}  ${d.status}`, 'dim');
-    return;
-  }
-  if (sub === 'protocols' || sub === 'proto') {
-    const q = (ctx.args[1] || '').toLowerCase();
-    ctx.head('PROTOCOLS');
-    for (const p of ov.protocols.filter(p => !q || `${p.id} ${p.name} ${p.layer}`.toLowerCase().includes(q)).sort((a, b) => b.adoption - a.adoption)) {
-      ctx.print(`  ${pad(p.name, 28)} ${pad(p.layer, 12)} ${pad(p.status, 11)} ${progressBar(p.adoption, 12)} ${Math.round(p.adoption)}%  ${p.spec}`, 'dim');
-    }
-    return;
-  }
-  if (sub === 'events') {
-    ctx.head('NETWORK EVENTS');
-    for (const e of net.events.slice(-30).reverse()) printEvent(ctx, e);
-    return;
-  }
-  ctx.err(`net: '${sub}' is not a recognized subcommand. Try: net status|asns|ixps|cables|dc|protocols|events|map`);
-};
-COMMANDS.network = COMMANDS.net;
-
-COMMANDS.web = (ctx) => {
-  const g = ctx.game;
-  const net = ensureInternet(g);
-  const sub = (ctx.args[0] || '').toLowerCase();
-  if (!sub || sub === 'list') {
-    ctx.head('WORLD WIDE WEB');
-    for (const r of webList(g).slice(0, 32)) {
-      ctx.print(`  ${pad(r.domain, 28)} ${pad(r.kind || '', 10)} tls:${r.tls?.enabled ? (r.tls.version || 'yes') : 'no'}  ${padLeft(Math.round(r.availability), 3)}%  ${fmtNum(r.requestsPerMin)}/min  ${r.status}`, r.status === 'live' ? 'dim' : 'warn');
-    }
-    return;
-  }
-  if (sub === 'secure' || sub === 'harden') {
-    const r = playerHardenWebsite(g, ctx.args[1]);
-    if (!r.ok) { ctx.err(r.error); return; }
-    ctx.ok(`Hardened ${r.site.domain} for ${fmtMoney(r.cost)}. Security headers ${Math.round(r.record.securityHeaders)}/100.`);
-    ctx.app.refreshUI?.();
-    return;
-  }
-  if (sub === 'cert' || sub === 'renew') {
-    const r = playerRenewCertificate(g, ctx.args[1]);
-    if (!r.ok) { ctx.err(r.error); return; }
-    ctx.ok(`Certificate installed for ${r.site.domain} · ${r.cert.tlsVersion} · ${netAge(r.cert.validToWorld, g.worldMinutes)} remaining`);
-    return;
-  }
-  if (sub === 'api') {
-    const r = playerAttachApi(g, ctx.args[1], { protocol: ctx.args[2], auth: ctx.args[3] });
-    if (!r.ok) { ctx.err(r.error); return; }
-    ctx.ok(`Published ${r.api.protocol.toUpperCase()} API for ${r.site.domain} at ${r.api.path} (${fmtMoney(r.cost)}).`);
-    return;
-  }
-  if (sub === 'scan') {
-    const r = playerSecurityScan(g, ctx.args[1]);
-    if (!r.ok) { ctx.err(r.error); return; }
-    ctx.ok(`Scanned ${r.site.domain} for ${fmtMoney(r.cost)} · SBOM score ${r.sbom.score}/100`);
-    if (!r.findings.length) ctx.print('  No material findings.', 'dim');
-    for (const f of r.findings) ctx.print(`  ${f.severity.padEnd(7)} ${f.text}`, f.severity === 'high' ? 'err' : 'warn');
-    return;
-  }
-  if (sub === 'advisories' || sub === 'vulns') {
-    const sec = securityOverview(g);
-    ctx.head('SECURITY ADVISORIES');
-    for (const a of sec.advisories.slice(0, 24)) ctx.print(`  ${pad(a.cve, 15)} ${pad(a.severity, 9)} ${pad(a.status, 9)} ${a.title}`, a.severity === 'critical' ? 'err' : a.severity === 'high' ? 'warn' : 'dim');
-    return;
-  }
-  if (sub === 'incidents') {
-    const sec = securityOverview(g);
-    ctx.head(`OPEN SECURITY INCIDENTS · ${sec.incidents.filter(i => i.status !== 'resolved').length}`);
-    for (const i of sec.incidents.slice(0, 24)) ctx.print(`  ${pad(i.id, 12)} ${pad(i.severity, 9)} ${pad(i.kind, 20)} ${pad(i.targetName || '—', 22)} ${i.status}`, i.status === 'resolved' ? 'dim' : 'warn');
-    return;
-  }
-  if (sub === 'respond' || sub === 'mitigate') {
-    const r = playerMitigateIncident(g, ctx.args[1]);
-    if (!r.ok) { ctx.err(r.error); return; }
-    ctx.ok(`Resolved ${r.incident.id} for ${fmtMoney(r.cost)}.`);
-    ctx.app.refreshUI?.();
-    return;
-  }
-  if (sub === 'sbom') {
-    const sec = securityOverview(g);
-    const q = ctx.args[1];
-    const rows = q ? sec.sboms.filter(s => (s.domain || '').includes(q) || s.siteId === q) : sec.sboms;
-    ctx.head('SOFTWARE BILLS OF MATERIALS');
-    for (const s of rows.slice(0, 24)) ctx.print(`  ${pad(s.domain || s.siteId, 28)} ${padLeft(s.components, 4)} components  ${padLeft(s.critical, 2)} critical  score ${s.score}/100`, s.critical ? 'warn' : 'dim');
-    return;
-  }
-  if (sub === 'dev' || sub === 'packages') {
-    const dev = devEcosystem(g);
-    ctx.head('DEVELOPER ECOSYSTEM');
-    for (const p of dev.packages.slice(0, 24)) ctx.print(`  ${pad(p.registry, 10)} ${pad(p.name, 20)} ${pad(p.version, 10)} ${fmtNum(p.weeklyDownloads)}/wk  ${p.vulnerabilityCount ? `${p.vulnerabilityCount} vuln` : ''}`, 'dim');
-    return;
-  }
-  if (sub === 'platforms' || sub === 'social') {
-    const soc = socialOverview(g);
-    ctx.head('SOCIAL PLATFORMS');
-    for (const p of soc.platforms.slice(0, 20)) ctx.print(`  ${pad(p.name, 16)} ${pad(p.kind, 13)} ${padLeft(fmtNum(p.users), 9)} users  trust ${Math.round(p.trust)}  ${p.protocol}`, 'dim');
-    return;
-  }
-  if (sub === 'history') {
-    const rows = internetHistory(g, { query: ctx.args.slice(1).join(' '), limit: 40 });
-    ctx.head('INTERNET HISTORY');
-    for (const h of rows) ctx.print(`  ${h.year}  ${pad(h.category, 15)} ${h.title}`, h.major ? 'accent' : 'dim');
-    return;
-  }
-  const query = ctx.args.join(' ').toLowerCase();
-  const hit = resolveDomain(g, query) || webRecord(g, query);
-  if (!hit) { ctx.err(`web: no site matching '${ctx.args.join(' ')}'`); return; }
-  const r = hit.record;
-  const site = hit.site;
-  ctx.head(`${r.domain}`);
-  ctx.print(`  ${r.title} · ${r.kind} · ${r.status}`);
-  ctx.print(`  TLS        ${r.tls.enabled ? `${r.tls.version} · ${r.tls.issuer}${r.tls.hsts ? ' · HSTS' : ''}` : 'disabled'}`);
-  ctx.print(`  DNS        ${r.dns.a.join(', ')}${r.dns.aaaa.length ? ' · IPv6 ' + r.dns.aaaa.join(', ') : ''} · ttl ${r.dns.ttl}s · dnssec ${r.dns.dnssec ? 'signed' : 'unsigned'}`);
-  ctx.print(`  Stack      ${r.stack.join(', ')}${r.database ? ' · ' + r.database : ''}`);
-  ctx.print(`  CDN        ${r.cdn ? `${r.cdn.provider} · ${r.cdn.cacheHit}% hit · ${r.cdn.pops} PoPs` : 'none'}`);
-  ctx.print(`  APIs       ${r.apis.length ? r.apis.join(', ') : 'none advertised'}`);
-  ctx.print(`  Health     ${Math.round(r.availability)}% · ${r.latencyMs} ms · errors ${(r.errorRate * 100).toFixed(3)}% · ${fmtNum(r.requestsPerMin)} req/min`);
-  if (hit.cert) ctx.print(`  Cert       ${hit.cert.tlsVersion} · ${hit.cert.status} · expires in ${netAge(hit.cert.validToWorld, g.worldMinutes)}`);
-  if (hit.apis?.length) {
-    ctx.print('');
-    ctx.print('ENDPOINTS', 'head');
-    for (const a of hit.apis) ctx.print(`  ${pad(a.protocol, 10)} ${pad(a.path, 12)} ${pad(a.version, 5)} auth ${a.auth}  ${fmtNum(a.requests)} req  ${a.uptime.toFixed(2)}%`, 'dim');
-  }
-  if (site && site.ownerType === 'player') ctx.dim('  You control this site. Try: web secure, web cert, web api, web scan');
-};
-
-COMMANDS.registry = (ctx) => {
-  const g = ctx.game;
-  const net = ensureInternet(g);
-  const sub = (ctx.args[0] || 'list').toLowerCase();
-  if (sub === 'publish') {
-    const name = ctx.args[1];
-    const version = ctx.args[2] || '0.1.0';
-    const lang = ctx.args[3] || 'javascript';
-    if (!name) { ctx.err('usage: registry publish <name> [version] [language]'); return; }
-    const r = playerPublishPackage(g, name, version, lang);
-    if (!r.ok) { ctx.err(r.error); return; }
-    ctx.ok(`Published ${r.package.name}@${r.package.version} to ${r.package.registry} for ${fmtMoney(r.cost)}.`);
-    recordCoding(g, 'publish', 1, r.package.name);
-    ctx.app.refreshUI?.();
-    return;
-  }
-  if (sub === 'info') {
-    const name = ctx.args[1];
-    const pkg = net.packages.find(p => p.name === name || p.id === name);
-    if (!pkg) { ctx.err(`registry: no package '${name || ''}'`); return; }
-    ctx.head(`${pkg.name}@${pkg.version} · ${pkg.registry}`);
-    ctx.print(`  ${pkg.desc}`);
-    ctx.print(`  language     ${pkg.language} · license ${pkg.license} · maintainers ${pkg.maintainers}`);
-    ctx.print(`  downloads    ${fmtNum(pkg.weeklyDownloads)}/week · ${fmtNum(pkg.downloads)} total · ${fmtNum(pkg.stars)} stars`);
-    ctx.print(`  dependencies ${pkg.dependencies.length ? pkg.dependencies.join(', ') : 'none'}`);
-    ctx.print(`  security     ${pkg.vulnerabilityCount ? `${pkg.vulnerabilityCount} known vulnerabilit${pkg.vulnerabilityCount === 1 ? 'y' : 'ies'}` : 'no known vulnerabilities'}`);
-    ctx.print(`  versions     ${pkg.versions.join(', ')}`, 'dim');
-    return;
-  }
-  const q = sub === 'search' ? ctx.args.slice(1).join(' ').toLowerCase() : sub === 'list' ? '' : ctx.args.join(' ').toLowerCase();
-  ctx.head('PACKAGE REGISTRIES');
-  const rows = net.packages.filter(p => !q || `${p.name} ${p.desc} ${p.language}`.toLowerCase().includes(q)).sort((a, b) => b.weeklyDownloads - a.weeklyDownloads);
-  for (const p of rows.slice(0, 32)) ctx.print(`  ${pad(p.registry, 10)} ${pad(p.name, 20)} ${pad(p.version, 9)} ${padLeft(fmtNum(p.weeklyDownloads), 8)}/wk  ${p.desc.slice(0, 46)}`, 'dim');
-  ctx.dim('Try: registry info <name> | registry publish <name> [version] [language]');
-};
-
-COMMANDS.model = (ctx) => {
-  const g = ctx.game;
-  const sub = (ctx.args[0] || 'list').toLowerCase();
-  if (sub === 'train') {
-    const name = ctx.args[1] || 'operator-model';
-    const base = ctx.args[2] || '';
-    const hours = Number(ctx.args[3]) || 200;
-    const r = playerTrainModel(g, name, base, hours);
-    if (!r.ok) { ctx.err(r.error); return; }
-    ctx.ok(`Training ${r.run.modelName} from ${r.base.name} · ${r.run.computeHours} compute hours · ${fmtMoney(r.cost)}`);
-    ctx.dim('Training advances with world time. Use: model list to see the result.');
-    return;
-  }
-  if (sub === 'serve' || sub === 'deploy') {
-    const modelId = ctx.args[1] || '';
-    const siteId = ctx.args[2] || '';
-    const price = Number(ctx.args[3]) || 2;
-    const r = playerDeployEndpoint(g, modelId, siteId, price);
-    if (!r.ok) { ctx.err(r.error); return; }
-    ctx.ok(`Serving ${r.model.name} at ${r.site.domain} for ${fmtMoney(r.cost)} · ${r.endpoint.pricePerM}/M tokens`);
-    return;
-  }
-  if (sub === 'endpoints') {
-    const ai = aiEcosystem(g);
-    ctx.head('INFERENCE ENDPOINTS');
-    for (const e of ai.endpoints.slice(0, 24)) ctx.print(`  ${pad(e.id, 13)} ${pad(e.ownerName, 20)} ${pad(e.modelId, 16)} ${padLeft(e.pricePerM, 3)}/M  ${e.latencyMs}ms  ${e.uptime.toFixed(2)}%  ${e.status}`, 'dim');
-    return;
-  }
-  if (sub === 'training') {
-    const ai = aiEcosystem(g);
-    ctx.head('TRAINING RUNS');
-    for (const t of ai.training.slice(0, 20)) ctx.print(`  ${pad(t.id, 12)} ${pad(t.modelName, 22)} ${progressBar(t.progress, 14)} ${Math.round(t.progress)}%  ${t.status}`, 'dim');
-    return;
-  }
-  if (sub === 'vector') {
-    const ai = aiEcosystem(g);
-    ctx.head('VECTOR INFRASTRUCTURE');
-    for (const v of ai.vectorDbs) ctx.print(`  ${pad(v.name, 26)} ${fmtNum(v.vectors)} vectors · ${v.dimensions}d · ${v.latencyMs}ms · ${v.status}`, 'dim');
-    for (const r of ai.rag) ctx.print(`  ${pad(r.name, 26)} ${fmtNum(r.documents)} docs · freshness ${r.freshnessDays}d · ${r.status}`, 'dim');
-    return;
-  }
-  const q = sub === 'info' ? (ctx.args[1] || '').toLowerCase() : (sub === 'list' ? '' : ctx.args.join(' ').toLowerCase());
-  if (sub === 'info') {
-    const ai = aiEcosystem(g);
-    const m = ai.models.find(m => m.id === q || m.name.toLowerCase() === q);
-    if (!m) { ctx.err(`model: no model '${q}'`); return; }
-    ctx.head(`${m.name} · ${m.vendor}`);
-    ctx.print(`  quality      ${m.quality}/100 · ${m.params} parameters · ${m.modality}`);
-    ctx.print(`  context      ${fmtNum(m.context)} tokens · latency ${m.latencyMs} ms`);
-    ctx.print(`  pricing      ${m.costPerM ? '$' + m.costPerM + '/M tokens' : 'open weights'} · license ${m.license}`);
-    ctx.print(`  adoption     ${Math.round(m.adoption)}% · safety ${m.safety}/100 · ${m.status}`);
-    return;
-  }
-  const ai = aiEcosystem(g);
-  ctx.head('MODELS');
-  for (const m of ai.models.filter(m => !q || `${m.id} ${m.name} ${m.vendor} ${m.modality}`.toLowerCase().includes(q)).slice(0, 28)) {
-    ctx.print(`  ${pad(m.name, 20)} ${pad(m.vendor, 12)} ${pad(m.params, 7)} ${pad(m.modality, 11)} q${padLeft(Math.round(m.quality), 3)}  ${m.costPerM ? '$' + m.costPerM + '/M' : 'open'}  ${m.status}`, 'dim');
-  }
-  ctx.dim('Try: model info <id> | model train <name> [base] [hours] | model serve <model> <site> [price]');
-};
-
-COMMANDS.sec = (ctx) => {
-  const g = ctx.game;
-  const sub = (ctx.args[0] || 'status').toLowerCase();
-  if (sub === 'status' || sub === 'overview') {
-    const m = internetSummary(g).metrics;
-    const z = securityOverview(g).zeroTrust;
-    ctx.head(`SECURITY POSTURE · ${m.zeroTrustScore}/100`);
-    ctx.print(`  advisories   ${m.advisoryCount} · open incidents ${m.openIncidents}`);
-    ctx.print(`  identity     ${progressBar(z.identity, 14)} ${Math.round(z.identity)}`, 'dim');
-    ctx.print(`  devices      ${progressBar(z.device, 14)} ${Math.round(z.device)}`, 'dim');
-    ctx.print(`  network      ${progressBar(z.network, 14)} ${Math.round(z.network)}`, 'dim');
-    ctx.print(`  workloads    ${progressBar(z.workload, 14)} ${Math.round(z.workload)}`, 'dim');
-    ctx.print(`  data         ${progressBar(z.data, 14)} ${Math.round(z.data)}`, 'dim');
-    return;
-  }
-  if (sub === 'scan') {
-    const r = playerSecurityScan(g, ctx.args[1]);
-    if (!r.ok) { ctx.err(r.error); return; }
-    ctx.ok(`Scanned ${r.site.domain} for ${fmtMoney(r.cost)}`);
-    for (const f of r.findings) ctx.print(`  ${f.severity.padEnd(7)} ${f.text}`, f.severity === 'high' ? 'err' : 'warn');
-    if (!r.findings.length) ctx.dim('  No material findings.');
-    return;
-  }
-  if (sub === 'respond' || sub === 'mitigate') {
-    const r = playerMitigateIncident(g, ctx.args[1]);
-    if (!r.ok) { ctx.err(r.error); return; }
-    ctx.ok(`Resolved ${r.incident.id} for ${fmtMoney(r.cost)}.`);
-    return;
-  }
-  if (sub === 'advisories' || sub === 'incidents' || sub === 'sbom') return COMMANDS.web(ctx);
-  ctx.err('sec: try status|scan <site>|respond <id>|advisories|incidents|sbom');
-};
-COMMANDS.security = COMMANDS.sec;
-
-COMMANDS.social = (ctx) => {
-  const g = ctx.game;
-  const soc = socialOverview(g);
-  const q = ctx.args.join(' ').toLowerCase();
-  if (q) {
-    const p = soc.platforms.find(p => p.id === q || p.name.toLowerCase().includes(q));
-    if (!p) { ctx.err(`social: no platform '${q}'`); return; }
-    ctx.head(`${p.name} · ${p.kind}`);
-    ctx.print(`  ${p.desc}`);
-    ctx.print(`  users       ${fmtNum(p.users)} · growth ${(p.growth * 100).toFixed(2)}%/day`);
-    ctx.print(`  trust       ${Math.round(p.trust)}/100 · protocol ${p.protocol} · ${p.status}`);
-    ctx.print(`  founded     ${p.foundedYear}`);
-    return;
-  }
-  ctx.head('SOCIAL INTERNET');
-  for (const p of soc.platforms) ctx.print(`  ${pad(p.name, 16)} ${pad(p.kind, 13)} ${padLeft(fmtNum(p.users), 9)} users  trust ${padLeft(Math.round(p.trust), 2)}  ${p.protocol}`, 'dim');
-};
-
-COMMANDS.nethistory = (ctx) => {
-  const rows = internetHistory(ctx.game, { query: ctx.args.join(' '), limit: 60 });
-  ctx.head('INTERNET HISTORY');
-  for (const h of rows) {
-    ctx.print(`  ${String(h.year).padEnd(6)} ${pad(h.category, 15)} ${h.title}`, h.major ? 'accent' : '');
-    ctx.dim(`         ${h.body}`);
-  }
-};
-
-COMMANDS.coding = (ctx) => {
-  const s = codingSummary(ctx.game);
-  ctx.head(`CODING · level ${s.level} · ${s.xp} XP`);
-  ctx.print(`  streak       ${s.streak} day(s) · ${s.activeDays} active day(s)`);
-  ctx.print(`  progress     ${progressBar(s.progress * 100, 22)} ${Math.round(s.progress * 100)}% to level ${s.level + 1}`);
-  ctx.print(`  output       ${fmtNum(s.linesWritten)} lines written · ${fmtNum(s.linesRemoved)} removed · ${s.filesTouched} file edits`);
-  ctx.print(`  verification ${s.bugsFixed} passing checks · ${s.builds} builds · ${s.releases} releases · ${s.deployments} deployments`);
-  if (s.projects.length) {
-    ctx.print('');
-    ctx.print('PROJECTS', 'head');
-    for (const p of s.projects) ctx.print(`  ${pad(p.root, 40)} ${p.edits} edit${p.edits === 1 ? '' : 's'}`, 'dim');
-  }
-  const recent = s.history.slice(0, 10);
-  if (recent.length) {
-    ctx.print('');
-    ctx.print('RECENT', 'head');
-    for (const h of recent) ctx.print(`  ${pad(h.kind, 10)} ${pad(String(h.amount), 4)} ${h.memo || ''}`, 'dim');
-  }
-  ctx.print('');
-  ctx.dim('Open the Editor for the full workspace. Try: init node app && project app');
-};
-
-/* ============================================================
-   AUTONOMOUS DEVELOPMENT + SECURITY WORKSPACE
-   ============================================================ */
-function authRoll(ctx, key) {
-  return (hash32(`${ctx.game.seed}:${ctx.game.tickCount}:${key}`) % 100000) / 100000;
-}
-function checkAuth(ctx, asset, action, key) {
-  const result = evaluateAuthorization(ctx.game, { asset, action, roll: authRoll(ctx, key || (asset?.host || asset?.domain || '')) });
-  if (!result.allowed) {
-    for (const c of result.consequences) {
-      if (c.type === 'heat') addHeat(ctx.game, c.amount, c.reason);
-      else if (c.type === 'investigation') investigate(ctx.game, c.reason);
-    }
-    ctx.warn(`Authorization: ${result.reason}. ${result.detected ? 'The activity was logged by the target.' : 'The activity was not attributed.'}`);
-  } else ctx.dim(`Authorization: ${result.reason}.`);
-  return result;
-}
-
-COMMANDS.dev = (ctx) => {
-  const g = ctx.game;
-  const sub = (ctx.args[0] || 'status').toLowerCase();
-  const rest = ctx.args.slice(1);
-  const s = devOverview(g);
-  const m = s.metrics;
-  if (sub === 'developers' || sub === 'devs') {
-    ctx.head('DEVELOPERS');
-    for (const d of developerList(g, rest.join(' ')).slice(0, 40)) {
-      ctx.print(`  ${pad(d.handle, 12)} ${pad(d.role, 24)} skill ${padLeft(d.skill, 3)} rep ${padLeft(Math.round(d.reputation), 3)}  ${Object.keys(d.languages).join('/')}  ${d.status}`, d.status === 'active' ? 'dim' : 'warn');
-    }
-    return;
-  }
-  if (sub === 'projects' || sub === 'repos') {
-    ctx.head('DEVELOPER PROJECTS');
-    for (const p of projectList(g, rest.join(' ')).slice(0, 40)) {
-      ctx.print(`  ${pad(p.slug, 26)} ${pad(p.language, 11)} ${pad(p.kind, 10)} ${padLeft(fmtNum(p.metrics.lines), 6)} lines  ${padLeft(fmtNum(p.metrics.downloads), 7)} dl  ${p.status}`, p.status === 'abandoned' ? 'err' : 'dim');
-    }
-    return;
-  }
-  if (sub === 'events' || sub === 'history') {
-    ctx.head('DEVELOPMENT HISTORY');
-    for (const e of s.events.slice(0, 40)) ctx.print(`  ${pad(String(e.year), 6)} ${pad(e.category, 12)} ${e.title}`, e.severity === 'critical' || e.severity === 'high' ? 'warn' : 'dim');
-    return;
-  }
-  if (sub === 'contributions') {
-    ctx.head('CONTRIBUTIONS');
-    for (const c of contributionList(g).slice(0, 30)) ctx.print(`  ${pad(c.id, 12)} ${pad(c.handle, 12)} ${pad(c.status, 7)} ${c.change}`, 'dim');
-    return;
-  }
-  if (sub === 'publish' || sub === 'tool') {
-    const name = rest[0];
-    if (!name) { ctx.err('usage: dev publish <name> [language]'); return; }
-    const r = playerPublishTool(g, name, rest[1] || 'python');
-    if (!r.ok) { ctx.err(r.error); return; }
-    ctx.ok(`Published ${r.project.name} · ${r.project.files ? Object.keys(r.project.files).length : 0} source files · ${r.project.repoPath}`);
-    ctx.app.refreshUI?.();
-    return;
-  }
-  ctx.head('AUTONOMOUS DEVELOPMENT');
-  ctx.print(`Active developers   ${m.activeDevelopers} (${m.securityProfessionals} security professionals)`);
-  ctx.print(`Repositories        ${m.publishedProjects} published · ${m.detailedProjects} detailed`);
-  ctx.print(`Source              ${fmtNum(m.files)} files · ${fmtNum(m.lines)} lines`);
-  ctx.print(`Vulnerabilities     ${m.openVulns} open · ${m.patchedVulns} patched · ${m.advisories} advisories`);
-  ctx.print(`Quality             average security ${m.averageSecurity}/100 · ${m.contributions} contributions`);
-  ctx.print('');
-  ctx.print('RECENT', 'head');
-  for (const e of s.events.slice(0, 8)) ctx.print(`  ${pad(e.category, 12)} ${e.title}`, 'dim');
-  ctx.print('');
-  ctx.dim('Try: dev developers | dev projects | repo | vuln | lab');
-};
-
-COMMANDS.repo = (ctx) => {
-  const g = ctx.game;
-  const sub = (ctx.args[0] || 'list').toLowerCase();
-  const rest = ctx.args.slice(1);
-  if (sub === 'list' || sub === 'ls') return COMMANDS.dev(ctx);
-  if (sub === 'show' || sub === 'info') {
-    const hit = projectDetail(g, rest[0]);
-    if (!hit) { ctx.err(`repo: no project matching '${rest[0] || ''}'`); return; }
-    const p = hit.project, d = hit.developer;
-    ctx.head(`${p.name} · ${p.slug}`);
-    ctx.print(`  ${p.description}`);
-    ctx.print(`  maintainer  @${p.ownerHandle}${d ? ` (${d.role}, skill ${d.skill})` : ''}`);
-    ctx.print(`  language    ${p.language} · ${p.kind} · ${p.license} · ${p.status}`);
-    ctx.print(`  repository  ${p.repoPath} · ${p.published ? 'published' : 'unpublished'}`);
-    ctx.print(`  quality     sec ${p.quality.security} · tests ${p.quality.testing} · docs ${p.quality.documentation} · debt ${p.quality.debt}`);
-    ctx.print(`  metrics     ${fmtNum(p.metrics.lines)} lines · ${fmtNum(p.metrics.downloads)} downloads · ${p.metrics.stars} stars · ${p.metrics.forks} forks`);
-    ctx.print(`  releases    ${p.releases.map(r => r.version).join(', ') || 'none'} · ${p.metrics.contributions} contributions`);
-    ctx.print('');
-    ctx.print('ARCHITECTURE', 'head');
-    ctx.print(`  target ${p.architecture.target} · auth ${p.architecture.auth || 'none'} · api ${p.architecture.api || 'none'} · database ${p.architecture.database || 'none'}`);
-    for (const r of p.requirements) ctx.dim(`  · ${r}`);
-    if (p.dependencies.length) ctx.dim(`  dependencies: ${p.dependencies.map(d => `${d.name}@${d.version}${d.vulnerable ? ' (advisory)' : ''}`).join(', ')}`);
-    ctx.print('');
-    ctx.print('FILES', 'head');
-    for (const f of Object.keys(p.files)) ctx.dim(`  ${f}`);
-    ctx.print('');
-    ctx.print('GIT HISTORY', 'head');
-    for (const c of p.git.commits.slice(-12).reverse()) ctx.print(`  ${c.id}  ${c.world ? hhmm(c.world) : '—'}  ${c.message}`, 'dim');
-    if (p.issues.length) {
-      ctx.print('');
-      ctx.print('ISSUES', 'head');
-      for (const i of p.issues.slice(-8)) ctx.print(`  ${pad(i.status, 7)} ${pad(i.severity, 8)} ${i.title}`, i.status === 'open' ? 'warn' : 'dim');
-    }
-    if (hit.vulns.length) {
-      ctx.print('');
-      ctx.print('ADVISORIES', 'head');
-      for (const v of hit.vulns) ctx.print(`  ${pad(v.cve, 15)} ${pad(v.severity, 9)} ${pad(v.status, 8)} ${v.category}`, v.status === 'open' ? 'err' : 'dim');
-    }
-    return;
-  }
-  if (sub === 'source' || sub === 'cat') {
-    const hit = projectDetail(g, rest[0]);
-    if (!hit) { ctx.err('repo: no such project'); return; }
-    const files = hit.project.files;
-    if (!rest[1]) {
-      for (const [path, content] of Object.entries(files)) ctx.print(`  ${pad(path, 26)} ${padLeft(String(content).split('\n').length, 5)} lines`, 'dim');
-      ctx.dim(`Use: repo source ${hit.project.slug} <file>`);
-      return;
-    }
-    const path = rest.slice(1).join(' ');
-    const content = files[path] || files[Object.keys(files).find(f => f.endsWith('/' + path))];
-    if (content == null) { ctx.err(`repo: ${path}: no such file in ${hit.project.slug}`); return; }
-    ctx.print(content);
-    recordCoding(g, 'review', 1, `${hit.project.slug}/${path}`);
-    return;
-  }
-  if (sub === 'lint') {
-    const r = playerInspectSource(g, rest[0]);
-    if (!r.ok) { ctx.err(r.error); return; }
-    ctx.head(`${r.project.name} · ${r.problems.length} static finding(s)`);
-    for (const p of r.problems.slice(0, 60)) ctx.print(`  ${pad(p.path, 24)} ${padLeft(p.line, 4)}:${padLeft(p.col, 3)} ${pad(p.severity, 8)} ${p.message}`, p.severity === 'error' ? 'err' : p.severity === 'warning' ? 'warn' : 'dim');
-    recordCoding(g, 'review', 1, `lint ${r.project.slug}`);
-    return;
-  }
-  if (sub === 'clone') {
-    const r = playerCloneProject(g, rest[0]);
-    if (!r.ok) { ctx.err(r.error); return; }
-    const dir = rest[1] ? pathFor(ctx.term, rest[1]) : r.dest;
-    ensureDir(ctx.fs(), dir, userOf(ctx.term));
-    for (const [path, content] of Object.entries(r.files)) writeFile(ctx.fs(), joinPath(dir, path), content, { owner: userOf(ctx.term) });
-    ensureDir(ctx.fs(), joinPath(dir, '.git'), userOf(ctx.term));
-    writeFile(ctx.fs(), joinPath(dir, '.git/repo.json'), JSON.stringify({ branch: 'main', staged: [], commits: r.project.git.commits.slice(-5), remote: `git://git.nullnet/${r.project.ownerHandle}/${r.project.slug}.git` }, null, 2), { owner: userOf(ctx.term) });
-    ctx.ok(`Cloned ${r.project.name} into ${dir} · ${Object.keys(r.files).length} files`);
-    recordCoding(g, 'scaffold', 1, `clone ${r.project.slug}`);
-    ctx.app.refreshUI?.();
-    return;
-  }
-  if (sub === 'contribute' || sub === 'patch') {
-    const change = rest.slice(1).join(' ');
-    if (!change) { ctx.err('usage: repo contribute <project> <description>'); return; }
-    const r = playerContribute(g, rest[0], change);
-    if (!r.ok) { ctx.err(r.error); return; }
-    ctx.ok(`${r.contribution.id} submitted for review by @${r.project.ownerHandle}.`);
-    ctx.dim('The maintainer decides whether to merge. Contributions are recorded in developer memory.');
-    return;
-  }
-  if (sub === 'fork') {
-    const r = playerForkProject(g, rest[0]);
-    if (!r.ok) { ctx.err(r.error); return; }
-    ctx.ok(`Forked ${r.project.name} as ${r.fork.name} (${r.fork.slug}).`);
-    return;
-  }
-  if (sub === 'report') {
-    const r = playerReportVulnerability(g, rest[0], rest[1]);
-    if (!r.ok) { ctx.err(r.error); return; }
-    if (r.duplicate) ctx.print(`${r.vuln.cve} already records that category. Report count is now ${r.vuln.reports}.`, 'warn');
-    else ctx.ok(`Reported ${r.vuln.cve} · ${r.vuln.severity} · ${r.vuln.category}. An advisory was published.`);
-    return;
-  }
-  if (sub === 'issues') {
-    const hit = projectDetail(g, rest[0]);
-    if (!hit) { ctx.err('repo: no such project'); return; }
-    for (const i of hit.project.issues.slice(-20)) ctx.print(`  ${pad(i.status, 8)} ${pad(i.severity, 8)} ${i.title}`, i.status === 'open' ? 'warn' : 'dim');
-    return;
-  }
-  ctx.err(`repo: '${sub}' is not recognized. Try: list|show|source|lint|clone|contribute|fork|report|issues`);
-};
-COMMANDS.repos = COMMANDS.repo;
-
-COMMANDS.vuln = (ctx) => {
-  const g = ctx.game;
-  const sub = (ctx.args[0] || 'list').toLowerCase();
-  const rest = ctx.args.slice(1);
-  if (sub === 'info') {
-    const q = rest[0];
-    const v = vulnList(g).find(v => v.id === q || v.cve === q);
-    if (!v) { ctx.err(`vuln: no finding '${q || ''}'`); return; }
-    ctx.head(`${v.cve} · ${v.category}`);
-    ctx.print(`  target       ${v.projectName} · ${v.file}:${v.line} · ${v.affectedVersion}`);
-    ctx.print(`  severity     ${v.severity} · CVSS ${v.cvss} · exploitability ${v.exploitability}/100`);
-    ctx.print(`  discovered   world ${Math.round(v.discoveredWorld)} by ${v.discoveredBy}`);
-    ctx.print('');
-    for (const [label, text] of [['TECHNICAL', v.technical], ['PRECONDITIONS', v.preconditions], ['IMPACT', v.impact], ['DETECTION', v.detection], ['REMEDIATION', v.remediation]]) {
-      ctx.print(label, 'head'); ctx.print(`  ${text}`);
-    }
-    ctx.print('');
-    ctx.print(`Status: ${v.status}${v.patchAvailable ? ` · patch in ${v.projectName} @ ${v.patchWorld ? hhmm(v.patchWorld) : 'recent'}` : ' · no patch yet'}`, v.status === 'open' ? 'warn' : 'ok');
-    return;
-  }
-  if (sub === 'advisories') {
-    const dw = g.devworld;
-    for (const a of dw.advisories.slice(-30).reverse()) ctx.print(`  ${pad(a.cve, 15)} ${pad(a.severity, 9)} ${pad(a.status, 10)} ${a.title}`, a.severity === 'critical' ? 'err' : 'dim');
-    return;
-  }
-  if (sub === 'report') return COMMANDS.repo(ctx);
-  ctx.head('VULNERABILITY REGISTER');
-  const rows = vulnList(g, sub === 'list' ? '' : ctx.args.join(' '));
-  for (const v of rows.slice(0, 40)) ctx.print(`  ${pad(v.id, 9)} ${pad(v.cve, 15)} ${pad(v.severity, 9)} ${pad(v.status, 8)} ${pad(v.projectName, 22)} ${v.category}`, v.status === 'open' ? 'warn' : 'dim');
-  ctx.dim('Try: vuln info <cve|id> | vuln advisories | repo report <project> <category>');
-};
-
-COMMANDS.lab = (ctx) => {
-  const g = ctx.game;
-  const sub = (ctx.args[0] || 'list').toLowerCase();
-  const rest = ctx.args.slice(1);
-  const labs = labList(g);
-  if (sub === 'enter' || sub === 'leave') {
-    const r = playerLabSession(g, rest[0], sub);
-    if (!r.ok) { ctx.err(r.error); return; }
-    ctx.ok(r.message);
-    return;
-  }
-  if (sub === 'exploit' || sub === 'practice') {
-    const r = playerPracticeExploit(g, rest[0], rest[1]);
-    if (!r.ok) { ctx.err(r.error); return; }
-    ctx.ok(r.message);
-    return;
-  }
-  if (sub === 'targets') {
-    const lab = labs.find(l => l.id === rest[0] || l.domain === rest[0]);
-    if (!lab) { ctx.err('lab: no such laboratory'); return; }
-    for (const t of lab.targets) ctx.print(`  ${pad(t, 14)} in scope · ${lab.name}`, 'dim');
-    return;
-  }
-  ctx.head('AUTHORIZED LABORATORIES');
-  for (const l of labs) {
-    const authorized = l.authorizedHandles.includes(g.player.handle);
-    ctx.print(`  ${pad(l.id, 9)} ${pad(l.domain, 18)} ${pad(l.kind, 15)} ${l.targets.length} targets · ${l.sessions} sessions · ${authorized ? 'SESSION ACTIVE' : 'idle'}`, authorized ? 'ok' : 'dim');
-    ctx.dim(`      ${l.desc}`);
-  }
-  ctx.dim('Try: lab enter <lab> | lab targets <lab> | lab exploit <lab> <target> | lab leave <lab>');
-};
-
-COMMANDS.packets = (ctx) => {
-  const hostArg = ctx.args[0];
-  if (!hostArg) { ctx.err('usage: packets <host> [count]'); return; }
-  const server = getServer(ctx.game, hostArg);
-  if (!server) { ctx.err(`tcpdump: ${hostArg}: no such simulated host`); return; }
-  const count = clamp(Number(ctx.args[1]) || 12, 1, 40);
-  checkAuth(ctx, server, 'inspect', `packets:${server.id}`);
-  if (!Array.isArray(ctx.game.packetCaptures)) ctx.game.packetCaptures = [];
-  const rng = makeRngFor(ctx, `packets:${server.id}:${count}`);
-  const lines = [];
-  const local = ctx.game.player.ip || '10.0.0.42';
-  for (let i = 0; i < count; i++) {
-    const port = server.ports?.length ? server.ports[rng.int(0, server.ports.length - 1)] : 80;
-    const proto = port === 53 ? 'UDP' : [80,443,8080,8443].includes(port) ? 'TCP' : 'TCP';
-    const flags = proto === 'TCP' ? rng.pick(['S','S.','P.','F.','R.']) : '';
-    const src = rng.chance(.5) ? local : `${rng.int(10,223)}.${rng.int(0,255)}.${rng.int(0,255)}.${rng.int(1,254)}`;
-    const secs = String(rng.int(0,59)).padStart(2,'0');
-    lines.push(`${secs}.${String(rng.int(0,999999)).padStart(6,'0')} IP ${src}.${rng.int(1024,65535)} > ${server.ip}.${port}: ${flags}${proto.length ? ' ' + proto : ''} len=${rng.int(40,1460)}`);
-  }
-  const capture = { host: server.host, ip: server.ip, count, at: Date.now(), world: ctx.game.worldMinutes, lines: lines.slice() };
-  ctx.game.packetCaptures.unshift(capture);
-  if (ctx.game.packetCaptures.length > 40) ctx.game.packetCaptures.length = 40;
-  ctx.head(`tcpdump · ${server.host} (${server.ip}) · ${count} packets`);
-  for (const line of lines) ctx.print(line, 'dim');
-  ctx.print('');
-  ctx.dim(`${ctx.game.packetCaptures.length} capture(s) retained. Analysis is bounded; no real packets are handled.`);
-};
-function makeRngFor(ctx, key) {
-  let h = hash32(`${ctx.game.seed}:${ctx.game.tickCount}:${key}`) >>> 0;
-  return {
-    int(a, b) { h = (Math.imul(h ^ (h >>> 15), 2246822519) + 1013904223) >>> 0; return a + (h % (b - a + 1)); },
-    chance(p) { h = (Math.imul(h ^ (h >>> 13), 3266489917) + 668265263) >>> 0; return (h % 100000) / 100000 < p; },
-    pick(arr) { return arr[this.int(0, arr.length - 1)]; }
-  };
-}
-
-COMMANDS.forensics = (ctx) => {
-  const hostArg = ctx.args[0];
-  if (!hostArg) { ctx.err('usage: forensics <host>'); return; }
-  const server = getServer(ctx.game, hostArg);
-  if (!server) { ctx.err(`forensics: ${hostArg}: no such simulated host`); return; }
-  checkAuth(ctx, server, 'inspect', `forensics:${server.id}`);
-  if (!Array.isArray(ctx.game.evidence)) ctx.game.evidence = [];
-  const evidence = {
-    id: `EV-${String(ctx.game.evidence.length + 1).padStart(4, '0')}`,
-    host: server.host, ip: server.ip, world: ctx.game.worldMinutes, at: Date.now(),
-    classification: assetClassFor(ctx, server),
-    findings: [
-      `OS fingerprint: ${server.os || 'unknown'}`,
-      `Security posture: ${Math.round(server.security || 0)}/100 · monitoring ${Math.round(server.authz?.monitoring ?? 50)}/100`,
-      `Listening services: ${(server.ports || []).join(', ') || 'none recorded'}`,
-      `Recent host notes: ${(server.notes || []).slice(0, 3).join(' | ') || 'none'}`,
-      `Compromise indicator: ${server.compromised ? 'present' : 'not observed'}`,
-      `Authorization record: ${server.authz?.classification || 'unclassified'}`
-    ],
-    chain: [ctx.game.player.handle, ctx.game.worldMinutes, server.host, ctx.game.seed]
-  };
-  ctx.game.evidence.unshift(evidence);
-  if (ctx.game.evidence.length > 60) ctx.game.evidence.length = 60;
-  ctx.head(`FORENSIC REPORT · ${evidence.id}`);
-  for (const f of evidence.findings) ctx.print(`  ${f}`, 'dim');
-  ctx.print('');
-  ctx.dim(`Chain of custody recorded. ${ctx.game.evidence.length} report(s) retained.`);
-  recordCoding(ctx.game, 'review', 1, `forensics ${server.host}`);
-};
-function assetClassFor(ctx, asset) {
-  return asset?.authz?.classification || (asset?.owned ? 'player' : asset?.companyId ? 'company' : 'npc');
-}
-
-COMMANDS.http = (ctx) => {
-  const query = ctx.args[0];
-  if (!query) { ctx.err('usage: http <domain> [path]'); return; }
-  const hit = webRecord(ctx.game, query);
-  if (!hit?.record) { ctx.err(`http: ${query}: no web record`); return; }
-  const r = hit.record;
-  checkAuth(ctx, hit.site || { domain: r.domain }, 'http', `http:${r.domain}`);
-  ctx.game.flags.visited[r.domain] = ctx.game.worldMinutes;
-  const path = ctx.args[1] || '/';
-  ctx.print(`HTTP/1.1 ${r.status === 'live' ? '200 OK' : '503 Service Unavailable'}`);
-  ctx.print(`server: ${r.stack.join(' ') || 'unknown'}`);
-  ctx.print(`content-type: text/html; charset=utf-8`);
-  ctx.print(`x-tls: ${r.tls?.enabled ? r.tls.version : 'none'}`);
-  ctx.print(`x-cdn: ${r.cdn?.provider || 'none'}`);
-  ctx.print(`cache-control: ${r.cdn ? 'public, max-age=' + Math.round(r.cdn.cacheHit * 60) : 'no-store'}`);
-  ctx.print('');
-  ctx.print(`<title>${r.title}</title>`);
-  ctx.print(`<h1>${r.title}</h1>`);
-  ctx.print(`<p>${(hit.site?.desc || '').slice(0, 160)}</p>`);
-  ctx.print('');
-  ctx.dim(`GET ${path} · ${r.latencyMs} ms · ${fmtNum(r.requestsPerMin)} req/min · availability ${Math.round(r.availability)}%`);
-};
-
-COMMANDS.inspect = (ctx) => {
-  const query = ctx.args[0];
-  if (!query) { ctx.err('usage: inspect <host|domain>'); return; }
-  const server = getServer(ctx.game, query);
-  if (server) {
-    checkAuth(ctx, server, 'inspect', `inspect:${server.id}`);
-    ctx.head(`${server.host} · ${server.ip}`);
-    ctx.print(`  OS           ${server.os || 'unknown'} (fingerprinted from service banners)`);
-    ctx.print(`  role         ${server.role || 'unspecified'} · org ${server.org || 'unknown'}`);
-    ctx.print(`  ports        ${(server.ports || []).join(', ') || 'none'}`);
-    ctx.print(`  security     ${Math.round(server.security || 0)}/100 · status ${server.status}`);
-    ctx.print(`  vulnerabilities ${(server.vulns || []).filter(v => !v.patched).length} unpatched`);
-    ctx.print(`  authz        ${server.authz?.classification || 'unclassified'}`);
-    ctx.dim('  Findings are derived from simulated configuration, not generated success text.');
-    return;
-  }
-  const hit = webRecord(ctx.game, query);
-  if (!hit?.record) { ctx.err(`inspect: ${query}: no such host`); return; }
-  return COMMANDS.web(ctx);
-};
-COMMANDS.debug = (ctx) => {
-  const file = textFileAt(ctx, ctx.args.find(a => !a.startsWith('-')));
-  if (!file) { ctx.err('usage: debug <source-file>'); return; }
-  const lang = languageFor(file.abs, file.content);
-  const problems = lint(file.content, lang.id, file.abs);
-  const syms = outline(file.content, lang.id);
-  ctx.head(`gdb (simulated) · ${file.abs}`);
-  ctx.dim(`Language ${lang.name} · ${syms.length} symbols · ${problems.length} static findings`);
-  for (const s of syms.slice(0, 30)) ctx.print(`  breakpoint ${padLeft(s.line, 4)}  ${s.name} (${s.kind})`, 'dim');
-  for (const p of problems.filter(p => p.severity === 'error' || p.severity === 'warning').slice(0, 20)) ctx.print(`  ${padLeft(p.line, 4)}:${padLeft(p.col, 3)} ${p.severity} ${p.message}`, p.severity === 'error' ? 'err' : 'warn');
-  if (!problems.some(p => p.severity === 'error')) ctx.ok('No static faults detected. Runtime behaviour remains bounded by the simulated interpreter.');
-  recordCoding(ctx.game, 'debug', 1, file.abs);
-};
-COMMANDS.gdb = COMMANDS.debug;
-
-COMMANDS.openssl = (ctx) => {
-  if ((ctx.args[0] || '').toLowerCase() === 'version') { ctx.print('OpenSSL 3.4.1 (simulated)'); return; }
-  const idx = ctx.args.findIndex(a => /x509|s_client/i.test(a));
-  const domainArg = ctx.args.find(a => a && !a.startsWith('-') && !/x509|s_client/i.test(a));
-  if (idx < 0 || !domainArg) { ctx.err('usage: openssl x509 -in <domain> | openssl s_client -connect <domain>:443'); return; }
-  const q = domainArg.toLowerCase().replace(/:\d+$/, '');
-  const net = ensureInternet(ctx.game);
-  const cert = net.certs.find(c => c.domain.toLowerCase() === q || c.domain.toLowerCase().includes(q));
-  if (!cert) { ctx.err(`openssl: no certificate record for ${domainArg}`); return; }
-  const record = net.web.records[cert.siteId];
-  ctx.head(`X.509 certificate for ${cert.domain}`);
-  ctx.print(`  issuer       ${cert.issuer}`);
-  ctx.print(`  subject      CN=${cert.domain}`);
-  ctx.print(`  key          ${cert.keyType}`);
-  ctx.print(`  protocol     ${cert.tlsVersion}`);
-  ctx.print(`  valid        ${hhmm(cert.validFromWorld)} → ${hhmm(cert.validToWorld)} (world minutes)`);
-  ctx.print(`  status       ${cert.status} · auto-renew ${cert.autoRenew ? 'yes' : 'no'}`);
-  ctx.print(`  transport    HSTS ${record?.tls?.hsts ? 'enabled' : 'absent'} · DNSSEC ${record?.dns?.dnssec ? 'signed' : 'unsigned'}`);
-  ctx.dim('Certificate data comes from the simulated public key infrastructure.');
-};
-
-/* ============================================================
-   DEEP INTERACTION COMMANDS
-   ============================================================ */
-COMMANDS.hw = (ctx) => {
-  const st = ensureInteraction(ctx.game);
-  const sub = (ctx.args[0] || 'status').toLowerCase();
-  if (sub === 'upgrade') {
-    const component = ctx.args[1];
-    const tier = ctx.args[2];
-    if (!component || !tier) { ctx.err('usage: hw upgrade <cpu|gpu|memory|storage|nic> <tier>'); ctx.dim('Tiers: ' + Object.entries(HARDWARE_TIERS).map(([k, v]) => `${k}:${v.map(t => t.id).join('/')}`).join('  ')); return; }
-    const r = upgradeHardware(ctx.game, component, tier);
-    if (!r.ok) { ctx.err(r.error); return; }
-    ctx.ok(`Installed ${r.tier.name} for ${fmtMoney(r.tier.cost)}.`);
-    ctx.print(`  performance ${r.summary.performance} · VM slots ${r.summary.vmCapacity} · inference slots ${r.summary.inferenceCapacity}`);
-    ctx.app.refreshUI?.();
-    return;
-  }
-  if (sub === 'service' || sub === 'maintain') {
-    const r = maintainHardware(ctx.game);
-    if (!r.ok) { ctx.err(r.error); return; }
-    ctx.ok(r.message);
-    return;
-  }
-  const h = hardwareSummary(ctx.game);
-  ctx.head(`WORKSTATION · ${h.cpu.model}`);
-  ctx.print(`CPU         ${h.cpu.model} · ${h.cpu.cores} cores @ ${h.cpu.ghz} GHz`);
-  ctx.print(`GPU         ${h.gpu.model} · ${h.gpu.vramGb} GB VRAM`);
-  ctx.print(`Memory      ${h.memoryGb} GB · Storage ${Math.round(h.storageUsedGb)}/${h.storageGb} GB`);
-  ctx.print(` NIC         ${h.nic} · board ${h.motherboard}`);
-  ctx.print(`Power       ${h.powerW} W · temperature ${Math.round(h.temperature)}°C · health ${Math.round(h.health)}/100`);
-  ctx.print(`Performance ${h.performance} · VM slots ${h.vmCapacity} · inference slots ${h.inferenceCapacity} · ${h.status}`, h.status === 'healthy' ? 'ok' : 'warn');
-  if (h.upgrades.length) { ctx.print(''); ctx.print('UPGRADES', 'head'); for (const u of h.upgrades.slice(-8)) ctx.dim(`  ${hhmm(u.world)} ${u.component}:${u.tier} · ${fmtMoney(u.cost)}`); }
-  ctx.print('');
-  ctx.dim('hw upgrade <component> <tier> | hw service | ops');
-};
-COMMANDS.hardware = COMMANDS.hw;
-
-COMMANDS.ops = (ctx) => {
-  const sub = (ctx.args[0] || 'list').toLowerCase();
-  if (sub === 'cancel') {
-    const r = cancelOperation(ctx.game, ctx.args[1]);
-    if (!r.ok) { ctx.err(r.error); return; }
-    ctx.ok(`${r.operation.id} cancelled.`);
-    return;
-  }
-  const ops = operationSummary(ctx.game);
-  ctx.head('BACKGROUND OPERATIONS');
-  if (!ops.length) { ctx.dim('No operations started. Start one with: bg compile <file> | bg install <pkg> | bg download <url>'); return; }
-  for (const op of ops) {
-    const bar = progressBar(op.progress, 18);
-    const text = `${pad(op.id, 12)} ${bar} ${padLeft(op.progress, 3)}%  ${pad(op.status, 9)} ${op.label}`;
-    if (op.status === 'failed') ctx.print(text, 'err');
-    else if (op.status === 'done') ctx.print(text, 'ok');
-    else ctx.print(text, 'dim');
-    for (const log of op.logs.slice(-2)) ctx.dim(`      ${hhmm(log.world)} ${log.text}`);
-  }
-  ctx.dim('ops cancel <id>');
-};
-COMMANDS.bg = (ctx) => {
-  const kind = (ctx.args[0] || '').toLowerCase();
-  const target = ctx.args[1];
-  if (!kind || !target) { ctx.err('usage: bg <install|download|audit|compile|deploy> <target> [name]'); return; }
-  let opts = { kind, label: `${kind} ${target}`, work: 20 };
-  if (kind === 'install') opts = { kind, label: `install ${target}`, work: 14 + target.length * .8, meta: { package: target } };
-  else if (kind === 'download') {
-    const site = (ctx.game.sites || []).find(s => s.domain === target);
-    const content = site ? `${site.title}\n${site.desc}\n` : `Downloaded from ${target}\n`;
-    opts = { kind, label: `download ${target}`, work: 8 + content.length * .01, meta: { path: `/home/operator/downloads/${slugify(target) || 'download'}.txt`, content } };
-  } else if (kind === 'audit') opts = { kind, label: `audit ${target}`, work: 40, meta: {} };
-  else if (kind === 'compile') opts = { kind: 'compile', label: `compile ${target}`, work: 30, meta: { output: `/tmp/${slugify(basename(target)) || 'app'}`, lines: 40 } };
-  else if (kind === 'deploy') {
-    const domain = ctx.args[2] || target;
-    opts = { kind, label: `deploy ${domain}`, work: 26, meta: { domain, dir: ctx.args[3] || '.', serverId: null } };
-  } else { ctx.err(`bg: unknown operation '${kind}'`); return; }
-  const r = startOperation(ctx.game, opts);
-  if (!r.ok) { ctx.err(r.error); return; }
-  ctx.ok(`Started ${r.operation.id}: ${r.operation.label} · ~${r.operation.total} world minutes.`);
-  ctx.dim('You can switch applications while it runs. Use: ops');
-  ctx.app.refreshUI?.();
-};
-
-COMMANDS.contact = (ctx) => {
-  const handle = ctx.args[0];
-  const kind = (ctx.args[1] || 'message').toLowerCase();
-  const message = ctx.args.slice(2).join(' ');
-  if (!handle) { ctx.err('usage: contact <handle> <message|help|collaborate|hire|negotiate|review> [text]'); return; }
-  const r = contactNpc(ctx.game, handle, kind, message);
-  if (!r.ok) { ctx.err(r.error); return; }
-  ctx.ok(r.message);
-  ctx.dim('Responses depend on personality, trust, reputation and availability. Check your mail later.');
-  ctx.app.refreshUI?.();
-};
-COMMANDS.friends = (ctx) => {
-  const s = relationshipSummary(ctx.game);
-  ctx.head('RELATIONSHIPS');
-  for (const r of s.relationships.slice(0, 40)) {
-    ctx.print(`  ${pad('@' + r.handle, 14)} ${pad(r.status, 14)} trust ${padLeft(Math.round(r.trust), 3)}  ${r.role} · ${r.interactions.length} interactions`, r.status === 'collaborator' ? 'ok' : 'dim');
-    for (const i of r.interactions.slice(-2)) ctx.dim(`      ${i.status === 'pending' ? 'waiting' : i.response || i.status} · ${i.kind}: ${i.message.slice(0, 60)}`);
-  }
-  ctx.print('');
-  ctx.dim(`${s.pending} pending response(s) · ${s.collaborators} collaborator(s)`);
-};
-
-COMMANDS.pcreate = (ctx) => {
-  const name = ctx.args[0];
-  if (!name) { ctx.err('usage: pcreate <name> [language] [kind]'); return; }
-  const r = playerCreateProject(ctx.game, name, ctx.args[1] || 'python', ctx.args[2] || 'cli');
-  if (!r.ok) { ctx.err(r.error); return; }
-  ctx.ok(`Created ${r.project.name} · ${Object.keys(r.project.files).length} source files · ${r.project.repoPath}`);
-  ctx.dim('Edit with: pwrite <project> <file> <content>  ·  build with: pbuild <project>');
-  ctx.app.refreshUI?.();
-};
-COMMANDS.pwrite = (ctx) => {
-  const project = ctx.args[0];
-  const path = ctx.args[1];
-  if (!project || !path) { ctx.err('usage: pwrite <project> <file> [content...]  (or pipe content)'); return; }
-  let content = ctx.args.slice(2).join(' ');
-  if (!content && ctx.input) content = ctx.input;
-  const from = ctx.args.find(a => a.startsWith('--from='));
-  if (from) {
-    const p = pathFor(ctx.term, from.slice(7));
-    const node = getNode(ctx.fs(), p);
-    if (!node) { ctx.err(`pwrite: ${p}: no such local file`); return; }
-    content = node.content || '';
-  }
-  const r = playerWriteFile(ctx.game, project, path, content);
-  if (!r.ok) { ctx.err(r.error); return; }
-  ctx.ok(`Wrote ${r.path} (${r.lines} lines) in ${r.project.name}.`);
-  ctx.app.refreshUI?.();
-};
-COMMANDS.pbuild = (ctx) => {
-  const name = ctx.args[0];
-  const r = playerBuildProject(ctx.game, name);
-  if (!r.ok) { ctx.err(`${r.message} ${(r.errors || []).slice(0, 5).join(' | ')}`); return; }
-  const op = startOperation(ctx.game, { kind: 'compile', label: `build ${name} ${r.version}`, work: r.duration * operationSpeed(ctx.game), meta: { output: `/tmp/${slugify(name)}`, lines: 40 } });
-  ctx.ok(r.message);
-  if (op.ok) ctx.dim(`Build outputs queued as ${op.operation.id}. Use: ops`);
-  ctx.app.refreshUI?.();
-};
-COMMANDS.ptest = (ctx) => {
-  const r = playerTestProject(ctx.game, ctx.args[0]);
-  if (!r.ok) { ctx.err(r.error); return; }
-  if (r.pass) ctx.ok(`${r.message} (${r.cases} cases)`);
-  else ctx.warn(`${r.message} (${r.cases} cases) — check: repo show ${ctx.args[0]}`);
-  ctx.app.refreshUI?.();
-};
-COMMANDS.ppublish = (ctx) => {
-  const r = playerPublishProject(ctx.game, ctx.args[0]);
-  if (!r.ok) { ctx.err(r.error); return; }
-  ctx.ok(`${r.project.name} published to git.nullnet. NPCs can now discover it.`);
-  ctx.app.refreshUI?.();
-};
-COMMANDS.pdeploy = (ctx) => {
-  const project = ctx.args[0];
-  const domain = ctx.args[1];
-  if (!domain) { ctx.err('usage: pdeploy <project> <your-domain>'); return; }
-  const r = playerDeployProject(ctx.game, project, domain);
-  if (!r.ok) { ctx.err(r.error); return; }
-  const op = startOperation(ctx.game, { kind: 'deploy', label: `deploy ${r.project.name} to ${domain}`, work: r.duration * operationSpeed(ctx.game), meta: { domain, dir: ctx.args[2] || '.', serverId: r.server.id } });
-  ctx.ok(`Deployment started for ${domain} on ${r.server.host}.`);
-  if (op.ok) ctx.dim(`Tracked as ${op.operation.id}. Use: ops`);
-  ctx.app.refreshUI?.();
-};
-COMMANDS.prelease = (ctx) => {
-  const r = playerUpdateProject(ctx.game, ctx.args[0], ctx.args.slice(1).join(' '));
-  if (!r.ok) { ctx.err(r.error); return; }
-  ctx.ok(`Released ${r.version} of ${r.project.name}.`);
-  ctx.app.refreshUI?.();
-};
-
-COMMANDS.srv = (ctx) => {
-  const server = ctx.args[0];
-  const action = (ctx.args[1] || 'status').toLowerCase();
-  if (!server) { ctx.err('usage: srv <host|id> <service|user|dns|firewall|backup|config|package|restart> [args]'); return; }
-  const opts = {};
-  const rest = ctx.args.slice(2);
-  if (action === 'service') { opts.subaction = rest[1] || 'status'; opts.service = rest[0]; }
-  else if (['user','dns','firewall','package'].includes(action)) { opts.subaction = rest[0] || 'list'; opts.value = rest.slice(1).join(' '); if (action === 'firewall') opts.port = rest[1]; if (action === 'user') opts.name = rest[1]; }
-  else if (action === 'backup') { opts.subaction = rest[0] || 'create'; opts.value = rest[1]; }
-  else if (action === 'config') opts.value = rest.join(' ');
-  const r = serverAdmin(ctx.game, server, action, opts);
-  if (!r.ok) { ctx.err(r.error); return; }
-  ctx.ok(r.message);
-  if (r.service) ctx.print(`  ${r.service.name} ${r.service.state} · port ${r.service.port} · ${r.service.product} ${r.service.version}`, 'dim');
-  ctx.app.refreshUI?.();
-};
-COMMANDS.server = COMMANDS.srv;
-
-COMMANDS.invoice = (ctx) => {
-  const sub = (ctx.args[0] || 'list').toLowerCase();
-  if (sub === 'send') {
-    const r = issueInvoice(ctx.game, ctx.args[1], Number(ctx.args[2]) || 0, Number(ctx.args[3]) || 14);
-    if (!r.ok) { ctx.err(r.error); return; }
-    ctx.ok(`Invoice ${r.invoice.id} sent to ${r.invoice.client} for ${fmtMoney(r.invoice.amount)}.`);
-    return;
-  }
-  if (sub === 'pay') {
-    const r = payInvoice(ctx.game, ctx.args[1]);
-    if (!r.ok) { ctx.err(r.error); return; }
-    ctx.ok(`Paid ${r.invoice.id}.`);
-    return;
-  }
-  if (sub === 'collect') {
-    const r = collectInvoice(ctx.game, ctx.args[1]);
-    if (!r.ok) { ctx.err(r.error); return; }
-    ctx.ok(`Collected ${fmtMoney(r.invoice.amount)} for ${r.invoice.id}.`);
-    return;
-  }
-  const f = financeSummary(ctx.game);
-  ctx.head('INVOICES');
-  for (const i of f.invoices.slice(0, 30)) ctx.print(`  ${pad(i.id, 12)} ${pad(i.status, 9)} ${pad(i.client, 20)} ${padLeft(fmtMoney(i.amount), 10)} due ${hhmm(i.dueWorld)}`, i.status === 'overdue' ? 'err' : 'dim');
-  ctx.print(`Receivable ${fmtMoney(f.receivable)} · payable ${fmtMoney(f.payable)}`, 'accent');
-  ctx.dim('invoice send <client> <amount> [days] | invoice pay <id> | invoice collect <id>');
-};
-
-COMMANDS.transfer = (ctx) => {
-  const handle = ctx.args[0];
-  const amount = Number(ctx.args[1]) || 0;
-  const memo = ctx.args.slice(2).join(' ');
-  const r = transferFunds(ctx.game, handle, amount, memo);
-  if (!r.ok) { ctx.err(r.error); return; }
-  ctx.ok(r.message);
-  if (r.notification && Array.isArray(ctx.game.mail)) ctx.game.mail.push({ id: `mail-${Date.now()}`, time: Date.now(), world: ctx.game.worldMinutes, from: r.notification.from, to: r.notification.to, subject: r.notification.subject, body: r.notification.body, read: false, outbound: false });
-};
-
-COMMANDS.order = (ctx) => {
-  const sub = (ctx.args[0] || 'book').toLowerCase();
-  if (sub === 'buy' || sub === 'sell') {
-    const r = placeOrder(ctx.game, sub, ctx.args[1] || 'IDX', Number(ctx.args[2]) || 1, Number(ctx.args[3]) || 0);
-    if (!r.ok) { ctx.err(r.error); return; }
-    ctx.ok(`${r.order.id}: ${r.order.side} ${r.order.qty} ${r.order.asset} @ ${r.order.limit}.`);
-    ctx.dim('Orders fill as the index crosses your limit. Use: order book');
-    return;
-  }
-  if (sub === 'cancel') {
-    const r = cancelOrder(ctx.game, ctx.args[1]);
-    if (!r.ok) { ctx.err(r.error); return; }
-    ctx.ok(`${r.order.id} cancelled.`);
-    return;
-  }
-  const f = financeSummary(ctx.game);
-  ctx.head('ORDER BOOK');
-  ctx.print(`Index ${fmtNum(ctx.game.market.index)} · volume ${fmtNum(ctx.game.market.volume)} · sentiment ${ctx.game.market.sentiment}`);
-  for (const o of f.orders.slice(0, 30)) ctx.print(`  ${pad(o.id, 12)} ${pad(o.side, 5)} ${padLeft(o.qty, 6)} ${pad(o.asset, 8)} @ ${padLeft(o.limit, 6)}  ${Math.round(o.filled / o.qty * 100)}% ${o.status}`, o.status === 'filled' ? 'ok' : 'dim');
-  ctx.print('');
-  ctx.print('PORTFOLIO', 'head');
-  for (const h of f.holdings) ctx.print(`  ${pad(h.asset, 10)} ${padLeft(h.qty, 7)} @ ${padLeft(h.avgPrice, 6)} · value ${fmtMoney(h.value)} · P/L ${fmtMoney(h.pnl)}`, h.pnl >= 0 ? 'ok' : 'err');
-  if (!f.holdings.length) ctx.dim('  no holdings');
-  ctx.print(`Portfolio value ${fmtMoney(f.portfolioValue)}`, 'accent');
-  ctx.dim('order buy <asset> <qty> <limit> | order sell ... | order cancel <id>');
-};
-COMMANDS.portfolio = (ctx) => COMMANDS.order(ctx);
-
-COMMANDS.ln = (ctx) => {
-  const args = ctx.args;
-  const symbolic = args.includes('-s');
-  const parts = args.filter(a => !a.startsWith('-'));
-  if (parts.length < 2) { ctx.err('usage: ln [-s] <target> <link>'); return; }
-  const target = pathFor(ctx.term, parts[0]);
-  const link = pathFor(ctx.term, parts[1]);
-  if (getNode(ctx.fs(), link)) { ctx.err(`ln: ${parts[1]}: File exists`); return; }
-  if (symbolic) {
-    const rel = target.startsWith(ctx.term.cwd + '/') ? target.slice(ctx.term.cwd.length + 1) : target;
-    writeFile(ctx.fs(), link, '', { owner: userOf(ctx.term), meta: { symlink: rel } });
-    ctx.dim(`${parts[1]} -> ${parts[0]}`);
-  } else {
-    const node = getNode(ctx.fs(), target);
-    if (!node || node.type !== 'file') { ctx.err(`ln: ${parts[0]}: No such file`); return; }
-    writeFile(ctx.fs(), link, node.content || '', { owner: userOf(ctx.term), mode: node.mode, exec: node.exec });
-  }
-};
-
-COMMANDS.tar = (ctx) => {
-  const sub = ctx.args[0] || '';
-  const archive = ctx.args[1];
-  if (!archive) { ctx.err('usage: tar cf <archive> <dir> | tar xf <archive> [dir]'); return; }
-  const abs = pathFor(ctx.term, archive);
-  if (sub === 'cf') {
-    const dir = pathFor(ctx.term, ctx.args[2] || '.');
-    const files = allFiles(ctx.fs(), dir).filter(f => f.path.startsWith(dir === '/' ? '/' : dir + '/'));
-    if (!files.length) { ctx.err(`tar: ${ctx.args[2] || '.'}: directory is empty`); return; }
-    const entries = {};
-    for (const f of files.slice(0, 2000)) entries[f.path.slice(dir.length + 1)] = { content: f.node.content || '', mode: f.node.mode, owner: f.node.owner };
-    const payload = JSON.stringify({ format: 'nullnet-tar-1', root: dir, count: Object.keys(entries).length, entries });
-    writeFile(ctx.fs(), abs, payload, { owner: userOf(ctx.term) });
-    ctx.ok(`Archived ${Object.keys(entries).length} files into ${archive} (${fmtBytes(payload.length)}).`);
-    return;
-  }
-  if (sub === 'xf') {
-    const node = getNode(ctx.fs(), abs);
-    if (!node) { ctx.err(`tar: ${archive}: No such archive`); return; }
-    let data;
-    try { data = JSON.parse(node.content || ''); } catch { ctx.err('tar: not a nullnet archive'); return; }
-    if (data.format !== 'nullnet-tar-1' || !data.entries) { ctx.err('tar: unsupported archive format'); return; }
-    const dest = pathFor(ctx.term, ctx.args[2] || '.');
-    let count = 0;
-    for (const [path, entry] of Object.entries(data.entries)) {
-      if (writeFile(ctx.fs(), joinPath(dest, path), entry.content || '', { owner: userOf(ctx.term), mode: entry.mode })) count++;
-    }
-    ctx.ok(`Extracted ${count} files into ${ctx.args[2] || '.'}.`);
-    return;
-  }
-  ctx.err('tar: use cf or xf');
-};
-
-COMMANDS.society = (ctx) => {
-  const g = ctx.game;
-  const s = societyOverview(g);
-  const m = s.metrics;
-  const sub = (ctx.args[0] || 'status').toLowerCase();
-  if (sub === 'feed' || sub === 'events') {
-    ctx.head('CIVILIZATION FEED');
-    for (const e of s.events.slice(0, 40)) ctx.print(`  ${pad(e.category, 12)} ${pad(e.world.toFixed(0), 8)} ${e.title}`, e.severity === 'critical' ? 'err' : 'dim');
-    return;
-  }
-  if (sub === 'content') return COMMANDS.culture(ctx);
-  ctx.head('AUTONOMOUS CIVILIZATION');
-  ctx.print(`Population       ${m.population} · ${m.active} active · ${m.known} known · ${m.distant} distant`);
-  ctx.print(`Culture          ${m.content} content items · ${m.tests} real tests · ${m.reviews} reviews`);
-  ctx.print(`Economy          ${m.transactions} transactions · ${fmtMoney(m.revenue)} exchanged · ${m.relationships} relationships`);
-  ctx.print(`Mood             happiness ${m.averageHappiness >= 0 ? '+' : ''}${m.averageHappiness} · stress ${m.averageStress}`);
-  ctx.print('');
-  ctx.print('RECENT LIVES', 'head');
-  for (const e of s.events.slice(0, 10)) ctx.print(`  ${pad(e.category, 12)} ${e.title}`, 'dim');
-  ctx.print('');
-  ctx.dim('citizens | citizen <handle> | culture [query] | content <show|buy|review|test|publish> | meet <handle>');
-};
-COMMANDS.citizens = (ctx) => {
-  const s = societyOverview(ctx.game);
-  const q = ctx.args.join(' ').toLowerCase();
-  ctx.head('INHABITANTS');
-  const rows = s.citizens.filter(i => !q || `${i.handle} ${i.name} ${i.employment.role} ${i.interests.join(' ')}`.toLowerCase().includes(q));
-  for (const i of rows.slice(0, 60)) {
-    const top = Object.entries(i.needs).sort((a, b) => b[1] - a[1])[0];
-    ctx.print(`  ${pad('@' + i.handle, 14)} ${pad(i.level, 8)} age ${padLeft(i.age, 2)}  ${pad(i.employment.role, 22)} ${padLeft(fmtMoney(i.funds), 10)}  need:${top?.[0] || '—'}  mood:${i.mood}`, i.level === 'active' ? 'ok' : 'dim');
-  }
-  ctx.print('');
-  ctx.dim(`${rows.length} shown · ${s.metrics.population} total · citizen <handle> for a full profile`);
-};
-
-COMMANDS.citizen = (ctx) => {
-  const hit = citizenProfile(ctx.game, ctx.args[0]);
-  if (!hit) { ctx.err(`citizen: no inhabitant matching '${ctx.args[0] || ''}'`); return; }
-  const i = hit.identity;
-  ctx.head(`${i.name} · @${i.handle} · ${i.age}`);
-  ctx.print(`  status       ${i.level} inhabitant · ${i.mood} · health ${i.health}/100`);
-  ctx.print(`  living       ${i.living.situation} · ${i.living.location}`);
-  ctx.print(`  work         ${i.employment.role} at ${i.employment.employer} · ${fmtMoney(i.employment.salaryPerDay)}/day`);
-  ctx.print(`  personality  ${i.personality} · values ${i.values.join(', ')}`);
-  ctx.print(`  interests    ${i.interests.join(', ') || 'none recorded'}`);
-  ctx.print(`  education    ${i.education.map(e => `${e.level} ${e.field}`).join(', ') || 'none recorded'}`);
-  ctx.print(`  funds        ${fmtMoney(i.funds)} · ${i.contentIds.length} works · ${hit.sales.length} sales`);
-  ctx.print('');
-  ctx.print('EMOTIONS', 'head');
-  const emo = Object.entries(i.emotions).sort((a, b) => Math.abs(b[1]) - Math.abs(a[1])).slice(0, 10);
-  for (const [key, value] of emo) ctx.print(`  ${pad(key, 14)} ${padLeft(Math.round(value), 4)}  ${i.emotionCauses?.[key] || 'no recorded cause'}`, value < -25 ? 'warn' : 'dim');
-  ctx.print('');
-  ctx.print('NEEDS', 'head');
-  for (const [key, value] of Object.entries(i.needs).sort((a, b) => b[1] - a[1]).slice(0, 8)) ctx.print(`  ${pad(key, 14)} ${progressBar(value, 14)} ${Math.round(value)}`, 'dim');
-  if (i.memories.length) {
-    ctx.print('');
-    ctx.print('MEMORIES', 'head');
-    for (const m of i.memories.slice(-6)) ctx.print(`  ${hhmm(m.world)}  ${m.text}`, 'dim');
-  }
-  if (hit.content.length) {
-    ctx.print('');
-    ctx.print('CREATED CONTENT', 'head');
-    for (const c of hit.content.slice(0, 12)) ctx.print(`  ${pad(c.id, 12)} ${pad(c.type, 10)} ${pad(c.title, 24)} ${c.usage.views} views · ${c.usage.purchases} sales`, 'dim');
-  }
-  if (hit.decisions.length) {
-    ctx.print('');
-    ctx.print('RECENT DECISIONS', 'head');
-    for (const d of hit.decisions.slice(-8)) ctx.print(`  ${hhmm(d.world)}  ${pad(d.action, 11)} ${d.reason}`, 'dim');
-  }
-};
-
-COMMANDS.culture = (ctx) => {
-  const s = societyOverview(ctx.game);
-  const q = ctx.args.join(' ').toLowerCase();
-  ctx.head('CONTENT ECONOMY');
-  const rows = s.content.filter(c => !q || `${c.title} ${c.type} ${c.tags.join(' ')} ${c.creatorHandle}`.toLowerCase().includes(q));
-  for (const c of rows.slice(0, 50)) {
-    ctx.print(`  ${pad(c.id, 12)} ${pad(c.type, 10)} ${pad(c.title.slice(0, 28), 30)} @${pad(c.creatorHandle, 12)} ${pad(c.availability, 7)} ${padLeft(fmtMoney(c.price), 9)}  ${c.usage.views} views ${c.usage.tests} tests ${c.usage.reviews} reviews`, c.status === 'popular' ? 'ok' : 'dim');
-  }
-  ctx.print('');
-  ctx.dim('content show <id> | content buy <id> | content test <id> | content review <id> <text>');
-};
-
-COMMANDS.content = (ctx) => {
-  const sub = (ctx.args[0] || 'list').toLowerCase();
-  if (sub === 'list') return COMMANDS.culture(ctx);
-  if (sub === 'publish') {
-    const type = (ctx.args[1] || 'article').toLowerCase();
-    const title = ctx.args[2];
-    const text = ctx.args.slice(3).join(' ');
-    if (!title || !text) { ctx.err('usage: content publish <type> <title> <text>'); return; }
-    const r = playerPublishContent(ctx.game, type, title, text, Number((ctx.args.find(a => a.startsWith('--price=')) || '').split('=')[1]) || 0);
-    if (!r.ok) { ctx.err(r.error); return; }
-    ctx.ok(`Published ${r.content.id} · ${r.content.type} · ${r.content.availability}`);
-    ctx.dim(`Trace it with: content show ${r.content.id}`);
-    return;
-  }
-  const id = ctx.args[1] || ctx.args[0];
-  const hit = contentDetail(ctx.game, id);
-  if (!hit) { ctx.err(`content: no item matching '${id || ''}'`); return; }
-  const c = hit.content;
-  if (sub === 'show') {
-    ctx.head(`${c.title} · ${c.type}`);
-    ctx.print(`  id          ${c.id} · v${c.version} · ${c.availability} · ${c.status}`);
-    ctx.print(`  creator     @${c.creatorHandle} · ${c.reason}`);
-    ctx.print(`  price       ${fmtMoney(c.price)} (${c.model}) · tags ${c.tags.join(', ')}`);
-    ctx.print(`  quality     ${Object.entries(c.quality).map(([k, v]) => `${k} ${Math.round(v)}`).join(' · ')}`);
-    ctx.print(`  usage       ${c.usage.views} views · ${c.usage.downloads} downloads · ${c.usage.purchases} sales · ${c.usage.tests} tests · ${c.usage.reviews} reviews`);
-    ctx.print('');
-    if (c.data.text) { ctx.print('TEXT', 'head'); ctx.print(c.data.text); }
-    else if (c.data.html) { ctx.print('HTML', 'head'); ctx.print(c.data.html); }
-    else if (c.data.files) {
-      ctx.print('FILES', 'head');
-      const project = ctx.game.devworld?.projects?.find(p => p.id === c.projectId);
-      for (const f of c.data.files) ctx.print(`  ${pad(f, 26)} ${padLeft(project?.files?.[f]?.split('\n').length || 0, 5)} lines`, 'dim');
-      ctx.dim(`Open the source with: repo source ${project?.slug || c.title}`);
-    } else { ctx.print('REPRESENTATION', 'head'); ctx.print(JSON.stringify(c.data, null, 2)); }
-    if (hit.tests.length) {
-      ctx.print('');
-      ctx.print('TEST RESULTS', 'head');
-      for (const t of hit.tests.slice(0, 8)) ctx.print(`  ${t.id} ${t.result} · ${t.operation} · @${t.handle}${t.findings.length ? ' · ' + t.findings[0] : ''}`, t.result === 'fail' ? 'warn' : 'dim');
-    }
-    if (hit.reviews.length) {
-      ctx.print('');
-      ctx.print('REVIEWS', 'head');
-      for (const r of hit.reviews.slice(0, 8)) ctx.print(`  ${r.rating}/5 @${r.handle} · ${r.text}`, 'dim');
-    }
-    return;
-  }
-  if (sub === 'buy') {
-    const r = playerPurchaseContent(ctx.game, c.id);
-    if (!r.ok) { ctx.err(r.error); return; }
-    ctx.ok(`Acquired ${c.title} for ${fmtMoney(r.price)} · transaction ${r.transaction.id}.`);
-    ctx.print(`Test: ${r.test.operation} → ${r.test.result}${r.test.findings.length ? ' · ' + r.test.findings[0] : ''}`, r.test.result === 'fail' ? 'warn' : 'ok');
-    ctx.app.refreshUI?.();
-    return;
-  }
-  if (sub === 'test') {
-    const st = ensureSociety(ctx.game);
-    const r = testContent(ctx.game, st, playerIdentity(ctx.game), c);
-    ctx.print(`${r.operation}: ${r.result}${r.findings.length ? ' · ' + r.findings.join(' | ') : ''}`, r.result === 'fail' ? 'warn' : 'ok');
-    return;
-  }
-  if (sub === 'review') {
-    const r = playerReviewContent(ctx.game, c.id, ctx.args.slice(2).join(' '));
-    if (!r.ok) { ctx.err(r.error); return; }
-    ctx.ok(`${r.review.id}: ${r.review.rating}/5 recorded.`);
-    return;
-  }
-  ctx.err(`content: '${sub}' is not recognized. Try: list|show|buy|test|review|publish`);
-};
-
-COMMANDS.meet = (ctx) => {
-  const note = ctx.args.slice(1).join(' ');
-  const r = playerMeetNpc(ctx.game, ctx.args[0], 'conversation', note);
-  if (!r.ok) { ctx.err(r.error); return; }
-  ctx.ok(`You spoke with @${r.identity.handle}. Trust ${Math.round(r.relationship.trust)}/100, ${r.relationship.status}.`);
-  ctx.dim('Their memory and mood now include this interaction.');
-  ctx.app.refreshUI?.();
-};
-
-/* ============================================================
-   COMPLETE IT UNIVERSE
-   ============================================================ */
-COMMANDS.it = (ctx) => {
-  const s = itOverview(ctx.game);
-  const m = s.metrics;
-  ctx.head('IT UNIVERSE');
-  ctx.print(`Rigs ${m.rigs} · circuits ${m.circuits} · networks ${m.networks} · studios ${m.studios}`);
-  ctx.print(`Games ${m.games} · AI models ${m.aiModels} · agents ${m.agents} · certifications ${m.certifications}`);
-  ctx.print(`Support ${m.openTickets} open / ${m.resolvedTickets} resolved · challenges ${m.openChallenges} · collectibles ${m.collectibles}`);
-  ctx.print('');
-  ctx.print('SKILLS', 'head');
-  for (const [key, level] of Object.entries(m.skills)) ctx.print(`  ${pad(key, 14)} ${progressBar(level, 14)} L${level}`, 'dim');
-  ctx.print('');
-  ctx.dim('rig | parts | circuit | netlab | studio | ailab | tickets | challenge | skills | cert | collect');
-};
-
-COMMANDS.parts = (ctx) => {
-  const cat = componentCatalog(ctx.game);
-  const group = (ctx.args[0] || 'cpu').toLowerCase();
-  const rows = cat[group];
-  if (!rows) { ctx.err(`parts: unknown group '${group}'. Try: ${Object.keys(cat).join(', ')}`); return; }
-  ctx.head(`COMPONENT CATALOG · ${group.toUpperCase()}`);
-  for (const p of rows) {
-    const specs = Object.entries(p).filter(([k]) => !['id','name','price','vintage'].includes(k)).map(([k, v]) => `${k}:${v}`).join(' ');
-    ctx.print(`  ${pad(p.id, 14)} ${pad(p.name, 28)} ${padLeft(fmtMoney(p.price), 10)}  ${specs}`, p.vintage ? 'warn' : 'dim');
-  }
-};
-
-COMMANDS.rig = (ctx) => {
-  const g = ctx.game;
-  const st = ensureIT(g);
-  const sub = (ctx.args[0] || 'list').toLowerCase();
-  const rest = ctx.args.slice(1);
-  if (sub === 'list') {
-    ctx.head('COMPUTER RACK');
-    for (const r of st.rigs) ctx.print(`  ${pad(r.id, 10)} ${pad(r.name, 18)} ${pad(r.preset, 12)} perf ${padLeft(r.performance, 4)} ${padLeft(Math.round(r.temperature), 3)}°C ${padLeft(Math.round(r.powerW), 5)}W  ${r.status}${r.id === st.activeRigId ? '  ACTIVE' : ''}`, r.status === 'faulty' ? 'err' : 'dim');
-    return;
-  }
-  if (sub === 'build') {
-    const name = rest[0] || `rig-${st.rigs.length + 1}`;
-    const preset = (rest[1] || 'custom').toLowerCase();
-    const presets = {
-      gaming: { cpu:'cpu-i7', mobo:'mb-z790', ram:'ram-32', gpu:'gpu-4070', storage:'ssd-1t', psu:'psu-750', cooling:'cool-240', case:'case-atx' },
-      workstation: { cpu:'cpu-r9', mobo:'mb-x670', ram:'ram-64', gpu:'gpu-ig', storage:'ssd-4t', psu:'psu-750', cooling:'cool-360', case:'case-atx' },
-      server: { cpu:'cpu-epyc', mobo:'mb-sp5', ram:'ram-512', gpu:'gpu-ig', storage:'ssd-4t', psu:'psu-1200', cooling:'cool-360', case:'case-rack' },
-      ai: { cpu:'cpu-r9', mobo:'mb-x670', ram:'ram-64', gpu:'gpu-a6000', storage:'ssd-4t', psu:'psu-1200', cooling:'cool-360', case:'case-rack' },
-      mining: { cpu:'cpu-i3', mobo:'mb-h610', ram:'ram-8', gpu:'gpu-4090', storage:'ssd-256', psu:'psu-1200', cooling:'cool-240', case:'case-atx' },
-      compact: { cpu:'cpu-i3', mobo:'mb-h610', ram:'ram-16', gpu:'gpu-ig', storage:'ssd-256', psu:'psu-450', cooling:'cool-air', case:'case-matx' },
-      retro: { cpu:'cpu-retro', mobo:'mb-845', ram:'ram-1', gpu:'gpu-ig', storage:'ssd-256', psu:'psu-450', cooling:'cool-fan', case:'case-vintage' }
-    };
-    if (!presets[preset]) { ctx.err(`rig: unknown preset '${preset}'. Try: ${Object.keys(presets).join(', ')}`); return; }
-    const r = assembleRig(g, name, presets[preset], preset);
-    if (!r.ok) { ctx.err(r.error); return; }
-    ctx.ok(`Assembled ${r.rig.name} · ${r.check.ok ? 'compatible' : 'FAULTY'}`);
-    for (const p of r.check.problems) ctx.print(`  ${p}`, 'err');
-    ctx.dim(`Install an OS with: rig os ${r.rig.id} distro-nullDesktop`);
-    return;
-  }
-  const rig = st.rigs.find(r => r.id === rest[0] || r.name === rest[0]) || st.rigs.find(r => r.id === st.activeRigId);
-  if (!rig) { ctx.err('rig: no such machine'); return; }
-  if (sub === 'select') {
-    const r = selectRig(g, rest[0]);
-    if (!r.ok) { ctx.err(r.error); return; }
-    ctx.ok(`${r.rig.name} is now the active workstation.`);
-    ctx.app.refreshUI?.();
-    return;
-  }
-  if (sub === 'show') {
-    ctx.head(`${rig.name} · ${rig.preset}`);
-    for (const [key, id] of Object.entries(rig.parts)) ctx.print(`  ${pad(key, 10)} ${findPartName(id)}`, 'dim');
-    ctx.print(`  status     ${rig.status} · performance ${rig.performance} · ${Math.round(rig.powerW)} W · ${Math.round(rig.temperature)}°C · health ${Math.round(rig.health)}/100`);
-    ctx.print(`  BIOS       multiplier ${rig.bios.multiplier}% · voltage ${rig.bios.voltage} · fan ${rig.bios.fan} · secure boot ${rig.bios.secureBoot ? 'on' : 'off'}`);
-    if (rig.faults?.length) for (const f of rig.faults) ctx.print(`  fault      ${f}`, 'err');
-    const installs = st.installs.filter(i => i.rigId === rig.id && !i.removed);
-    ctx.print(`  OS         ${installs.map(i => i.distroName).join(', ') || 'none'}`);
-    return;
-  }
-  if (sub === 'bios') {
-    if (!rest[1]) { ctx.print(JSON.stringify(rig.bios, null, 2)); return; }
-    const r = setBios(g, rig.id, rest[1], rest[2]);
-    if (!r.ok) { ctx.err(r.error); return; }
-    ctx.ok(`${rest[1]} updated on ${rig.name}.`);
-    return;
-  }
-  if (sub === 'stress') {
-    const r = stressTest(g, rig.id, Number(rest[1]) || 60);
-    if (!r.ok) { ctx.err(r.error); return; }
-    ctx.print(`${r.stable ? 'STABLE' : 'UNSTABLE'} · ${r.temperature}°C · ${r.powerW} W · performance ${r.performance}`, r.stable ? 'ok' : 'err');
-    return;
-  }
-  if (sub === 'part') {
-    if (!rest[1]) { ctx.print(`Partitions: ${rig.partitions.map(p => `${p.mount}:${p.sizeGb}GB:${p.fs}`).join(' ') || 'none'}`); return; }
-    const r = partitionDisk(g, rig.id, rest[1]);
-    if (!r.ok) { ctx.err(r.error); return; }
-    ctx.ok(`Partition table written: ${r.partitions.map(p => `${p.mount} ${p.sizeGb}GB ${p.fs}`).join(', ')}`);
-    return;
-  }
-  if (sub === 'os') {
-    const distro = rest[1];
-    if (!distro) { ctx.err('rig: use rig os <distro-id> [dual]'); ctx.dim('distro-nullDesktop distro-nullServer distro-freebsd distro-winlike distro-embedded distro-security distro-retro'); return; }
-    const r = installOS(g, rig.id, distro, { dualBoot: rest.includes('dual') });
-    if (!r.ok) { ctx.err(r.error); return; }
-    ctx.ok(`${r.install.distroName} installed on ${rig.name}.`);
-    for (const line of r.logs) ctx.dim(`  ${line}`);
-    return;
-  }
-  if (sub === 'boot') {
-    const r = bootRig(g, rig.id);
-    if (!r.ok) { ctx.err(r.error); return; }
-    ctx.head(`BOOT · ${r.install.distroName}`);
-    for (const line of r.logs) ctx.print(`  ${line}`, 'dim');
-    return;
-  }
-  if (sub === 'config') {
-    const install = st.installs.find(i => i.rigId === rig.id && !i.removed);
-    if (!install) { ctx.err('No OS installed on that rig.'); return; }
-    if (!rest[1]) { ctx.print(JSON.stringify(install.config, null, 2)); return; }
-    const r = configureOS(g, install.id, rest[1], rest[2]);
-    if (!r.ok) { ctx.err(r.error); return; }
-    ctx.ok(`${rest[1]} configured on ${install.distroName}.`);
-    return;
-  }
-  if (sub === 'publish') {
-    const install = st.installs.find(i => i.rigId === rig.id && !i.removed);
-    const r = publishDistro(g, install?.id, rest.join(' '));
-    if (!r.ok) { ctx.err(r.error); return; }
-    ctx.ok(`Published custom distribution as content ${r.content.id}.`);
-    return;
-  }
-  ctx.err(`rig: '${sub}' is not recognized. Try: list|build|select|show|bios|stress|part|os|boot|config|publish`);
-};
-function findPartName(id) { return partName(id); }
-
-COMMANDS.circuit = (ctx) => {
-  const st = ensureIT(ctx.game);
-  const sub = (ctx.args[0] || 'list').toLowerCase();
-  if (sub === 'list') {
-    ctx.head('ELECTRONICS WORKBENCH');
-    ctx.print('Boards: ' + ['board-uno','board-pico','board-rpi','board-fpga','board-esp'].join(', '), 'dim');
-    ctx.print('Modules: ' + ['sensor-temp','sensor-motion','sensor-cam','sensor-relay','sensor-led','sensor-gps'].join(', '), 'dim');
-    for (const c of st.circuits) ctx.print(`  ${pad(c.id, 11)} ${pad(c.name, 20)} ${pad(c.boardName, 16)} ${c.pinsUsed} pins ${c.powerW}W ${c.status}`, c.status === 'working' ? 'ok' : 'warn');
-    return;
-  }
-  if (sub === 'build') {
-    const name = ctx.args[1] || 'device';
-    const board = ctx.args[2] || 'board-uno';
-    const sensors = (ctx.args[3] || '').split(',').filter(Boolean);
-    const firmware = ctx.args.slice(4).join(' ') || 'void setup() { pinMode(0, INPUT); }\nvoid loop() { readPin(0); }';
-    const r = createCircuit(ctx.game, name, board, sensors, firmware);
-    if (!r.ok) { ctx.err(r.error); return; }
-    ctx.ok(`Built ${r.circuit.name} · ${r.circuit.pinsUsed} pins · ${r.circuit.powerW} W`);
-    ctx.dim(`Test it with: circuit test ${r.circuit.id}`);
-    return;
-  }
-  if (sub === 'test') {
-    const r = testCircuit(ctx.game, ctx.args[1]);
-    if (!r.ok) { ctx.err(r.error); return; }
-    ctx.print(`${r.test.result.toUpperCase()} · ${r.test.notes}`, r.test.result === 'pass' ? 'ok' : 'warn');
-    return;
-  }
-  ctx.err('circuit: use list|build <name> <board> <sensors> <firmware>|test <id>');
-};
-
-COMMANDS.netlab = (ctx) => {
-  const st = ensureIT(ctx.game);
-  const sub = (ctx.args[0] || 'list').toLowerCase();
-  if (sub === 'list') {
-    ctx.head('NETWORK SANDBOX');
-    for (const n of st.networks) ctx.print(`  ${pad(n.id, 11)} ${pad(n.name, 20)} ${n.nodes.length} nodes · ${n.links.length} links · ${n.tests.length} tests`, 'dim');
-    return;
-  }
-  if (sub === 'create') {
-    const r = createNetwork(ctx.game, ctx.args[1] || 'labnet');
-    ctx.ok(`Created ${r.network.name} (${r.network.id}).`);
-    return;
-  }
-  const net = st.networks.find(n => n.id === ctx.args[1] || n.name === ctx.args[1]);
-  if (!net) { ctx.err('netlab: no such network'); return; }
-  if (sub === 'node') {
-    const r = addNetworkNode(ctx.game, net.id, ctx.args[2], ctx.args[3], ctx.args[4]);
-    if (!r.ok) { ctx.err(r.error); return; }
-    ctx.ok(`Added ${r.node.name} (${r.node.type}) at ${r.node.ip}.`);
-    return;
-  }
-  if (sub === 'link') {
-    const r = connectNodes(ctx.game, net.id, ctx.args[2], ctx.args[3], { latency: Number(ctx.args[4]) || 2 });
-    if (!r.ok) { ctx.err(r.error); return; }
-    ctx.ok(`Connected ${ctx.args[2]} ↔ ${ctx.args[3]} · ${r.link.latencyMs} ms`);
-    return;
-  }
-  if (sub === 'config') {
-    const r = configNode(ctx.game, net.id, ctx.args[2], ctx.args[3], ctx.args[4]);
-    if (!r.ok) { ctx.err(r.error); return; }
-    ctx.ok(`${r.node.name}: ${ctx.args[3]} configured.`);
-    return;
-  }
-  if (sub === 'test') {
-    const r = testNetwork(ctx.game, net.id, ctx.args[2], ctx.args[3]);
-    if (!r.ok) { ctx.err(r.error); return; }
-    ctx.print(`Route: ${r.path.join(' → ') || 'none'}`, r.success ? 'ok' : 'err');
-    ctx.print(`Latency ${r.latencyMs} ms · loss ${r.lossPct}%`, 'dim');
-    for (const p of r.problems) ctx.print(`  problem: ${p}`, 'err');
-    return;
-  }
-  if (sub === 'show') {
-    ctx.head(net.name);
-    for (const n of net.nodes) ctx.print(`  ${pad(n.name, 16)} ${pad(n.type, 10)} ${pad(n.ip, 16)} vlan ${n.config.vlan} up ${n.config.up}`, 'dim');
-    for (const l of net.links) ctx.print(`  link ${net.nodes.find(x => x.id === l.from)?.name} ↔ ${net.nodes.find(x => x.id === l.to)?.name} · ${l.latencyMs} ms · ${l.bandwidthMbps} Mbps`, 'dim');
-    return;
-  }
-  ctx.err('netlab: use list|create <name>|<net> node|link|config|test|show');
-};
-
-COMMANDS.studio = (ctx) => {
-  const st = ensureIT(ctx.game);
-  const sub = (ctx.args[0] || 'list').toLowerCase();
-  if (sub === 'list') {
-    ctx.head('GAME STUDIOS');
-    for (const s of st.studios) ctx.print(`  ${pad(s.id, 11)} ${pad(s.name, 20)} ${s.staff.length} staff · ${s.projects.length} projects · rep ${s.reputation}`, 'dim');
-    for (const g of st.games) ctx.print(`  ${pad(g.id, 10)} ${pad(g.title, 24)} ${pad(g.status, 12)} ${Math.round(g.progress)}% · ${g.sales} sales`, g.status === 'released' ? 'ok' : 'dim');
-    return;
-  }
-  if (sub === 'create') {
-    const r = createStudio(ctx.game, ctx.args[1]);
-    if (!r.ok) { ctx.err(r.error); return; }
-    ctx.ok(`Studio ${r.studio.name} registered.`);
-    return;
-  }
-  const studio = st.studios.find(s => s.id === ctx.args[1] || s.name === ctx.args[1]);
-  if (!studio) { ctx.err('studio: no such studio'); return; }
-  if (sub === 'hire') {
-    const r = hireDeveloper(ctx.game, studio.id, ctx.args[2], ctx.args[3] || 'programmer');
-    if (!r.ok) { ctx.err(r.error); return; }
-    ctx.ok(`Hired @${r.staff.handle} as ${r.staff.role} · ${fmtMoney(r.staff.salary)}/day`);
-    return;
-  }
-  if (sub === 'game') {
-    const r = createGameProject(ctx.game, studio.id, ctx.args.slice(2).join(' ') || 'untitled', ctx.args[3] || 'NullEngine 2D');
-    if (!r.ok) { ctx.err(r.error); return; }
-    ctx.ok(`${r.project.title} entered development (${r.project.engine}).`);
-    return;
-  }
-  if (sub === 'test') {
-    const r = testGame(ctx.game, ctx.args[1]);
-    if (!r.ok) { ctx.err(r.error); return; }
-    ctx.print(`${r.result.passed ? 'PASS' : 'FAIL'} · ${r.result.notes}`, r.result.passed ? 'ok' : 'warn');
-    return;
-  }
-  if (sub === 'publish') {
-    const r = publishGame(ctx.game, ctx.args[1], Number(ctx.args[2]) || 15);
-    if (!r.ok) { ctx.err(r.error); return; }
-    ctx.ok(`${r.project.title} published as content ${r.content.id}.`);
-    return;
-  }
-  ctx.err('studio: use list|create <name>|<studio> hire|game|test|publish');
-};
-
-COMMANDS.ailab = (ctx) => {
-  const st = ensureIT(ctx.game);
-  const sub = (ctx.args[0] || 'list').toLowerCase();
-  if (sub === 'list') {
-    ctx.head('AI PLAYGROUND');
-    for (const m of st.ai) ctx.print(`  ${pad(m.id, 10)} ${pad(m.name, 20)} ${pad(m.status, 8)} q${m.quality} ${m.gpu} · ${m.benchmarks.length} benchmarks`, 'dim');
-    for (const a of st.agents) ctx.print(`  agent ${pad(a.id, 8)} ${pad(a.name, 20)} tools ${a.tools.join('/')} budget ${fmtMoney(a.budget)}`, 'dim');
-    return;
-  }
-  if (sub === 'train') {
-    const r = createAIExperiment(ctx.game, ctx.args[1] || 'model', ctx.args[2] || 'lumen-8b', ctx.args[3] || 'local-corpus');
-    if (!r.ok) { ctx.err(r.error); return; }
-    ctx.ok(`Training ${r.model.name} on ${r.model.gpu} · operation ${r.operation.id}`);
-    return;
-  }
-  if (sub === 'bench') {
-    const r = benchmarkAI(ctx.game, ctx.args[1]);
-    if (!r.ok) { ctx.err(r.error); return; }
-    ctx.print(`Quality ${r.benchmark.quality}/100 · ${r.benchmark.latencyMs} ms · ${fmtNum(r.benchmark.tokens)} tokens`, 'ok');
-    return;
-  }
-  if (sub === 'agent') {
-    const r = itDeployAgent(ctx.game, ctx.args[1], ctx.args[2] || 'read,write', Number(ctx.args[3]) || 100);
-    if (!r.ok) { ctx.err(r.error); return; }
-    ctx.ok(`Deployed ${r.agent.name} with tools ${r.agent.tools.join(', ')}.`);
-    return;
-  }
-  ctx.err('ailab: use list|train <name> [base] [dataset]|bench <model>|agent <model> <tools> <budget>');
-};
-
-COMMANDS.tickets = (ctx) => {
-  const sub = (ctx.args[0] || 'list').toLowerCase();
-  const st = ensureIT(ctx.game);
-  if (sub === 'scan') {
-    const found = generateTickets(ctx.game);
-    ctx.ok(`${found.length} open ticket(s) derived from live world state.`);
-    return;
-  }
-  if (sub === 'diagnose') {
-    const r = diagnoseTicket(ctx.game, ctx.args[1]);
-    if (!r.ok) { ctx.err(r.error); return; }
-    ctx.head(`EVIDENCE · ${r.ticket.title}`);
-    ctx.print(`  symptom  ${r.ticket.symptom}`);
-    ctx.print(`  evidence ${JSON.stringify(r.ticket.evidence)}`, 'dim');
-    ctx.dim('Fix with: tickets fix <id> <action>');
-    return;
-  }
-  if (sub === 'fix') {
-    const r = resolveTicket(ctx.game, ctx.args[1], ctx.args[2]);
-    if (!r.ok) { ctx.err(r.error); return; }
-    ctx.ok(`Resolved ${r.ticket.title} · reward ${fmtMoney(r.reward)}.`);
-    ctx.app.refreshUI?.();
-    return;
-  }
-  ctx.head('SUPPORT DESK');
-  for (const t of st.tickets.slice(-30).reverse()) ctx.print(`  ${pad(t.id, 14)} ${pad(t.status, 9)} ${pad(t.kind, 10)} ${t.title}`, t.status === 'open' ? 'warn' : 'dim');
-  ctx.dim('tickets scan | tickets diagnose <id> | tickets fix <id> <action>');
-};
-
-COMMANDS.challenge = (ctx) => {
-  const sub = (ctx.args[0] || 'list').toLowerCase();
-  const st = ensureIT(ctx.game);
-  if (sub === 'scan') { generateChallenges(ctx.game); ctx.ok('Challenges refreshed from current skills and world state.'); return; }
-  if (sub === 'try') {
-    const r = attemptChallenge(ctx.game, ctx.args[1]);
-    if (!r.ok) { ctx.err(r.error); return; }
-    ctx.ok(`Completed ${r.challenge.title} · ${fmtMoney(r.challenge.reward.money)} · ${r.challenge.reward.xp} XP`);
-    return;
-  }
-  ctx.head('OPTIONAL CHALLENGES');
-  for (const c of st.challenges.filter(x => x.status === 'open')) ctx.print(`  ${pad(c.id, 12)} ${pad(c.kind, 10)} ${c.title} · ${fmtMoney(c.reward.money)}`, 'dim');
-  ctx.dim('challenge scan | challenge try <id>');
-};
-
-COMMANDS.skills = (ctx) => {
-  const s = skillOverview(ctx.game);
-  ctx.head('SKILL TREES');
-  for (const k of s.skills) ctx.print(`  ${pad(k.key, 14)} ${progressBar(k.level, 18)} L${padLeft(k.level, 2)}  ${fmtNum(k.xp)} XP`, 'dim');
-  ctx.print('');
-  ctx.print('CERTIFICATIONS', 'head');
-  for (const c of s.available) ctx.print(`  ${pad(c.id, 12)} ${pad(c.name, 34)} req ${c.skill} L${c.required} ${fmtMoney(c.cost)} ${s.certifications.some(x => x.id === c.id) ? 'HELD' : c.eligible ? 'ELIGIBLE' : 'locked'}`, c.eligible ? 'ok' : 'dim');
-  ctx.dim('cert take <id> | cert list');
-};
-
-COMMANDS.cert = (ctx) => {
-  if ((ctx.args[0] || 'list') === 'take') {
-    const r = takeCertification(ctx.game, ctx.args[1]);
-    if (!r.ok) { ctx.err(r.error); return; }
-    ctx.ok(`Certified: ${r.cert.name}.`);
-    return;
-  }
-  return COMMANDS.skills(ctx);
-};
-
-COMMANDS.collect = (ctx) => {
-  const sub = (ctx.args[0] || 'list').toLowerCase();
-  if (sub === 'buy') {
-    const r = buyCollectible(ctx.game, ctx.args[1]);
-    if (!r.ok) { ctx.err(r.error); return; }
-    ctx.ok(`Acquired ${r.item.name} for ${fmtMoney(r.price)}.`);
-    return;
-  }
-  if (sub === 'sell') {
-    const r = sellCollectible(ctx.game, ctx.args[1]);
-    if (!r.ok) { ctx.err(r.error); return; }
-    ctx.ok(`Sold ${r.item.name} for ${fmtMoney(r.price)}.`);
-    return;
-  }
-  ctx.head('TECHNOLOGY COLLECTIBLES');
-  for (const item of marketplace(ctx.game)) ctx.print(`  ${pad(item.id, 14)} ${pad(item.name, 38)} ${pad(item.rarity, 10)} condition ${item.condition}% ${item.owned ? 'OWNED' : fmtMoney(Math.round(item.base * item.condition / 100 * (1 + item.demand / 200)))}`, item.owned ? 'ok' : 'dim');
-  ctx.dim('collect buy <id> | collect sell <id>');
-};
-
-COMMANDS.session = (ctx) => {
-  const n = clamp(Number(ctx.args[0]) || 2, 1, 4);
-  const kind = n === 1 ? 'terminal' : `terminal${n}`;
-  ctx.app.openWindow?.(kind);
-  ctx.ok(`Opened terminal session ${n}. Filesystem state is shared; history is per session.`);
-};
-COMMANDS.term = COMMANDS.session;
-
-COMMANDS.settings = (ctx) => {
-  const s = ctx.game.settings || (ctx.game.settings = {});
-  const key = ctx.args[0];
-  if (!key) {
-    ctx.head('SYSTEM SETTINGS');
-    ctx.print(`  fontSize       ${s.fontSize || 10}px`);
-    ctx.print(`  reducedMotion  ${s.reducedMotion ? 'on' : 'off'}`);
-    ctx.print(`  sound          ${s.sound ? 'on' : 'off'}`);
-    ctx.print(`  compact        ${s.compact ? 'on' : 'off'}`);
-    ctx.dim('settings <key> <on|off|number>');
-    return;
-  }
-  if (!['fontSize','reducedMotion','sound','compact'].includes(key)) { ctx.err(`settings: unknown key '${key}'`); return; }
-  const value = ctx.args[1];
-  if (value == null) { ctx.print(`${key} = ${s[key]}`); return; }
-  if (key === 'fontSize') s[key] = clamp(Number(value) || 10, 7, 18);
-  else s[key] = /^(on|true|1|yes)$/i.test(value);
-  ctx.ok(`${key} = ${s[key]}`);
-  ctx.app.refreshUI?.();
-};
 
 COMMANDS.save = (ctx) => {
   if (typeof ctx.app.saveGame === 'function') {
