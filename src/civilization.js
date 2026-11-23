@@ -11,13 +11,13 @@ export const CIV_VERSION = 1;
 export const DAY = 1440;
 export const YEAR = 365 * DAY;
 
-const CAPS = Object.freeze({
+export const CAPS = Object.freeze({
   laws: 150, courts: 60, regulators: 60, disputes: 80, projects: 36,
   discoveries: 160, media: 140, outlets: 48, listings: 72, owned: 120,
   factories: 60, warehouses: 60, shipments: 48, tech: 110, games: 80,
   music: 80, communities: 80, esports: 40, cultureEvents: 60, events: 220,
   timeline: 280, ledger: 400, identities: 480, outages: 40, policies: 60,
-  treaties: 80, sanctions: 60, content: 180
+  treaties: 80, sanctions: 60, content: 180, jobs: 80, applications: 24
 });
 
 const REGION_LABEL = {
@@ -209,6 +209,32 @@ const EDU_FIELDS = [
   { id: 'economics', name: 'Economics', research: 'cs', cert: 'Policy Economist', cost: 170, difficulty: 3, blurb: 'Incentives, trade, public finance, and the structure of markets.' },
   { id: 'hardware', name: 'Hardware engineering', research: 'semiconductors', cert: 'Hardware Engineer', cost: 210, difficulty: 4, blurb: 'Circuits, fabrication constraints, thermal design, and supply reality.' },
   { id: 'biotech', name: 'Biotechnology', research: 'biotech', cert: 'Computational Biologist', cost: 230, difficulty: 4, blurb: 'Biological data, laboratory practice, ethics, and reproducible experiments.' }
+];
+
+/* Career ladders for the global job market. Fields reference EDU_FIELDS ids. */
+const CAREER_ROLES = [
+  { id: 'developer', title: 'Software Developer', field: 'programming', sectors: ['software', 'cloud', 'data', 'commerce', 'design'], salary: [72000, 185000], remote: true },
+  { id: 'network-engineer', title: 'Network Engineer', field: 'networks', sectors: ['telecoms', 'infrastructure', 'cloud', 'hosting'], salary: [65000, 158000], remote: false },
+  { id: 'sysadmin', title: 'Systems Administrator', field: 'networks', sectors: ['cloud', 'hosting', 'consulting', 'data'], salary: [58000, 132000], remote: true },
+  { id: 'cloud-architect', title: 'Cloud Architect', field: 'networks', sectors: ['cloud', 'hosting', 'software', 'finance'], salary: [106000, 224000], remote: true },
+  { id: 'ai-engineer', title: 'AI Engineer', field: 'ai', sectors: ['ai', 'software', 'data', 'research'], salary: [96000, 245000], remote: true },
+  { id: 'security-analyst', title: 'Security Analyst', field: 'cybersecurity', sectors: ['security', 'finance', 'consulting', 'cloud'], salary: [70000, 168000], remote: true },
+  { id: 'research-scientist', title: 'Research Scientist', field: 'mathematics', sectors: ['research', 'biotech', 'manufacturing', 'ai'], salary: [82000, 196000], remote: false },
+  { id: 'it-technician', title: 'IT Technician', field: 'networks', sectors: ['consulting', 'commerce', 'media', 'services'], salary: [42000, 91000], remote: false },
+  { id: 'consultant', title: 'Technical Consultant', field: 'operations', sectors: ['consulting', 'finance', 'software'], salary: [76000, 182000], remote: true },
+  { id: 'marketer', title: 'Digital Marketer', field: 'media', sectors: ['media', 'commerce', 'software', 'design'], salary: [55000, 132000], remote: true },
+  { id: 'data-analyst', title: 'Data Analyst', field: 'mathematics', sectors: ['data', 'finance', 'commerce', 'consulting'], salary: [65000, 148000], remote: true },
+  { id: 'journalist', title: 'Journalist', field: 'media', sectors: ['media', 'services'], salary: [48000, 112000], remote: true },
+  { id: 'creator', title: 'Content Creator', field: 'media', sectors: ['media', 'design', 'commerce'], salary: [30000, 162000], remote: true },
+  { id: 'hardware-engineer', title: 'Hardware Engineer', field: 'hardware', sectors: ['manufacturing', 'semiconductors', 'robotics'], salary: [78000, 178000], remote: false },
+  { id: 'designer', title: 'Product Designer', field: 'design', sectors: ['design', 'software', 'media', 'commerce'], salary: [68000, 156000], remote: true },
+  { id: 'compliance-analyst', title: 'Compliance Analyst', field: 'law', sectors: ['consulting', 'finance', 'cloud', 'services'], salary: [62000, 142000], remote: true }
+];
+const JOB_LEVELS = [
+  { id: 'junior', name: 'Junior', professional: 12, knowledge: 8, multiplier: .78, years: 0 },
+  { id: 'mid', name: 'Mid-level', professional: 38, knowledge: 24, multiplier: 1, years: 2 },
+  { id: 'senior', name: 'Senior', professional: 62, knowledge: 42, multiplier: 1.28, years: 5 },
+  { id: 'lead', name: 'Lead', professional: 80, knowledge: 58, multiplier: 1.52, years: 9 }
 ];
 
 const RESEARCH_FIELDS = [
@@ -452,6 +478,7 @@ function makeCountry(def, rng) {
     parties: def.parties.slice(), rulingParty: def.parties[0],
     economy: {
       gdp: def.gdp, growth: def.growth, inflation: def.inflation, unemployment: def.unemployment,
+      baseGrowth: def.growth, baseInflation: def.inflation, baseUnemployment: def.unemployment,
       debt: def.debt, reserves: Math.round(def.gdp * rng.float(.04, .12)),
       tax: { ...def.tax }, budget: Math.round(def.gdp * rng.float(.18, .28)),
       tradeBalance: Math.round(def.gdp * rng.float(-.04, .05)), productivity: rng.int(45, 88)
@@ -460,6 +487,7 @@ function makeCountry(def, rng) {
     tax: { ...def.tax }, sectors: def.sectors.slice(),
     universities: def.universities.slice(), telecoms: def.telecoms.slice(), banks: def.banks.slice(),
     cyberPolicy: def.cyberPolicy, stability, approval: def.approval + rng.int(-3, 3),
+    baseStability: stability, baseApproval: def.approval,
     unrest: clamp(100 - stability + rng.int(-8, 8), 0, 100),
     costIndex: def.costIndex,
     institutions: [], relations: {}, nextElection: 0,
@@ -719,7 +747,14 @@ function makeSupply(civ, rng) {
   }
   const components = {};
   for (const [id, name, costShare, inputs] of SUPPLY_COMPONENTS) {
-    components[id] = { id, name, costShare, inputs, price: 0, availability: rng.int(48, 96), demand: rng.int(38, 92), stock: Math.round(rng.int(200, 4000)) };
+    const inputCost = inputs.reduce((sum, key) => sum + (materials[key]?.base || 0), 0);
+    const basePrice = Math.max(1, Math.round(inputCost * costShare * 4 + 12));
+    const scarcity = rng.float(1, 1.25);
+    components[id] = {
+      id, name, costShare, inputs, basePrice,
+      price: Math.max(1, Math.round(basePrice * scarcity)),
+      availability: rng.int(48, 96), demand: rng.int(38, 92), stock: Math.round(rng.int(200, 4000))
+    };
   }
   const factories = rng.picks(civ._companies, 10).map(co => ({
     id: nextId(civ, 'factory'), companyId: co.id, companyName: co.name,
@@ -829,7 +864,7 @@ export function buildCivilization(game, rng = null) {
   const civ = {
     version: CIV_VERSION, builtWorld: game.worldMinutes, seq: {},
     countries: [], cities: [], institutions: [], laws: [], courts: [], regulators: [],
-    disputes: [], compliance: [], policies: [],
+    disputes: [], compliance: [], policies: [], jobs: [], applications: [],
     relations: { treaties: [], sanctions: [], negotiations: [], blocs: [] },
     education: { institutions: [], courses: [], certifications: [], enrollments: [], player: { knowledge: {}, credentials: [], studyHours: 0, enrolled: null } },
     research: { fields: RESEARCH_FIELDS.map(f => ({ id: f.id, name: f.name, code: f.code, level: 1, progress: rng.int(0, 40), funding: rng.int(100000, 4000000), discoveries: [] })), labs: [], projects: [], discoveries: [] },
@@ -996,7 +1031,11 @@ export function buildCivilization(game, rng = null) {
   civ.player = {
     id: 'player', kind: 'player', handle: game.player.handle, name: game.player.name,
     countryId: 'novaria', cityId: 'meridian',
-    professional: { score: 12, title: 'unproven', employerId: null, endorsements: 0, employmentHistory: [], verified: false },
+    professional: {
+      score: 12, title: 'unproven', role: null, employerId: null, employerName: null,
+      salary: 0, sinceWorld: null, lastPayWorld: null, performance: 60,
+      endorsements: 0, employmentHistory: [], verified: false
+    },
     social: { score: clamp(game.player.reputation, 0, 100), followers: 0, controversy: 0, communities: ['nullnet'] },
     security: { score: 45, incidents: 0, credentials: [] },
     financial: { score: 35, credit: 620, assets: Math.max(0, game.player.money) },
@@ -1058,9 +1097,22 @@ export function ensureCivilization(game) {
   assignCompanyJurisdictions(civ, game, makeRng((game.seed ^ 0x6d21) >>> 0));
   const defaults = {
     countries: [], cities: [], institutions: [], laws: [], courts: [], regulators: [], disputes: [], compliance: [], policies: [],
-    identities: [], events: [], timeline: []
+    identities: [], events: [], timeline: [], jobs: [], applications: []
   };
   for (const [key, value] of Object.entries(defaults)) if (!Array.isArray(civ[key])) civ[key] = value;
+
+  // Versioned compatibility: restore macro baselines and supply baselines
+  // without touching values already recorded by a live world.
+  for (const country of civ.countries) {
+    const def = COUNTRY_DEFS.find(d => d.id === country.id);
+    if (!country.economy) country.economy = {};
+    const e = country.economy;
+    if (typeof e.baseGrowth !== 'number') e.baseGrowth = def?.growth ?? (typeof e.growth === 'number' ? e.growth : 2);
+    if (typeof e.baseInflation !== 'number') e.baseInflation = def?.inflation ?? (typeof e.inflation === 'number' ? e.inflation : 2.5);
+    if (typeof e.baseUnemployment !== 'number') e.baseUnemployment = def?.unemployment ?? (typeof e.unemployment === 'number' ? e.unemployment : 5);
+    if (typeof country.baseStability !== 'number') country.baseStability = def?.stability ?? (typeof country.stability === 'number' ? country.stability : 60);
+    if (typeof country.baseApproval !== 'number') country.baseApproval = def?.approval ?? 50;
+  }
   civ.relations = civ.relations || { treaties: [], sanctions: [], negotiations: [], blocs: [] };
   for (const key of ['treaties', 'sanctions', 'negotiations', 'blocs']) if (!Array.isArray(civ.relations[key])) civ.relations[key] = [];
   civ.education = civ.education || { institutions: [], courses: [], certifications: [], enrollments: [], player: { knowledge: {}, credentials: [], studyHours: 0, enrolled: null } };
@@ -1080,13 +1132,41 @@ export function ensureCivilization(game) {
   civ.property.listings = civ.property.listings || [];
   civ.property.owned = civ.property.owned || [];
   civ.supply = civ.supply || { materials: {}, components: {}, factories: [], warehouses: [], shipments: [], hardwareIndex: 100, energyIndex: 100, lastProductionWorld: game.worldMinutes };
+  civ.supply.materials = civ.supply.materials || {};
+  civ.supply.components = civ.supply.components || {};
+  for (const [id, name, unit, base] of SUPPLY_MATERIALS) {
+    if (!civ.supply.materials[id]) civ.supply.materials[id] = { id, name, unit, base, price: base, availability: 60, demand: 55, stock: 500 };
+    else if (typeof civ.supply.materials[id].base !== 'number') civ.supply.materials[id].base = base;
+  }
+  for (const [id, name, costShare, inputs] of SUPPLY_COMPONENTS) {
+    if (!civ.supply.components[id]) {
+      const inputCost = inputs.reduce((sum, key) => sum + (civ.supply.materials[key]?.base || 0), 0);
+      const basePrice = Math.max(1, Math.round(inputCost * costShare * 4 + 12));
+      civ.supply.components[id] = { id, name, costShare, inputs, basePrice, price: basePrice, availability: 60, demand: 55, stock: 500 };
+    } else if (typeof civ.supply.components[id].basePrice !== 'number') {
+      const inputCost = inputs.reduce((sum, key) => sum + (civ.supply.materials[key]?.base || 0), 0);
+      civ.supply.components[id].basePrice = Math.max(1, Math.round(inputCost * costShare * 4 + 12));
+    }
+  }
+  // Older builds stored an absolute component cost here. Normalize it to a
+  // 100-based index so purchase prices and event thresholds behave correctly.
+  if (typeof civ.supply.hardwareIndex !== 'number' || civ.supply.hardwareIndex > 1000) {
+    const comps = Object.values(civ.supply.components);
+    civ.supply.hardwareIndex = comps.length
+      ? Math.round(comps.reduce((sum, c) => sum + c.price / Math.max(1, c.basePrice || 1) * 100, 0) / comps.length)
+      : 100;
+  }
   civ.tech = civ.tech || { technologies: [], standards: [], lastReleaseWorld: game.worldMinutes };
   civ.tech.technologies = civ.tech.technologies || [];
   civ.culture = civ.culture || { organizations: [], games: [], music: [], communities: [], esports: [], events: [] };
   for (const key of ['organizations', 'games', 'music', 'communities', 'esports', 'events']) if (!Array.isArray(civ.culture[key])) civ.culture[key] = [];
   civ.player = civ.player || {
     id: 'player', kind: 'player', handle: game.player.handle, name: game.player.name, countryId: 'novaria', cityId: 'meridian',
-    professional: { score: 12, title: 'unproven', employerId: null, endorsements: 0, employmentHistory: [], verified: false },
+    professional: {
+      score: 12, title: 'unproven', role: null, employerId: null, employerName: null,
+      salary: 0, sinceWorld: null, lastPayWorld: null, performance: 60,
+      endorsements: 0, employmentHistory: [], verified: false
+    },
     social: { score: 0, followers: 0, controversy: 0, communities: ['nullnet'] },
     security: { score: 45, incidents: 0, credentials: [] }, financial: { score: 35, credit: 620, assets: 0 },
     academic: { score: 8, publications: 0, citations: 0, field: null }, credentials: [], published: [], compliance: 82, updatedWorld: game.worldMinutes
@@ -1094,10 +1174,22 @@ export function ensureCivilization(game) {
   civ.player.compliance = typeof civ.player.compliance === 'number' ? civ.player.compliance : 82;
   civ.player.credentials = civ.player.credentials || [];
   civ.player.published = civ.player.published || [];
+  civ.player.professional = civ.player.professional || { score: 12, title: 'unproven', endorsements: 0, employmentHistory: [], verified: false };
+  const profDefaults = { score: 12, title: 'unproven', role: null, employerId: null, employerName: null, salary: 0, sinceWorld: null, lastPayWorld: null, performance: 60, endorsements: 0, employmentHistory: [], verified: false };
+  for (const [key, value] of Object.entries(profDefaults)) {
+    if (key === 'employmentHistory') { if (!Array.isArray(civ.player.professional[key])) civ.player.professional[key] = []; }
+    else if (civ.player.professional[key] == null) civ.player.professional[key] = value;
+  }
   civ.cadence = civ.cadence || {};
-  for (const key of ['continuous', 'politics', 'economy', 'supply', 'media', 'research', 'events', 'history', 'property', 'education', 'infrastructure']) if (typeof civ.cadence[key] !== 'number') civ.cadence[key] = Math.floor((game.worldMinutes || 0) / (key === 'continuous' ? 30 : key === 'media' || key === 'research' ? 360 : DAY));
+  const cadenceIntervals = {
+    continuous: 30, politics: DAY, economy: DAY, supply: DAY, media: 360, research: 360,
+    events: DAY * 3, history: YEAR, property: DAY, education: 720, infrastructure: 180, jobs: 360
+  };
+  for (const [key, interval] of Object.entries(cadenceIntervals)) {
+    if (typeof civ.cadence[key] !== 'number') civ.cadence[key] = Math.floor((game.worldMinutes || 0) / interval);
+  }
   civ.seq = civ.seq || {};
-  for (const key of ['law', 'inst', 'course', 'disc', 'proj', 'lab', 'outlet', 'content', 'grid', 'fiber', 'dc', 'logi', 'prop', 'factory', 'warehouse', 'ship', 'tech', 'culture', 'game', 'music', 'comm', 'esport', 'cevent', 'event', 'hist', 'policy', 'treaty', 'dispute', 'ledger', 'player']) if (typeof civ.seq[key] !== 'number') civ.seq[key] = 1;
+  for (const key of ['law', 'inst', 'course', 'disc', 'proj', 'lab', 'outlet', 'content', 'grid', 'fiber', 'dc', 'logi', 'prop', 'factory', 'warehouse', 'ship', 'tech', 'culture', 'game', 'music', 'comm', 'esport', 'cevent', 'event', 'hist', 'policy', 'treaty', 'dispute', 'ledger', 'player', 'job', 'app']) if (typeof civ.seq[key] !== 'number') civ.seq[key] = 1;
   const knownIdentities = new Set(civ.identities.map(i => i.id));
   for (const npc of game.npcs || []) {
     if (knownIdentities.has(npc.id)) continue;
@@ -1162,6 +1254,8 @@ function trimCiv(civ) {
   bounded(civ.culture.communities, CAPS.communities);
   bounded(civ.culture.esports, CAPS.esports);
   bounded(civ.culture.events, CAPS.cultureEvents);
+  bounded(civ.jobs, CAPS.jobs);
+  bounded(civ.applications, CAPS.applications);
   bounded(civ.events, CAPS.events);
   bounded(civ.timeline, CAPS.timeline);
   bounded(civ.multiplayer.ledger, CAPS.ledger);
@@ -1195,23 +1289,40 @@ function activeEffects(civ, key) {
 function advanceContinuous(game, civ, minutes, rng, events) {
   const hours = minutes / 60;
   const years = hours / (24 * 365);
-  const growthShock = activeEffects(civ, 'growth');
+  const growthShock = clamp(activeEffects(civ, 'growth'), -1.6, 1.4);
+  const employmentShock = clamp(activeEffects(civ, 'unemployment'), -1.5, 2.5);
   const riskShock = activeEffects(civ, 'cyberRisk');
   const energyShock = activeEffects(civ, 'energy');
+  // Shocks are temporary pressure, not permanent edits. Each macro variable
+  // relaxes toward a jurisdiction baseline so multi-year worlds stay playable.
+  const relaxMacro = Math.min(1, hours / (24 * 180));
+  const relaxSocial = Math.min(1, hours / (24 * 120));
+  const relaxUnrest = Math.min(1, hours / (24 * 60));
 
   for (const country of civ.countries) {
     const e = country.economy;
-    const cycle = (rng.next() - .5) * .18 + growthShock * .01;
-    e.growth = clamp(e.growth + cycle * Math.min(1, hours / 24), -5, 9);
-    e.inflation = clamp(e.inflation + (rng.next() - .5) * .08 * Math.min(3, hours / 24), -1, 18);
-    e.unemployment = clamp(e.unemployment + (rng.next() - .5) * .04 * Math.min(3, hours / 24), 1.2, 24);
+    const cycle = (rng.next() - .5) * .12;
+    const targetGrowth = (e.baseGrowth ?? 2) + growthShock * .55;
+    e.growth = clamp(e.growth + cycle * Math.min(1, hours / 24) + (targetGrowth - e.growth) * relaxMacro, -5, 9);
+    e.inflation = clamp(e.inflation + (rng.next() - .5) * .08 * Math.min(3, hours / 24) + ((e.baseInflation ?? 2.5) - e.inflation) * relaxMacro * .5, -1, 18);
+    const targetUnemployment = (e.baseUnemployment ?? 5) + employmentShock;
+    e.unemployment = clamp(e.unemployment + (rng.next() - .5) * .04 * Math.min(3, hours / 24) + (targetUnemployment - e.unemployment) * relaxMacro, 1.2, 24);
     e.gdp = Math.max(1e9, e.gdp * (1 + e.growth / 100 * years));
     country.population = Math.max(100000, Math.round(country.population * (1 + e.growth / 500 * years)));
     e.debt = clamp(e.debt + (rng.next() - .45) * .12 * Math.min(2, hours / 24), 8, 260);
     e.reserves = Math.max(0, e.reserves + e.gdp * (e.growth / 100) * years * .04);
-    country.stability = clamp(country.stability + (rng.next() - .5) * .16 * Math.min(2, hours / 24) - country.unrest * .0006 * hours / 24, 10, 98);
-    country.unrest = clamp(country.unrest + (100 - country.stability) * .0008 * hours / 24 - e.growth * .002 * hours / 24, 0, 100);
-    country.approval = clamp(country.approval + (e.growth - e.inflation - e.unemployment * .5) * .006 * Math.min(4, hours / 24) + (rng.next() - .5) * .08, 5, 96);
+    country.stability = clamp(
+      country.stability + (rng.next() - .5) * .16 * Math.min(2, hours / 24) - country.unrest * .0006 * hours / 24 +
+      ((country.baseStability ?? 60) - country.stability) * relaxSocial, 10, 98
+    );
+    country.unrest = clamp(
+      country.unrest + (100 - country.stability) * .0008 * hours / 24 - e.growth * .002 * hours / 24 +
+      (clamp(100 - country.approval, 0, 100) * .38 - country.unrest) * relaxUnrest, 0, 100
+    );
+    country.approval = clamp(
+      country.approval + (e.growth - e.inflation - e.unemployment * .5) * .006 * Math.min(4, hours / 24) + (rng.next() - .5) * .08 +
+      ((country.baseApproval ?? 50) - country.approval) * relaxSocial * .6, 5, 96
+    );
     country.internetFreedom = clamp(100 - country.internet.censorship * 1.25 + country.regulation.privacy * .22 - riskShock * .3, 0, 100);
     country.internet.penetration = clamp(country.internet.penetration + (rng.next() - .35) * .02 * Math.min(2, hours / 24), 8, 99.5);
     country.internet.speed = Math.max(8, country.internet.speed * (1 + (rng.next() - .48) * .0007 * Math.min(3, hours / 24)));
@@ -1276,19 +1387,28 @@ function advanceContinuous(game, civ, minutes, rng, events) {
   property.rentIndex = clamp(property.rentIndex + (rng.next() - .5) * .05 * Math.min(4, hours / 12), 45, 230);
   property.vacancy = clamp(property.vacancy + (rng.next() - .5) * .02, 1, 28);
 
+  const relaxSupply = Math.min(1, hours / (24 * 150));
   for (const material of Object.values(civ.supply.materials)) {
-    material.availability = clamp(material.availability + (rng.next() - .48) * .08 * Math.min(4, hours / 12), 3, 100);
-    material.demand = clamp(material.demand + (rng.next() - .5) * .06, 1, 100);
-    material.price = Math.max(1, material.price + (material.base - material.price) * .002 * Math.min(4, hours / 12) + (material.demand - material.availability) * material.base * .00008);
+    material.availability = clamp(material.availability + (rng.next() - .48) * .08 * Math.min(4, hours / 12) + (68 - material.availability) * relaxSupply, 3, 100);
+    material.demand = clamp(material.demand + (rng.next() - .5) * .06 + (60 - material.demand) * relaxSupply * .6, 1, 100);
+    material.price = clamp(
+      material.price + (material.base - material.price) * .002 * Math.min(4, hours / 12) + (material.demand - material.availability) * material.base * .00008,
+      material.base * .45, material.base * 3.4
+    );
   }
   for (const component of Object.values(civ.supply.components)) {
-    component.availability = clamp(component.availability + (rng.next() - .47) * .07 * Math.min(4, hours / 12), 2, 100);
-    component.demand = clamp(component.demand + (rng.next() - .5) * .05, 1, 100);
+    component.availability = clamp(component.availability + (rng.next() - .47) * .07 * Math.min(4, hours / 12) + (70 - component.availability) * relaxSupply, 2, 100);
+    component.demand = clamp(component.demand + (rng.next() - .5) * .05 + (62 - component.demand) * relaxSupply * .5, 1, 100);
     const inputCost = (component.inputs || []).reduce((sum, id) => sum + (civ.supply.materials[id]?.price || 0), 0);
-    const scarcity = 1 + (100 - component.availability) / 100 * .9;
+    const scarcity = 1 + (100 - component.availability) / 100 * .55;
+    const basePrice = component.basePrice || Math.max(1, Math.round(inputCost * component.costShare * 4 + 12));
     component.price = Math.max(1, Math.round((inputCost * component.costShare * 4 + 12) * scarcity));
+    component.price = clamp(component.price, Math.round(basePrice * .55), Math.round(basePrice * 2.2));
   }
-  civ.supply.hardwareIndex = Math.round(Object.values(civ.supply.components).reduce((s, c) => s + c.price, 0) / 9);
+  const comps = Object.values(civ.supply.components);
+  civ.supply.hardwareIndex = comps.length
+    ? Math.round(comps.reduce((sum, c) => sum + c.price / Math.max(1, c.basePrice || 1) * 100, 0) / comps.length)
+    : 100;
   civ.supply.energyIndex = Math.round((civ.supply.materials.energy?.price || 88) / 88 * 100);
 
   for (const tech of civ.tech.technologies) {
@@ -1324,9 +1444,13 @@ function dailyEconomy(game, civ, rng, events) {
     const taxRevenue = e.gdp * (e.tax.corp + e.tax.income + e.tax.vat) / 100 * .21 / 365;
     e.budget = Math.max(0, e.budget + taxRevenue * .82 - e.gdp * .00022);
     e.debt = clamp(e.debt + (e.budget < e.gdp * .02 ? .004 : -.002), 5, 280);
-    country.approval = clamp(country.approval + (e.growth - e.inflation) * .04 - (e.unemployment - 5) * .025 + (rng.next() - .5) * .4, 2, 97);
-    country.stability = clamp(country.stability + (country.approval - 50) * .008 - country.unrest * .004 + (rng.next() - .5) * .3, 10, 98);
-    country.unrest = clamp(country.unrest + (45 - country.approval) * .012 + (100 - country.stability) * .006 - e.growth * .02, 0, 100);
+    country.approval = clamp(country.approval + (e.growth - e.inflation) * .03 - (e.unemployment - 5) * .02 + (50 - country.approval) * .002 + (rng.next() - .5) * .3, 2, 97);
+    country.stability = clamp(country.stability + (country.approval - 50) * .004 - clamp(country.unrest - 50, 0, 100) * .003 + (rng.next() - .5) * .15, 10, 98);
+    country.unrest = clamp(
+      country.unrest + clamp(45 - country.approval, 0, 100) * .006 + clamp(70 - country.stability, 0, 100) * .0015 -
+      Math.max(0, e.growth - .5) * .015 + (clamp(100 - country.approval, 0, 100) * .35 - country.unrest) * .01,
+      0, 100
+    );
     country.internetFreedom = clamp(100 - country.internet.censorship * 1.25 + country.regulation.privacy * .22, 0, 100);
   }
 
@@ -1381,6 +1505,45 @@ function dailyEconomy(game, civ, rng, events) {
         pushMail(game, 'notice', 'Regulatory compliance notice', `A ${country.name} review found unresolved issues with ${issue}.\n\nFine: ${fmtMoney(fine)}\nAuthority: ${country.name} ${LAW_DOMAINS.find(d => d.id === 'data')?.regulator || 'Data Governance Office'}\n\nThis notice is recorded in your compliance history. Corrective evidence may reduce future penalties.`);
         emit(events, 'feed', `Compliance fine in ${country.name}: ${fmtMoney(fine)} (${issue}).`, { kind: 'bad' });
         recordTimeline(civ, 'law', `Compliance action against operator in ${country.name}`, `A regulator resolved a ${issue} case with a ${fmtMoney(fine)} penalty.`, { countryId: country.id, major: false });
+      }
+    }
+  }
+
+  // Employment payroll: salary is paid monthly in world time, after income tax.
+  const prof = civ.player.professional;
+  if (prof && prof.employerId) {
+    const employer = companies.find(c => c.id === prof.employerId);
+    if (!employer || employer.status === 'failed' || employer.status === 'bankrupt') {
+      const former = prof.employerName || 'your employer';
+      prof.employmentHistory = prof.employmentHistory || [];
+      prof.employmentHistory.push({ companyId: prof.employerId, employerName: former, role: prof.role, salary: prof.salary, sinceWorld: prof.sinceWorld, untilWorld: civ.worldMinutes, reason: 'company closed' });
+      bounded(prof.employmentHistory, 20);
+      prof.employerId = null; prof.employerName = null; prof.role = null; prof.salary = 0; prof.sinceWorld = null; prof.lastPayWorld = null;
+      pushMail(game, 'careers', 'Your employer has closed', `${former} is no longer operating. Your employment record has been updated and you are available for new roles.\n\nUse "civ jobs" to review the market.`);
+      emit(events, 'feed', `${former} closed; you are no longer employed there.`, { kind: 'warn' });
+      recordTimeline(civ, 'labor', `${game.player.handle} leaves ${former}`, 'The employer ceased operations. The separation is recorded in the public employment history.', { actors: ['player'], major: false });
+    } else if (civ.worldMinutes - (typeof prof.lastPayWorld === 'number' ? prof.lastPayWorld : civ.worldMinutes) >= 30 * DAY) {
+      const gross = Math.max(0, Math.round((prof.salary || 0) / 12));
+      const taxRate = clamp((playerCountry.tax.income || 0) / 100, 0, .6);
+      const net = Math.max(0, Math.round(gross * (1 - taxRate)));
+      let paid = net;
+      if ((employer.funds || 0) < gross) {
+        paid = Math.max(0, Math.round(employer.funds || 0));
+        employer.funds = 0;
+      } else employer.funds -= gross;
+      if (paid > 0) {
+        game.player.money += paid;
+        game.stats.earned += paid;
+        game.player.transactions.unshift({ time: Date.now(), amount: paid, memo: `${prof.role || 'salary'} · ${employer.name} (net)`, balance: game.player.money });
+        if (game.player.transactions.length > 120) game.player.transactions.length = 120;
+        playerCountry.economy.budget += Math.round((gross - net) * (paid / Math.max(1, net)));
+      }
+      prof.lastPayWorld = civ.worldMinutes;
+      prof.performance = clamp((prof.performance || 60) + (paid < net ? -5 : .6), 0, 100);
+      civ.player.professional.score = clamp(civ.player.professional.score + (paid < net ? -.4 : .15), 0, 100);
+      if (paid < net) {
+        emit(events, 'feed', `${employer.name} missed part of payroll.`, { kind: 'warn' });
+        pushMail(game, employer.name, 'Payroll shortfall', `Only ${fmtMoney(paid)} of ${fmtMoney(net)} could be paid this cycle. The company cites cash-flow pressure.\n\nRepeated shortfalls are recorded in your employment history.`);
       }
     }
   }
@@ -1493,7 +1656,7 @@ function dailySupply(game, civ, rng, events) {
     factory.utilization = clamp(factory.utilization + (effective - factory.utilization) * .05, 5, 100);
     const output = Math.max(0, Math.round(factory.capacity * factory.utilization / 100 * .02));
     component.stock = Math.min(100000, (component.stock || 0) + output);
-    component.availability = clamp(component.availability + output / 260 - component.demand / 180, 2, 100);
+    component.availability = clamp(component.availability + output / 180 - component.demand / 520 + (65 - component.availability) * .01, 2, 100);
     if (rng.chance(.015)) {
       factory.status = rng.chance(.7) ? 'maintenance' : 'operating';
       if (factory.status === 'maintenance') emit(events, 'feed', `${factory.companyName} pauses ${factory.output} production for maintenance.`, { kind: 'warn' });
@@ -1575,8 +1738,64 @@ function mediaCadence(game, civ, rng, events) {
     trend.sentiment = clamp(trend.sentiment + rng.int(-2, 2), -100, 100);
     trend.updatedWorld = civ.worldMinutes;
   }
+  if (civ.media.trends.length < 10 && rng.chance(.08)) {
+    const topic = rng.pick(['infrastructure costs', 'AI regulation', 'privacy', 'semiconductor supply', 'remote work',
+      'platform accountability', 'open source', 'gaming', 'digital identity', 'energy prices',
+      'robotics', 'satellite internet', 'local news', 'creator economy', 'post-quantum migration']);
+    if (!civ.media.trends.some(t => t.topic === topic)) {
+      civ.media.trends.push({ topic, volume: rng.int(18, 55), sentiment: rng.int(-35, 45), updatedWorld: civ.worldMinutes });
+    }
+  }
   civ.media.trends.sort((a, b) => b.volume - a.volume);
+  bounded(civ.media.trends, 10);
   bounded(civ.media.content, CAPS.content);
+
+  // Communities and creators form independently of the player.
+  if (civ.culture.communities.length < CAPS.communities && rng.chance(.02)) {
+    const topic = rng.pick(['open-source', 'privacy', 'gaming', 'local news', 'digital labor', 'retro computing',
+      'hardware modding', 'security research', 'distributed systems', 'digital art', 'civic technology', 'independent music']);
+    const country = rng.pick(civ.countries);
+    civ.culture.communities.push({
+      id: nextId(civ, 'comm'), name: `${topic.replace(/\b\w/g, c => c.toUpperCase())} Circle`,
+      topic, members: rng.int(120, 42000), trust: rng.int(28, 82), countryId: country.id,
+      status: 'active', foundedWorld: civ.worldMinutes
+    });
+    if (rng.chance(.25)) emit(events, 'feed', `A new ${topic} community opened in ${country.name}.`, { kind: 'info' });
+  }
+  for (const community of civ.culture.communities) {
+    community.members = Math.max(20, Math.round(community.members * (1 + (rng.next() - .495) * .004)));
+    community.trust = clamp(community.trust + (rng.next() - .5) * .04, 5, 98);
+  }
+  if (civ.culture.organizations.length < 32 && rng.chance(.012)) {
+    const country = rng.pick(civ.countries);
+    const org = makeCulture(civ, [
+      `${rng.pick(['Quiet', 'Signal', 'Harbor', 'Static', 'Open', 'Cinder', 'Atlas', 'Low'])} ${rng.pick(['Studio', 'Audio', 'Games', 'Media', 'Collective', 'Works'])}`,
+      rng.pick(['independent', 'studio', 'influencer', 'label']), country.id, rng.pick(civ.cities.filter(c => c.countryId === country.id) || civ.cities).name,
+      'A new independent creator organization building an audience from the network outward.'
+    ], rng);
+    civ.culture.organizations.push(org);
+    if (rng.chance(.2)) emit(events, 'feed', `${org.name} launched in ${country.name}.`, { kind: 'info' });
+  }
+  if (civ.culture.games.length < CAPS.games && rng.chance(.015) && civ.culture.organizations.length) {
+    const org = rng.pick(civ.culture.organizations);
+    const country = civ.countries.find(c => c.id === org.countryId);
+    civ.culture.games.push({
+      id: nextId(civ, 'game'), title: `${rng.pick(['Null', 'Signal', 'Harbor', 'Static', 'Open', 'Quiet', 'Cinder', 'Atlas'])} ${rng.pick(['Drift', 'Circuit', 'Garden', 'Protocol', 'Season', 'Machine', 'Shore', 'Archive'])}`,
+      studioId: org.id, genre: rng.pick(['simulation', 'strategy', 'puzzle', 'narrative', 'sandbox', 'racing']),
+      price: rng.int(0, 45), players: rng.int(100, 180000), rating: rng.float(2.4, 4.9),
+      status: 'released', releasedWorld: civ.worldMinutes
+    });
+    recordTimeline(civ, 'culture', `${org.name} releases a new game`, `The ${country?.name || 'independent'} studio shipped into a crowded market. Early reception is mixed but measurable.`, { actors: [org.id], major: false });
+  }
+  if (civ.culture.music.length < CAPS.music && rng.chance(.02)) {
+    const npc = rng.pick(game.npcs || []);
+    const employer = npc?.companyId ? (civ._companies || []).find(c => c.id === npc.companyId) : null;
+    civ.culture.music.push({
+      id: nextId(civ, 'music'), title: rng.pick(['Low Orbit', 'Paper Machines', 'Night Bus', 'Signal Lost', 'Quiet Infrastructure', 'Static Bloom', 'Field Notes', 'Afterimage']),
+      artist: npc?.handle || 'independent', countryId: countryForCompany(civ, employer)?.id || null,
+      streams: rng.int(500, 240000), revenue: rng.int(20, 42000), releasedWorld: civ.worldMinutes
+    });
+  }
 }
 
 /* -------- research completion and new projects -------- */
@@ -1800,6 +2019,113 @@ function educationCadence(game, civ, rng, events) {
   }
 }
 
+/* -------- employment market and careers -------- */
+function makeJobPosting(game, civ, rng) {
+  const employers = (game.companies || []).filter(c => c.status === 'operating' && c.ownerType !== 'player');
+  if (!employers.length) return null;
+  const company = pickWeighted(rng, employers, c => Math.max(500, c.funds || 0));
+  const sector = String(company.sector || '').toLowerCase();
+  const eligible = CAREER_ROLES.filter(role => role.sectors.some(s => sector.includes(s)));
+  const role = rng.pick(eligible.length ? eligible : CAREER_ROLES);
+  const level = pickWeighted(rng, JOB_LEVELS, l => l.id === 'mid' ? 42 : l.id === 'junior' ? 30 : l.id === 'senior' ? 20 : 8);
+  const country = countryForCompany(civ, company) || rng.pick(civ.countries);
+  const countryCities = civ.cities.filter(c => c.countryId === country.id);
+  const city = rng.pick(countryCities.length ? countryCities : civ.cities);
+  const remote = !!role.remote && rng.chance(.45);
+  const salary = Math.max(18000, Math.round(rng.int(role.salary[0], role.salary[1]) * level.multiplier * (country.costIndex * .7 + .3) / 500) * 500);
+  return {
+    id: nextId(civ, 'job'), companyId: company.id, companyName: company.name,
+    title: role.title, roleId: role.id, field: role.field, level: level.id, levelName: level.name,
+    salary, remote, countryId: country.id, cityId: city?.id || null,
+    requirements: {
+      professional: clamp(level.professional + rng.int(-4, 6), 5, 95),
+      knowledge: clamp(level.knowledge + rng.int(-3, 5), 3, 95),
+      years: level.years
+    },
+    status: 'open', postedWorld: civ.worldMinutes, expiresWorld: civ.worldMinutes + rng.int(24, 50) * DAY,
+    applicants: 0, filledBy: null, filledWorld: null,
+    description: `${company.name} is hiring a ${level.name.toLowerCase()} ${role.title.toLowerCase()}${remote ? ' (remote)' : ` in ${city?.name || country.name}`}.`
+  };
+}
+
+export function jobMatch(game, job) {
+  if (!job) return 0;
+  const civ = ensureCivilization(game);
+  const professional = civ.player.professional?.score || 0;
+  const knowledge = civ.education.player.knowledge?.[job.field] || 0;
+  const credential = civ.education.player.credentials?.some(c => c.field === job.field) ? 2 : 0;
+  const reputation = clamp(game.player.reputation || 0, 0, 100);
+  const profRatio = professional / Math.max(1, job.requirements?.professional || 1);
+  const knowRatio = (knowledge + 2) / Math.max(1, job.requirements?.knowledge || 1);
+  return Math.round(clamp((profRatio * .58 + knowRatio * .42) * 50 + reputation * .12 + credential, 0, 100));
+}
+
+function hireNpcForJob(game, civ, job, npc, rng) {
+  job.status = 'filled';
+  job.filledBy = npc.id;
+  job.filledWorld = civ.worldMinutes;
+  const previous = npc.company;
+  npc.companyId = job.companyId;
+  npc.company = job.companyName;
+  npc.role = job.title;
+  npc.activity = 'working';
+  const identity = civ.identities.find(i => i.id === npc.id);
+  if (identity) {
+    const prof = identity.professional || (identity.professional = { score: 40, title: npc.role, employerId: null, endorsements: 0, employmentHistory: [], verified: false });
+    prof.employerId = job.companyId;
+    prof.title = job.title;
+    prof.score = clamp((prof.score || 40) + 2, 0, 100);
+    prof.employmentHistory = prof.employmentHistory || [];
+    prof.employmentHistory.push({ companyId: job.companyId, employerName: job.companyName, role: job.title, salary: job.salary, sinceWorld: civ.worldMinutes });
+    bounded(prof.employmentHistory, 16);
+  }
+  for (const app of civ.applications) {
+    if (app.jobId === job.id && app.status !== 'offered' && app.status !== 'accepted') app.status = 'closed';
+  }
+  if (rng.chance(.22)) {
+    recordTimeline(civ, 'labor', `@${npc.handle} joins ${job.companyName}`, `${npc.handle} moves from ${previous || 'independent work'} into a ${job.levelName.toLowerCase()} ${job.title.toLowerCase()} role.`, { actors: [npc.id, job.companyId], major: false });
+  }
+  emitListForJobs(game, `${job.companyName} hired @${npc.handle} as ${job.title}.`);
+  return true;
+}
+
+function emitListForJobs(game, text) {
+  if (!game.feed) game.feed = [];
+  game.feed.unshift({ id: game.seq?.feed ? game.seq.feed++ : game.feed.length + 1, time: Date.now(), world: game.worldMinutes, text, kind: 'info' });
+  if (game.feed.length > 80) game.feed.length = 80;
+}
+
+function jobsCadence(game, civ, rng, events) {
+  for (const job of civ.jobs) {
+    if (job.status === 'open' && civ.worldMinutes > job.expiresWorld) job.status = 'expired';
+  }
+  const open = civ.jobs.filter(j => j.status === 'open').length;
+  if (open < CAPS.jobs && rng.chance(.7)) {
+    const job = makeJobPosting(game, civ, rng);
+    if (job) {
+      civ.jobs.push(job);
+      if (rng.chance(.08)) emit(events, 'feed', `${job.companyName} posted a ${job.title} role.`, { kind: 'info' });
+    }
+  }
+  for (const job of civ.jobs) {
+    if (job.status !== 'open') continue;
+    if (civ.worldMinutes - job.postedWorld < 3 * DAY) continue;
+    if (!rng.chance(.055)) continue;
+    const candidates = (game.npcs || []).filter(n => !n.key || rng.chance(.12)).filter(n => (n.skill || 40) >= job.requirements.professional - 14);
+    if (!candidates.length) continue;
+    const npc = rng.pick(candidates);
+    if (npc.companyId === job.companyId) {
+      job.status = 'filled';
+      job.filledBy = npc.id;
+      job.filledWorld = civ.worldMinutes;
+      continue;
+    }
+    hireNpcForJob(game, civ, job, npc, rng);
+  }
+  bounded(civ.jobs, CAPS.jobs);
+  bounded(civ.applications, CAPS.applications);
+}
+
 /* -------- physical infrastructure and world effects -------- */
 function infrastructureCadence(game, civ, rng, events) {
   const outageChance = .035;
@@ -1888,14 +2214,14 @@ function resolveWorldEvent(game, civ, event, rng, events) {
     for (const country of civ.countries) country.internet.speed = Math.round(country.internet.speed * 1.02);
     emit(events, 'feed', 'A long-running infrastructure project reaches completion. Regional capacity improves.', { kind: 'good' });
   }
-  if (event.category === 'economy') {
-    for (const country of civ.countries) country.economy.growth = clamp(country.economy.growth + .3, -5, 9);
-  }
   if (event.category === 'supply') {
     for (const component of Object.values(civ.supply.components)) component.availability = clamp(component.availability + 8, 2, 100);
   }
   if (event.category === 'infrastructure') {
-    for (const fiber of civ.infrastructure.fiber) fiber.status = 'nominal';
+    for (const fiber of civ.infrastructure.fiber) {
+      fiber.status = 'nominal';
+      fiber.latency = Math.max(2, fiber.latency * .8);
+    }
   }
   recordTimeline(civ, event.category, `${event.title} — resolved`, event.body, { countryId: event.countryId, actors: event.actors, major: false });
   emit(events, 'feed', `${event.title} has resolved.`, { kind: 'info' });
@@ -1915,15 +2241,13 @@ function spawnWorldEvent(game, civ, rng, kindId, events, opts = {}) {
   };
   switch (archetype.id) {
     case 'recession':
-      for (const c of civ.countries) { c.economy.growth = clamp(c.economy.growth - 1.2, -5, 9); c.economy.unemployment = clamp(c.economy.unemployment + .6, 1, 24); }
-      event.effects = { growth: -.8, market: -.002, unrest: 4 };
+      event.effects = { growth: -.9, unemployment: .8, market: -.002, unrest: 4 };
       break;
     case 'boom':
-      for (const c of civ.countries) c.economy.growth = clamp(c.economy.growth + .8, -5, 9);
-      event.effects = { growth: .5, market: .0015 };
+      event.effects = { growth: .6, unemployment: -.25, market: .0015 };
       break;
     case 'energy-crisis':
-      civ.supply.energyIndex = Math.round(civ.supply.energyIndex * 1.35);
+      if (civ.supply.materials.energy) civ.supply.materials.energy.price = Math.round((civ.supply.materials.energy.price || 88) * 1.35);
       for (const city of civ.cities) city.utilities.power = clamp(city.utilities.power - 8, 8, 99);
       event.effects = { energy: 6, growth: -.2 };
       break;
@@ -2046,7 +2370,7 @@ export function tickCivilization(game, minutes = 1, rng = null) {
   const civ = ensureCivilization(game);
   rng = rng || civRng(game, 0x7f4a);
   const events = [];
-  const elapsed = Math.max(0, Number(minutes) || 0);
+  void minutes;
   civ.worldMinutes = game.worldMinutes;
 
   const continuous = advanceBucket(civ, 'continuous', 30, civ.worldMinutes, 96);
@@ -2072,6 +2396,9 @@ export function tickCivilization(game, minutes = 1, rng = null) {
 
   const education = advanceBucket(civ, 'education', 720, civ.worldMinutes, 10);
   for (let i = 0; i < education; i++) educationCadence(game, civ, rng, events);
+
+  const jobs = advanceBucket(civ, 'jobs', 360, civ.worldMinutes, 10);
+  for (let i = 0; i < jobs; i++) jobsCadence(game, civ, rng, events);
 
   const infra = advanceBucket(civ, 'infrastructure', 180, civ.worldMinutes, 12);
   for (let i = 0; i < infra; i++) infrastructureCadence(game, civ, rng, events);
@@ -2338,6 +2665,174 @@ export function playerAdoptTech(game, techId) {
   return { ok: true, tech, cost };
 }
 
+/* ============================================================
+   EMPLOYMENT: APPLICATIONS, INTERVIEWS, OFFERS AND CAREERS
+   ============================================================ */
+function findOpenJob(civ, query) {
+  const q = String(query || '').trim().toLowerCase();
+  if (!q) return null;
+  return civ.jobs.find(j => j.status === 'open' && (j.id === q || `${j.title} ${j.companyName} ${j.field} ${j.level}`.toLowerCase().includes(q))) || null;
+}
+
+function findApplication(civ, query) {
+  const q = String(query || '').trim().toLowerCase();
+  const active = civ.applications.filter(a => a.status !== 'closed' && a.status !== 'declined');
+  return active.find(a => a.id === q) || active.find(a => a.jobId === q) || active.find(a => {
+    const job = civ.jobs.find(j => j.id === a.jobId);
+    return job && `${job.title} ${job.companyName}`.toLowerCase().includes(q);
+  }) || null;
+}
+
+export function playerApplyJob(game, query) {
+  const civ = ensureCivilization(game);
+  const prof = civ.player.professional;
+  if (prof.employerId) return { ok: false, error: `You already work at ${prof.employerName || 'an employer'}. Quit first: civ quit` };
+  const job = findOpenJob(civ, query);
+  if (!job) return { ok: false, error: 'No open role matches that. Try: civ jobs' };
+  const existing = civ.applications.find(a => a.jobId === job.id);
+  if (existing && ['applied', 'interview', 'offered'].includes(existing.status)) {
+    return { ok: false, error: `You already have an application for ${job.title} (${existing.status}). Interview: civ interview ${job.id}` };
+  }
+  const match = jobMatch(game, job);
+  if (match < 20) {
+    const fieldName = EDU_FIELDS.find(f => f.id === job.field)?.name || job.field;
+    return { ok: false, error: `Your application is not competitive (${match}% match). Study ${fieldName.toLowerCase()} or build professional experience first.` };
+  }
+  const app = existing || { id: nextId(civ, 'app'), jobId: job.id, appliedWorld: civ.worldMinutes };
+  app.status = 'applicants';
+  app.match = match;
+  app.appliedWorld = civ.worldMinutes;
+  app.interviewWorld = null;
+  app.offerSalary = null;
+  if (!existing) civ.applications.push(app);
+  job.applicants = (job.applicants || 0) + 1;
+  emitPlayerFeed(game, `Applied to ${job.title} at ${job.companyName} (${match}% match).`, 'info');
+  return { ok: true, application: app, job, match };
+}
+
+export function playerInterviewJob(game, query) {
+  const civ = ensureCivilization(game);
+  const app = findApplication(civ, query);
+  if (!app) return { ok: false, error: 'No application matches that. Apply first: civ apply <job>' };
+  if (!['applicants', 'applied', 'interview'].includes(app.status)) return { ok: false, error: `That application is already ${app.status}.` };
+  const job = civ.jobs.find(j => j.id === app.jobId);
+  if (!job || job.status !== 'open') {
+    app.status = 'closed';
+    return { ok: false, error: 'That role is no longer open.' };
+  }
+  const rng = makeRng((game.seed ^ hash32(app.id) ^ (game.tickCount * 97) ^ 0x51ab) >>> 0);
+  const fieldCredential = civ.education.player.credentials.some(c => c.field === job.field);
+  const reputation = clamp(game.player.reputation || 0, 0, 100);
+  const chance = clamp(.16 + app.match / 125 + reputation / 600 + (fieldCredential ? .06 : 0), .05, .94);
+  app.interviewWorld = civ.worldMinutes;
+  if (!rng.chance(chance)) {
+    app.status = 'rejected';
+    game.player.reputation = clamp((game.player.reputation || 0) - 0.2, 0, 100);
+    emitPlayerFeed(game, `${job.companyName} passed on your ${job.title} application.`, 'warn');
+    return { ok: true, hired: false, application: app, job, chance };
+  }
+  const offer = Math.max(18000, Math.round(job.salary * clamp(.9 + app.match / 500 + rng.float(0, .08), .86, 1.26) / 100) * 100);
+  app.status = 'offered';
+  app.offerSalary = offer;
+  emitPlayerFeed(game, `${job.companyName} offered you ${job.title} at ${fmtMoney(offer)}/yr.`, 'good');
+  return { ok: true, hired: false, offered: true, application: app, job, offer, chance };
+}
+
+export function playerNegotiateJob(game, query, amount) {
+  const civ = ensureCivilization(game);
+  const app = findApplication(civ, query);
+  if (!app || app.status !== 'offered') return { ok: false, error: 'No open offer to negotiate. Interview first.' };
+  const job = civ.jobs.find(j => j.id === app.jobId);
+  if (!job) return { ok: false, error: 'That role no longer exists.' };
+  const desired = Math.round(Number(amount) || 0);
+  if (desired <= app.offerSalary) return { ok: false, error: `Ask for more than the current offer (${fmtMoney(app.offerSalary)}).` };
+  if (desired > app.offerSalary * 1.4) return { ok: false, error: 'That request is too far above the posted range.' };
+  const rng = makeRng((game.seed ^ hash32(app.id) ^ 0x6a11 ^ game.tickCount) >>> 0);
+  const chance = clamp(.9 - (desired / app.offerSalary - 1) * 1.6 + app.match / 450, .12, .94);
+  if (rng.chance(chance)) {
+    app.offerSalary = desired;
+    emitPlayerFeed(game, `${job.companyName} raised your offer to ${fmtMoney(desired)}.`, 'good');
+    return { ok: true, accepted: true, application: app, job, offer: desired };
+  }
+  app.status = 'rejected';
+  emitPlayerFeed(game, `${job.companyName} withdrew the offer after negotiation.`, 'bad');
+  return { ok: true, accepted: false, application: app, job, offer: app.offerSalary };
+}
+
+export function playerAcceptJob(game, query) {
+  const civ = ensureCivilization(game);
+  const app = findApplication(civ, query);
+  if (!app || app.status !== 'offered') return { ok: false, error: 'No offer to accept. Interview first.' };
+  const job = civ.jobs.find(j => j.id === app.jobId);
+  if (!job || job.status !== 'open') return { ok: false, error: 'That role has already been filled.' };
+  const prof = civ.player.professional;
+  prof.employerId = job.companyId;
+  prof.employerName = job.companyName;
+  prof.role = job.title;
+  prof.title = job.title;
+  prof.salary = app.offerSalary;
+  prof.sinceWorld = civ.worldMinutes;
+  prof.lastPayWorld = civ.worldMinutes;
+  prof.performance = 60;
+  prof.employmentHistory.push({ companyId: job.companyId, employerName: job.companyName, role: job.title, salary: app.offerSalary, sinceWorld: civ.worldMinutes, remote: job.remote });
+  bounded(prof.employmentHistory, 20);
+  prof.score = clamp(prof.score + 2, 0, 100);
+  job.status = 'filled';
+  job.filledBy = 'player';
+  job.filledWorld = civ.worldMinutes;
+  app.status = 'accepted';
+  for (const other of civ.applications) {
+    if (other.jobId === job.id && other !== app) other.status = 'closed';
+  }
+  const country = getCivCountry(game, job.countryId);
+  pushMail(game, 'careers', `Offer accepted: ${job.title}`, `${job.companyName} confirmed your start as ${job.title}.\n\nSalary: ${fmtMoney(app.offerSalary)}/yr${job.remote ? ' · remote' : ` · ${country?.name || job.countryId}`}\n\nThe payroll cycle is monthly in world time and income tax is withheld.`);
+  recordTimeline(civ, 'labor', `${game.player.handle} joins ${job.companyName}`, `A ${job.levelName.toLowerCase()} ${job.title.toLowerCase()} role begins after an interview and salary negotiation.`, { actors: ['player', job.companyId], major: false });
+  emitPlayerFeed(game, `You now work at ${job.companyName} as ${job.title} (${fmtMoney(app.offerSalary)}/yr).`, 'good');
+  return { ok: true, application: app, job, salary: app.offerSalary };
+}
+
+export function playerDeclineJob(game, query) {
+  const civ = ensureCivilization(game);
+  const app = findApplication(civ, query);
+  if (!app || !['offered', 'applicants'].includes(app.status)) return { ok: false, error: 'No active application to decline.' };
+  const job = civ.jobs.find(j => j.id === app.jobId);
+  app.status = 'declined';
+  emitPlayerFeed(game, `Declined ${job?.title || 'the role'} at ${job?.companyName || 'the employer'}.`, 'info');
+  return { ok: true, application: app, job };
+}
+
+export function playerQuitJob(game) {
+  const civ = ensureCivilization(game);
+  const prof = civ.player.professional;
+  if (!prof.employerId) return { ok: false, error: 'You are not employed.' };
+  const employer = prof.employerName || 'your employer';
+  const history = prof.employmentHistory || [];
+  const current = history.slice().reverse().find(h => h.companyId === prof.employerId && !h.untilWorld);
+  if (current) { current.untilWorld = civ.worldMinutes; current.reason = 'resigned'; }
+  const tenure = Math.max(0, civ.worldMinutes - (prof.sinceWorld || civ.worldMinutes));
+  prof.employerId = null; prof.employerName = null; prof.role = null; prof.salary = 0;
+  prof.sinceWorld = null; prof.lastPayWorld = null; prof.title = 'independent';
+  if (tenure < 60 * DAY) game.player.reputation = clamp((game.player.reputation || 0) - 1, 0, 100);
+  pushMail(game, 'careers', 'Employment ended', `Your role at ${employer} has ended. The separation is recorded after ${Math.max(1, Math.round(tenure / DAY))} world days.`);
+  recordTimeline(civ, 'labor', `${game.player.handle} leaves ${employer}`, 'The operator resigned. Employment history remains part of the public professional record.', { actors: ['player'], major: false });
+  emitPlayerFeed(game, `You left ${employer}.`, 'warn');
+  return { ok: true, employer, tenure };
+}
+
+export function careerSnapshot(game) {
+  const civ = ensureCivilization(game);
+  const prof = civ.player.professional;
+  const applications = civ.applications
+    .filter(a => a.status !== 'closed' && a.status !== 'declined')
+    .map(a => ({ ...a, job: civ.jobs.find(j => j.id === a.jobId) || null }));
+  return {
+    professional: prof,
+    employed: !!prof.employerId,
+    applications,
+    jobs: civ.jobs.filter(j => j.status === 'open').slice().sort((a, b) => b.postedWorld - a.postedWorld)
+  };
+}
+
 function emitPlayerFeed(game, text, kind = 'info') {
   if (!game.feed) game.feed = [];
   game.feed.unshift({ id: game.seq?.feed ? game.seq.feed++ : game.feed.length + 1, time: Date.now(), world: game.worldMinutes, text, kind });
@@ -2389,9 +2884,12 @@ export function authorizeAction(game, actorId, action) {
   if (!actor.connected && action !== 'sync') return { ok: false, error: 'actor is disconnected' };
   const allowed = mp.permissions[actor.role] || [];
   if (!allowed.includes(action) && !allowed.includes('admin')) return { ok: false, error: `role ${actor.role} may not perform ${action}` };
-  const now = Date.now();
-  const key = `${actor.id}:${action}`;
+  const bucket = Math.floor((civ.worldMinutes || 0) / DAY);
+  const key = `${actor.id}:${action}:${bucket}`;
   mp.antiCheat.rate[key] = (mp.antiCheat.rate[key] || 0) + 1;
+  for (const existing of Object.keys(mp.antiCheat.rate)) {
+    if (!existing.endsWith(`:${bucket}`)) delete mp.antiCheat.rate[existing];
+  }
   if (mp.antiCheat.rate[key] > 90) {
     mp.antiCheat.rejected++;
     return { ok: false, error: 'rate limit exceeded' };
@@ -2402,13 +2900,17 @@ export function authorizeAction(game, actorId, action) {
 export function validateLedger(game) {
   const civ = ensureCivilization(game);
   const mp = civ.multiplayer;
-  let prev = 'genesis';
+  if (!mp.ledger.length) return { ok: true, head: mp.ledgerHead || 'genesis', entries: 0, checked: 0 };
+  // The ledger is retention-bounded. The oldest retained row anchors the
+  // verifiable window; its prev hash may point at an entry already trimmed.
+  let prev = mp.ledger[0].prev;
   for (const row of mp.ledger) {
     const body = JSON.stringify({ actor: row.actor, action: row.action, amount: row.amount, memo: row.memo, world: row.world });
     const expected = hash32(prev + body).toString(16).padStart(8, '0');
     if (row.prev !== prev || row.hash !== expected) return { ok: false, brokenAt: row.id, expected, found: row.hash };
     prev = row.hash;
   }
+  if (mp.ledgerHead !== prev) return { ok: false, brokenAt: 'head', expected: prev, found: mp.ledgerHead };
   return { ok: true, head: mp.ledgerHead, entries: mp.ledger.length, checked: mp.ledger.length };
 }
 
@@ -2517,6 +3019,8 @@ export function civilizationSummary(game) {
     properties: civ.property.owned.length,
     listed: civ.property.listings.filter(l => l.status === 'available').length,
     technologies: civ.tech.technologies.length,
+    jobs: civ.jobs.filter(j => j.status === 'open').length,
+    employed: !!civ.player.professional?.employerId,
     activeEvents: civ.events.filter(e => e.status === 'active').length,
     timeline: civ.timeline.length,
     playerDisputes: civ.disputes.filter(d => d.subject === 'player' || d.subject === 'player-company').length
