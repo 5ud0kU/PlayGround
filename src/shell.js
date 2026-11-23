@@ -1,9 +1,9 @@
 /* Terminal shell: parsing, pipes, virtual filesystem, networking and tools. */
-import { fmtMoney, fmtNum, fmtBytes, fmtDate, fmtTime, fmtDateTime, fmtDuration, esc, pad, padLeft, table, sleep, clamp, progressBar, lineWrap, titleCase } from './util.js';
+import { fmtMoney, fmtNum, fmtBytes, fmtDate, fmtTime, fmtDateTime, fmtDuration, esc, pad, padLeft, table, sleep, clamp, progressBar, lineWrap, titleCase, hash32 } from './util.js';
 import {
   HOME, resolvePath, getNode, listDir, readFile, writeFile, ensureDir, removeNode, moveNode,
   copyNode, exists, isDir, basename, dirname, joinPath, normalize, allFiles, findFiles, treeLines,
-  sizeOf, modeString, diskUsage, newDir, newFile
+  sizeOf, modeString, diskUsage, newDir, newFile, writeSymlink
 } from './vfs.js';
 import {
   getServer, getSite, getNpc, getCompany, getContract, getPlayerSkill, skillTitle, playerTitle,
@@ -38,6 +38,16 @@ import {
   playerPublishGame, playerReleaseMusic, playerCreateCommunity, playerHostEvent, playerSetHome,
   playerTeach
 } from './civilization.js';
+import {
+  ensureInteraction, interactionSummary, startJob, bankTransfer, bankInvoice, bankOrder,
+  bankBudget, sharePrice, npcContact, npcMeet, npcOffer, devInit, devIssue, devPr, devBuild,
+  devTest, devDeploy, devPublish, labCreate, labAction, faultDiagnose, faultRepair, hardwareUpgrade
+} from './interaction.js';
+
+/* Deterministic technical detail: no value is invented by Math.random. */
+const detSeed = (ctx, ...parts) => (ctx.game.seed ^ Math.floor(ctx.game.worldMinutes * 2654435761) ^ (ctx.game.tickCount * 97) ^ hash32(parts.join('|'))) >>> 0;
+const detHex = (ctx, ...parts) => hash32(detSeed(ctx, ...parts)).toString(16).padStart(8, '0');
+const detByte = (ctx, ...parts) => hash32(detSeed(ctx, ...parts)) % 90 + 10;
 
 const CMD_ALIASES = {
   ll: 'ls -la', la: 'ls -a', l: 'ls', ports: 'ss -tulnp', dir: 'ls',
@@ -331,7 +341,7 @@ COMMANDS.help = (ctx) => {
   ctx.dim('A fictional network. Real parsing. Every command acts on simulated state.');
   const groups = [
     ['NAVIGATION', 'pwd  cd  ls  tree  find  file  stat  du  df'],
-    ['FILES', 'cat  head  tail  less  grep  wc  mkdir  touch  rm  cp  mv  chmod  nano  vim  code'],
+    ['FILES', 'cat  head  tail  less  grep  wc  mkdir  touch  rm  cp  mv  ln  tar  chmod  nano  vim  code'],
     ['SYSTEM', 'whoami  id  hostname  uname  date  uptime  ps  top  kill  free  systemctl  sudo  su'],
     ['PACKAGES', 'apt update  apt install <pkg>  apt list --installed'],
     ['NETWORK', 'ip  ifconfig  ping  traceroute  dig  whois  curl  wget  ssh  scp  nc  netstat  ss'],
@@ -342,6 +352,8 @@ COMMANDS.help = (ctx) => {
     ['ECONOMY', 'bank  contracts  accept  submit  market  buy  deploy  domains  site  servers  company'],
     ['SOCIAL', 'mail  send  read  forum  thread  post  news  profile  search  whois'],
     ['CIVILIZATION', 'civ  country  study  research  publish  civ laws  civ legal  civ identity  civ property  civ tech  civ supply  civ history  civ events  civ mp'],
+    ['INTERACTION', 'bg  hw  upgrade  bank transfer|invoice|order|portfolio  contact  meet  offer  conversations'],
+    ['LIFECYCLE', 'dev init|issue|pr|build|test|deploy|publish  lab create|scan|capture|patch|report  fault diagnose|repair'],
     ['WORLD', 'map  status  world  achievements  save  reset  neofetch  history  clear'],
   ];
   for (const [g, cmds] of groups) {
@@ -774,6 +786,73 @@ COMMANDS.stat = (ctx) => {
   ctx.print(`Access: (${n.mode}/${modeString(n)})  Uid: (${n.owner === 'root' ? 0 : 1000}/${n.owner})`);
   ctx.print(`Modify: ${new Date(n.mtime).toUTCString()}`);
 };
+COMMANDS.ln = (ctx) => {
+  const symbolic = ctx.args.includes('-s');
+  const parts = ctx.args.filter(a => a !== '-s' && !a.startsWith('-'));
+  if (parts.length < 2) { ctx.err('usage: ln [-s] <target> <link>'); return; }
+  const [targetArg, linkArg] = parts;
+  const linkAbs = pathFor(ctx.term, linkArg);
+  if (getNode(ctx.fs(), linkAbs)) { ctx.err(`ln: failed to create link '${linkArg}': File exists`); return; }
+  const targetAbs = pathFor(ctx.term, targetArg);
+  if (!getNode(ctx.fs(), targetAbs)) { ctx.err(`ln: failed to access '${targetArg}': No such file or directory`); return; }
+  const stored = symbolic && !targetArg.startsWith('/') && !targetArg.startsWith('~') ? targetArg : targetAbs;
+  const link = writeSymlink(ctx.fs(), linkAbs, stored, { owner: userOf(ctx.term) });
+  if (!link) { ctx.err(`ln: cannot create link '${linkArg}'`); return; }
+  ctx.ok(`Linked ${linkArg} → ${stored}${symbolic ? '' : ' (hard)'}`);
+};
+COMMANDS.tar = (ctx) => {
+  const mode = (ctx.args[0] || '').toLowerCase();
+  const archiveArg = ctx.args[1];
+  if (!archiveArg || !['cf', 'tf', 'xf'].includes(mode)) {
+    ctx.err('usage: tar cf <archive> <paths...> | tar tf <archive> | tar xf <archive> [dir]');
+    return;
+  }
+  const archiveAbs = pathFor(ctx.term, archiveArg);
+  const fs = ctx.fs();
+  if (mode === 'cf') {
+    const paths = ctx.args.slice(2);
+    if (!paths.length) { ctx.err('tar: no files or directories specified'); return; }
+    const entries = [];
+    const base = ctx.term.cwd;
+    for (const p of paths) {
+      const abs = pathFor(ctx.term, p);
+      const node = getNode(fs, abs);
+      if (!node) { ctx.err(`tar: ${p}: Cannot stat: No such file or directory`); continue; }
+      if (node.type === 'dir') {
+        for (const f of allFiles(fs, abs)) {
+          const rel = f.path.startsWith(base + '/') ? f.path.slice(base.length + 1) : basename(f.path);
+          entries.push({ path: rel, content: f.node.content || '', mode: f.node.mode, owner: f.node.owner, mtime: f.node.mtime });
+        }
+      } else {
+        const rel = abs.startsWith(base + '/') ? abs.slice(base.length + 1) : basename(abs);
+        entries.push({ path: rel, content: node.content || '', mode: node.mode, owner: node.owner, mtime: node.mtime });
+      }
+    }
+    writeFile(fs, archiveAbs, JSON.stringify({ format: 'nullnet-tar-v1', entries }, null, 2), { owner: userOf(ctx.term) });
+    ctx.ok(`${archiveArg}: archived ${entries.length} file(s).`);
+    return;
+  }
+  const raw = readFile(fs, archiveAbs);
+  if (raw === null) { ctx.err(`tar: ${archiveArg}: Cannot open: No such file or directory`); return; }
+  let bundle;
+  try { bundle = JSON.parse(raw); } catch { ctx.err(`tar: ${archiveArg}: not a nullnet archive`); return; }
+  if (!bundle?.entries) { ctx.err(`tar: ${archiveArg}: unrecognised archive format`); return; }
+  if (mode === 'tf') {
+    for (const e of bundle.entries) ctx.print(e.path, 'accent');
+    ctx.dim(`${bundle.entries.length} entries`);
+    return;
+  }
+  const dest = ctx.args[2] ? pathFor(ctx.term, ctx.args[2]) : ctx.term.cwd;
+  ensureDir(fs, dest, userOf(ctx.term));
+  let written = 0;
+  for (const e of bundle.entries) {
+    const target = joinPath(dest, e.path);
+    if (getNode(fs, target)) { ctx.warn(`tar: ${e.path}: already exists, skipped`); continue; }
+    writeFile(fs, target, e.content, { mode: e.mode, owner: e.owner || userOf(ctx.term), mtime: e.mtime });
+    written++;
+  }
+  ctx.ok(`Extracted ${written} file(s) to ${dest}.`);
+};
 COMMANDS.file = (ctx) => {
   if (!ctx.args.length) { ctx.err('file: missing operand'); return; }
   for (const p of ctx.args) {
@@ -960,7 +1039,7 @@ COMMANDS.ifconfig = (ctx) => {
   const ip = s ? s.ip : '10.0.0.42';
   ctx.print(`eth0: flags=4163<UP,BROADCAST,RUNNING,MULTICAST>  mtu 1500`);
   ctx.print(`        inet ${ip}  netmask 255.255.255.0  broadcast ${ip.split('.').slice(0, 3).join('.')}.255`);
-  ctx.print(`        ether 52:54:00:${(s?.id || 'local').slice(-2)}:${Math.floor(Math.random() * 90 + 10)}:${Math.floor(Math.random() * 90 + 10)}  txqueuelen 1000  (Ethernet)`);
+  ctx.print(`        ether 52:54:00:${(s?.id || 'local').slice(-2)}:${detByte(ctx, 'mac-a', s?.id)}:${detByte(ctx, 'mac-b', s?.id)}  txqueuelen 1000  (Ethernet)`);
   ctx.print(`        RX packets 184220  bytes 218439921 (218.4 MB)`);
   ctx.print(`        TX packets 92114  bytes 18200412 (18.2 MB)`);
 };
@@ -997,7 +1076,7 @@ COMMANDS.ping = async (ctx) => {
   const latency = server ? Math.max(2, Math.round(6 + (server.security % 17) + (server.region === 'eu-west' ? 2 : 18))) : 12;
   ctx.print(`PING ${host} (${ip}) 56(84) bytes of data.`);
   for (let i = 0; i < count; i++) {
-    const t = (latency + Math.random() * 5).toFixed(1);
+    const t = (latency + hash32(detSeed(ctx, 'ping', ip, i)) % 500 / 100).toFixed(1);
     ctx.print(`64 bytes from ${ip}: icmp_seq=${i + 1} ttl=${server?.os.includes('Windows') ? 128 : 64} time=${t} ms`);
     await sleep(40);
   }
@@ -1022,7 +1101,8 @@ COMMANDS.traceroute = async (ctx) => {
   ];
   for (let i = 0; i < hops.length; i++) {
     const [ip, name, base] = hops[i];
-    ctx.print(`${padLeft(i + 1, 2)}  ${pad(name, 26)} (${ip})  ${(base + Math.random()).toFixed(2)} ms  ${(base + 1.1 + Math.random()).toFixed(2)} ms`);
+    const jitter = hash32(detSeed(ctx, 'trace', ip, i)) % 100 / 100;
+    ctx.print(`${padLeft(i + 1, 2)}  ${pad(name, 26)} (${ip})  ${(base + jitter).toFixed(2)} ms  ${(base + 1.1 + jitter * .7).toFixed(2)} ms`);
     await sleep(50);
   }
 };
@@ -1307,7 +1387,7 @@ COMMANDS.nmap = async (ctx) => {
   ctx.print(`Starting Nmap 7.94 ( https://nmap.org ) at ${new Date().toUTCString()}`, 'dim');
   await sleep(160);
   ctx.print(`Nmap scan report for ${server.host} (${server.ip})`, 'accent');
-  ctx.print(`Host is up (0.0${Math.floor(Math.random() * 9 + 1)}s latency).`);
+  ctx.print(`Host is up (0.0${detByte(ctx, 'nmap-latency', server?.id || host) % 9 + 1}s latency).`);
   const closed = allPorts ? 65535 - ports.length : 995 - ports.length;
   ctx.print(`Not shown: ${Math.max(0, closed)} closed tcp ports (reset)`, 'dim');
   ctx.print('PORT      STATE SERVICE     VERSION');
@@ -1661,13 +1741,17 @@ function runPython(ctx, source, filename) {
       log10: Math.log10, sin: Math.sin, cos: Math.cos, tan: Math.tan, pi: Math.PI, e: Math.E,
       inf: Infinity, isfinite: Number.isFinite
     },
-    random: {
-      random: () => Math.random(),
-      randint: (a, b) => a + Math.floor(Math.random() * (b - a + 1)),
-      choice: a => a[Math.floor(Math.random() * a.length)],
-      shuffle: a => { for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return null; },
-      seed: () => null
-    },
+    random: (() => {
+      let n = 0;
+      const next = () => hash32(detSeed(ctx, 'py-random', n++)) / 4294967296;
+      return {
+        random: next,
+        randint: (a, b) => a + Math.floor(next() * (b - a + 1)),
+        choice: a => a[Math.floor(next() * a.length)],
+        shuffle: a => { for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(next() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return null; },
+        seed: s => { n = Math.abs(Number(s) || 0); return null; }
+      };
+    })(),
     json: { dumps: o => JSON.stringify(o), loads: s => JSON.parse(s) },
     time: { time: () => Date.now() / 1000, sleep: () => null, strftime: () => new Date().toISOString() },
     re: {
@@ -2095,7 +2179,7 @@ COMMANDS.git = (ctx) => {
     ensureDir(ctx.fs(), dest, userOf(ctx.term));
     for (const [p, content] of Object.entries(repo.files)) writeFile(ctx.fs(), joinPath(dest, p), content, { owner: userOf(ctx.term) });
     ensureDir(ctx.fs(), joinPath(dest, '.git'), userOf(ctx.term));
-    saveRepo(ctx, dest, { branch: 'main', staged: [], commits: [{ hash: Math.random().toString(16).slice(2, 9), message: 'initial import', time: Date.now(), files: Object.keys(repo.files) }], remote: url });
+    saveRepo(ctx, dest, { branch: 'main', staged: [], commits: [{ hash: detHex(ctx, 'clone', repo.name, url).slice(0, 7), message: 'initial import', time: Date.now(), files: Object.keys(repo.files) }], remote: url });
     ctx.print(`Cloning into '${name}'...`);
     ctx.print('remote: Enumerating objects: 42, done.');
     ctx.print('remote: Counting objects: 100% (42/42), done.');
@@ -2129,7 +2213,7 @@ COMMANDS.git = (ctx) => {
     const mi = ctx.args.indexOf('-m');
     const msg = mi >= 0 ? ctx.args.slice(mi + 1).join(' ') : 'update';
     if (!repo.staged.length) { ctx.err('On branch ' + repo.branch); ctx.err('nothing added to commit but untracked files present'); return; }
-    const hash = Math.random().toString(16).slice(2, 9);
+    const hash = detHex(ctx, 'commit', root, msg, repo.commits.length, repo.staged.join(',')).slice(0, 7);
     repo.commits.push({ hash, message: msg, time: Date.now(), files: repo.staged.slice() });
     const n = repo.staged.length;
     repo.staged = [];
@@ -2339,14 +2423,78 @@ COMMANDS.submit = (ctx) => {
 };
 
 COMMANDS.bank = (ctx) => {
-  const p = ctx.game.player;
+  const g = ctx.game;
+  const ix = ensureInteraction(g);
+  const sub = (ctx.args[0] || '').toLowerCase();
+  if (sub === 'transfer') {
+    if (ctx.args.length < 3) { ctx.err('usage: bank transfer <handle|company> <amount>'); return; }
+    const amount = ctx.args[ctx.args.length - 1];
+    const target = ctx.args.slice(1, -1).join(' ');
+    const r = bankTransfer(g, target, amount);
+    if (!r.ok) { ctx.err(r.error); return; }
+    ctx.ok(`Transferred ${fmtMoney(r.amount)} to ${r.target}. Fee ${fmtMoney(r.fee)}.`);
+    ctx.dim('The recipient funds or trust changed with the transfer.');
+    return;
+  }
+  if (sub === 'invoice') {
+    if (ctx.args.length < 3) { ctx.err('usage: bank invoice <party> <amount> [days]'); return; }
+    const parts = ctx.args.slice(1);
+    let days = 14;
+    if (parts.length >= 3 && Number.isFinite(Number(parts[parts.length - 1]))) days = Number(parts.pop());
+    const amount = parts.pop();
+    const party = parts.join(' ');
+    const r = bankInvoice(g, party, amount, days);
+    if (!r.ok) { ctx.err(r.error); return; }
+    ctx.ok(`${r.invoice.id} sent to ${r.invoice.party} for ${fmtMoney(r.invoice.amount)}.`);
+    ctx.print(`  due in ${Math.max(1, Math.ceil((r.invoice.dueWorld - g.worldMinutes) / 1440))} days · status ${r.invoice.status}`, 'accent');
+    return;
+  }
+  if (sub === 'order') {
+    if (ctx.args.length < 4) { ctx.err('usage: bank order <buy|sell> <company> <quantity> [limit]'); return; }
+    const parts = ctx.args.slice(1);
+    const side = parts.shift();
+    let limit = null;
+    if (parts.length >= 3 && Number.isFinite(Number(parts[parts.length - 1]))) limit = Number(parts.pop());
+    const qty = parts.pop();
+    const asset = parts.join(' ');
+    const r = bankOrder(g, side, asset, qty, limit);
+    if (!r.ok) { ctx.err(r.error); return; }
+    ctx.ok(`${r.order.id} opened: ${r.order.side} ${r.order.quantity} ${r.order.asset} @ ${fmtMoney(r.quoted)}.`);
+    ctx.dim('Orders execute on later ticks when price and liquidity cross the limit.');
+    return;
+  }
+  if (sub === 'price') {
+    const asset = ctx.args.slice(1).join(' ').trim();
+    if (!asset) { ctx.err('usage: bank price <company>'); return; }
+    const price = sharePrice(g, asset);
+    if (!price) { ctx.err('No quote for that asset.'); return; }
+    ctx.ok(`${asset} quotes ${fmtMoney(price)} per share.`);
+    return;
+  }
+  if (sub === 'portfolio') {
+    ctx.head('PORTFOLIO');
+    const entries = Object.entries(ix.bank.portfolio).filter(([, qty]) => qty > 0);
+    if (!entries.length) ctx.dim('No holdings. Use bank order buy <company> <qty>.');
+    for (const [asset, qty] of entries) ctx.print(`  ${pad(asset, 26)} ${padLeft(String(qty), 6)} shares · quote ${fmtMoney(sharePrice(g, asset))}`);
+    ctx.print(`Order activity: ${ix.bank.orders.length} · fees paid ${fmtMoney(ix.bank.feesPaid)}`, 'dim');
+    return;
+  }
+  if (sub === 'budget') {
+    if (ctx.args.length < 3) { ctx.err('usage: bank budget <category> <amount>'); return; }
+    const r = bankBudget(g, ctx.args[1], ctx.args[2]);
+    ctx.ok(`Budget ${r.category} set to ${fmtMoney(r.amount)}.`);
+    return;
+  }
+  const p = g.player;
   ctx.head('OPERATOR ACCOUNT');
   ctx.print(`Balance:    ${fmtMoney(p.money)}`, 'ok');
-  ctx.print(`Net worth:  ${fmtMoney(netWorth(ctx.game))}`, 'accent');
-  ctx.print(`Earned:     ${fmtMoney(ctx.game.stats.earned)}`, 'dim');
-  ctx.print(`Spent:      ${fmtMoney(ctx.game.stats.spent)}`, 'dim');
+  ctx.print(`Net worth:  ${fmtMoney(netWorth(g))}`, 'accent');
+  ctx.print(`Earned:     ${fmtMoney(g.stats.earned)}`, 'dim');
+  ctx.print(`Spent:      ${fmtMoney(g.stats.spent)}`, 'dim');
+  ctx.print(`Fees paid:  ${fmtMoney(ix.bank.feesPaid)}`, 'dim');
+  ctx.print(`Open orders ${ix.bank.orders.filter(o => o.status === 'open').length} · invoices ${ix.bank.invoices.length}`, 'dim');
   ctx.print('');
-  const tx = p.transactions.slice(0, ctx.args[0] === 'history' ? 20 : 6);
+  const tx = p.transactions.slice(0, sub === 'history' ? 20 : 6);
   if (!tx.length) ctx.dim('No transactions yet. The board is open.');
   else {
     ctx.print('RECENT ACTIVITY', 'head');
@@ -2355,7 +2503,8 @@ COMMANDS.bank = (ctx) => {
       ctx.print(`  ${fmtDateTime(t.time)}  ${pad(sign + fmtMoney(t.amount), 11)}  ${t.memo || ''}`, t.amount >= 0 ? 'ok' : 'accent');
     }
   }
-  ctx.dim('bank history   ·   contracts   ·   market');
+  ctx.dim('bank transfer <party> <amount> · bank invoice <party> <amount> · bank order <buy|sell> <company> <qty>');
+  ctx.dim('bank portfolio · bank price <company> · bank budget <category> <amount> · bank history');
 };
 
 COMMANDS.market = (ctx) => {
@@ -2873,7 +3022,8 @@ COMMANDS.docker = (ctx) => {
     if (!g.cloud.images.includes(info.name)) g.cloud.images.push(info.name);
     ctx.print(`Using default tag: latest`);
     ctx.print(`${info.name}: Pulling from library/${info.name.split(':')[0]}`);
-    ctx.print(`Digest: sha256:${Math.random().toString(16).slice(2).padEnd(64, '0')}`);
+    const digest = Array.from({ length: 8 }, (_, i) => detHex(ctx, 'digest', info.name, i)).join('');
+    ctx.print(`Digest: sha256:${digest}`);
     ctx.ok(`Status: Downloaded newer image for ${info.name}`);
     return;
   }
@@ -4194,6 +4344,203 @@ COMMANDS.study = (ctx) => civStudy(ctx, ctx.args);
 COMMANDS.research = (ctx) => civResearch(ctx, ctx.args);
 COMMANDS.publish = (ctx) => civMedia(ctx, ['publish', ...ctx.args]);
 COMMANDS.country = (ctx) => ctx.args.length ? civCountry(ctx, ctx.args.join(' ')) : civCountries(ctx);
+
+/* ---------------- deep interaction ---------------- */
+COMMANDS.bg = (ctx) => {
+  const ix = ensureInteraction(ctx.game);
+  const rows = ix.jobs.slice().reverse();
+  ctx.head('BACKGROUND JOBS');
+  if (!rows.length) { ctx.dim('No jobs. Start one with dev build, lab scan, bank order, or contact.'); return; }
+  for (const j of rows.slice(0, 24)) {
+    const status = j.status === 'running' ? `${Math.round(j.progress)}%` : j.status;
+    ctx.print(`  ${pad(j.id, 9)} ${pad(status, 10)} ${pad(j.label, 34)} ${j.status === 'running' ? `eta ${Math.max(0, Math.ceil((j.endsWorld - ctx.game.worldMinutes) / 60))}m` : ''}`, j.status === 'done' ? 'ok' : j.status === 'failed' ? 'err' : 'accent');
+    if (j.log?.length) ctx.dim(`      ${j.log[j.log.length - 1].text}`);
+  }
+  ctx.dim(`${ix.jobs.filter(j => j.status === 'running').length}/${Math.max(1, 1 + Math.floor(ix.hardware.ram.total / 8))} worker slots busy · jobs finish as world time passes.`);
+};
+COMMANDS.hw = (ctx) => {
+  const ix = ensureInteraction(ctx.game);
+  const hw = ix.hardware;
+  if ((ctx.args[0] || '').toLowerCase() === 'upgrade') {
+    const r = hardwareUpgrade(ctx.game, ctx.args[1]);
+    if (!r.ok) { ctx.err(r.error); return; }
+    ctx.ok(`${r.option.label} queued for ${fmtMoney(r.option.cost)}.`);
+    ctx.dim('The upgrade takes effect when its job completes.');
+    return;
+  }
+  ctx.head('WORKSTATION HARDWARE');
+  ctx.print(`${hw.cpu.model} · ${hw.cpu.cores} cores @ ${hw.cpu.speed} GHz · load ${hw.cpu.load.toFixed(0)}% · ${hw.cpu.temp.toFixed(0)}°C`);
+  ctx.print(`${hw.gpu.model} · ${hw.gpu.vram} GB VRAM · load ${hw.gpu.load.toFixed(0)}%`);
+  ctx.print(`${hw.ram.used}/${hw.ram.total} GB RAM · ${hw.storage.used.toFixed(1)}/${hw.storage.total} GB ${hw.storage.fs} · ${hw.nic.model} ${hw.nic.bandwidth} Mbps`);
+  ctx.print(`${hw.motherboard.model} · ${hw.power} W draw · chassis ${hw.temp.toFixed(0)}°C`, 'accent');
+  const open = ix.faults.filter(f => f.status !== 'resolved');
+  if (open.length) ctx.print(`Open faults: ${open.length} · ${open.map(f => f.kind).join(', ')}`, 'warn');
+  ctx.dim('hw upgrade ram|cpu|storage|gpu|nic · failures and thermals change job speed.');
+};
+COMMANDS.upgrade = (ctx) => COMMANDS.hw({ ...ctx, args: ['upgrade', ...ctx.args] });
+COMMANDS.conversations = (ctx) => {
+  const ix = ensureInteraction(ctx.game);
+  ctx.head('CONVERSATIONS');
+  const rows = ix.conversations.slice().reverse();
+  if (!rows.length) { ctx.dim('No conversations. Use contact <handle> <message>.'); return; }
+  for (const c of rows.slice(0, 20)) {
+    ctx.print(`  ${pad(c.id, 14)} ${pad(c.handle || '', 14)} ${pad(c.status, 14)} ${c.subject}`, c.status === 'awaiting-you' ? 'warn' : 'accent');
+    for (const msg of c.messages.slice(-2)) ctx.dim(`      ${msg.from}: ${msg.text.slice(0, 100)}`);
+  }
+  ctx.print(`Offers: ${ix.offers.length} · trust is contextual and persistent.`, 'dim');
+};
+COMMANDS.contact = (ctx) => {
+  if (ctx.args.length < 2) { ctx.err('usage: contact <handle> <message>'); return; }
+  const target = ctx.args.shift();
+  const intent = ctx.flags?.help ? 'help' : 'chat';
+  const r = npcContact(ctx.game, target, intent, { text: ctx.args.join(' ') });
+  if (!r.ok) { ctx.err(r.error); return; }
+  ctx.ok(`Message sent to @${r.convo.handle}.`);
+  ctx.dim(`Conversation ${r.convo.id} · ${r.job ? `reply expected in ${Math.ceil((r.job.endsWorld - ctx.game.worldMinutes) / 60)} minutes` : 'queued until a worker slot is free'}.`);
+};
+COMMANDS.message = COMMANDS.contact;
+COMMANDS.meet = (ctx) => {
+  if (!ctx.args[0]) { ctx.err('usage: meet <handle>'); return; }
+  const r = npcMeet(ctx.game, ctx.args[0]);
+  if (!r.ok) { ctx.err(r.error); return; }
+  ctx.ok(`Meeting with @${r.convo.handle} scheduled (${r.job.id}).`);
+};
+COMMANDS.offer = (ctx) => {
+  if (ctx.args.length < 3) { ctx.err('usage: offer <handle> <role> <salary>'); return; }
+  const salary = Number(ctx.args[ctx.args.length - 1]);
+  if (!Number.isFinite(salary)) { ctx.err('Salary must be a number.'); return; }
+  const r = npcOffer(ctx.game, ctx.args[0], ctx.args.slice(1, -1).join(' '), salary);
+  if (!r.ok) { ctx.err(r.error); return; }
+  ctx.ok(`Offer sent to @${r.convo.handle}. They will respond in world time.`);
+};
+COMMANDS.dev = (ctx) => {
+  const g = ctx.game;
+  const ix = ensureInteraction(g);
+  const sub = (ctx.args[0] || 'list').toLowerCase();
+  const rest = ctx.args.slice(1);
+  if (sub === 'init') {
+    if (!rest[0]) { ctx.err('usage: dev init <name> [language]'); return; }
+    const r = devInit(g, rest[0], rest[1] || 'Python');
+    if (!r.ok) { ctx.err(r.error); return; }
+    ctx.ok(`Project ${r.repo.name} created at ${r.root}.`);
+    ctx.dim('Edit src/, then dev build → dev test → dev deploy → dev publish.');
+    return;
+  }
+  if (sub === 'issue') {
+    if (rest.length < 2) { ctx.err('usage: dev issue <project> <title>'); return; }
+    const r = devIssue(g, rest[0], rest.slice(1).join(' '));
+    if (!r.ok) { ctx.err(r.error); return; }
+    ctx.ok(`${r.issue.id} opened on ${r.repo.name}.`);
+    return;
+  }
+  if (sub === 'pr') {
+    if (!rest[0]) { ctx.err('usage: dev pr <project> [contributor]'); return; }
+    const r = devPr(g, rest[0], rest[1]);
+    if (!r.ok) { ctx.err(r.error); return; }
+    ctx.ok(`${r.pr.id} from @${r.pr.author}: ${r.accepted ? 'merged' : 'changes requested'}.`);
+    return;
+  }
+  if (sub === 'build') {
+    if (!rest[0]) { ctx.err('usage: dev build <project> [version]'); return; }
+    const r = devBuild(g, rest[0], rest[1] || '0.1.0');
+    if (!r.ok) { ctx.err(r.error); return; }
+    ctx.ok(`${r.job.id}: building ${r.repo.name}. Watch with bg.`);
+    return;
+  }
+  if (sub === 'test') {
+    if (!rest[0]) { ctx.err('usage: dev test <project> [build-id]'); return; }
+    const r = devTest(g, rest[0], rest[1]);
+    if (!r.ok) { ctx.err(r.error); return; }
+    ctx.ok(`${r.job.id}: testing build ${r.build.id}.`);
+    return;
+  }
+  if (sub === 'deploy') {
+    if (rest.length < 2) { ctx.err('usage: dev deploy <build-id> <server-id|host>'); return; }
+    const r = devDeploy(g, rest[0], rest[1]);
+    if (!r.ok) { ctx.err(r.error); return; }
+    ctx.ok(`${r.job.id}: deploying ${r.build.project} to ${r.server.host}.`);
+    return;
+  }
+  if (sub === 'publish') {
+    if (!rest[0]) { ctx.err('usage: dev publish <project>'); return; }
+    const r = devPublish(g, rest[0]);
+    if (!r.ok) { ctx.err(r.error); return; }
+    ctx.ok(`${r.repo.name} published; NPC developers can discover and report issues.`);
+    return;
+  }
+  ctx.head('SOFTWARE PROJECTS');
+  const repos = (g.repos || []).filter(r => r.owner === 'player');
+  if (!repos.length) ctx.dim('No projects. Start with dev init <name> [language].');
+  for (const r of repos) {
+    ctx.print(`  ${pad(r.name, 20)} ${pad(r.lang, 12)} quality ${pad(Math.round(r.quality), 3)} stars ${pad(String(r.stars || 0), 4)} downloads ${r.downloads || 0}`, 'accent');
+    ctx.dim(`      issues ${r.issues?.length || 0} · PRs ${r.pullRequests?.length || 0} · builds ${r.builds?.length || 0}${r.publishedWorld ? ' · published' : ''}`);
+  }
+  ctx.print('');
+  ctx.print('RECENT BUILDS / TESTS', 'head');
+  for (const b of ix.dev.builds.slice(-4).reverse()) ctx.print(`  ${b.id} ${pad(b.project, 18)} ${b.version} quality ${b.quality} · ${b.status}`);
+  for (const t of ix.dev.tests.slice(-4).reverse()) ctx.print(`  ${t.id} ${pad(t.project, 18)} ${t.passed ? 'PASS' : 'FAIL'} ${t.cases} case(s)${t.failures ? ` · ${t.failures} failed` : ''}`, t.passed ? 'ok' : 'err');
+  ctx.dim('dev init|issue|pr|build|test|deploy|publish <project>');
+};
+COMMANDS.lab = (ctx) => {
+  const ix = ensureInteraction(ctx.game);
+  const sub = (ctx.args[0] || 'list').toLowerCase();
+  const rest = ctx.args.slice(1);
+  if (sub === 'create') {
+    if (!rest[0]) { ctx.err('usage: lab create <name> [os]'); return; }
+    const r = labCreate(ctx.game, rest[0], rest.slice(1).join(' ') || 'Debian 9');
+    if (!r.ok) { ctx.err(r.error); return; }
+    ctx.ok(`Environment ${r.env.id} (${r.env.name}) provisioned on ${r.env.network}.`);
+    ctx.print(`  services: ${r.env.services.map(s => s.name).join(', ')}`, 'accent');
+    return;
+  }
+  if (['scan', 'capture', 'report'].includes(sub)) {
+    const r = labAction(ctx.game, sub, rest[0]);
+    if (!r.ok) { ctx.err(r.error); return; }
+    if (r.report) ctx.ok(`${r.report.id} filed · quality ${r.report.quality} · ${r.report.findings.length} finding(s).`);
+    else ctx.ok(`${r.job.id}: ${sub} in ${r.env.name}.`);
+    return;
+  }
+  if (sub === 'patch') {
+    if (rest.length < 2) { ctx.err('usage: lab patch <env> <service>'); return; }
+    const r = labAction(ctx.game, 'patch', rest[0], rest[1]);
+    if (!r.ok) { ctx.err(r.error); return; }
+    ctx.ok(`${r.job.id}: patching ${r.service.name} in ${r.env.name}.`);
+    return;
+  }
+  ctx.head('CYBER RANGE');
+  const envs = ix.lab.environments;
+  if (!envs.length) ctx.dim('No environments. Use lab create <name> [os].');
+  for (const e of envs) {
+    ctx.print(`  ${pad(e.id, 10)} ${pad(e.name, 22)} ${pad(e.os, 14)} ${pad(e.status, 12)} evidence ${e.evidence || 0}`, 'accent');
+    for (const s of e.services) ctx.print(`      ${pad(s.name, 8)} ${pad(s.version, 12)} ${s.patched ? 'patched' : s.discovered ? s.vuln : 'unexamined'}`, s.patched ? 'ok' : 'dim');
+  }
+  ctx.print(`Captures ${ix.lab.captures.length} · reports ${ix.lab.reports.length}`, 'dim');
+  ctx.dim('lab create <name> [os] · lab scan|capture|report <env> · lab patch <env> <service>');
+};
+COMMANDS.fault = (ctx) => {
+  const ix = ensureInteraction(ctx.game);
+  const sub = (ctx.args[0] || 'list').toLowerCase();
+  if (sub === 'diagnose') {
+    const r = faultDiagnose(ctx.game, ctx.args[1]);
+    if (!r.ok) { ctx.err(r.error); return; }
+    ctx.ok(`${r.fault.id}: ${r.fault.cause}`);
+    ctx.print(`  suggested fix: ${r.fault.fix}`, 'accent');
+    return;
+  }
+  if (sub === 'repair') {
+    const r = faultRepair(ctx.game, ctx.args[1]);
+    if (!r.ok) { ctx.err(r.error); return; }
+    ctx.ok(`${r.job.id}: repair started for ${r.fault.symptom}.`);
+    return;
+  }
+  ctx.head('OPEN FAULTS');
+  const open = ix.faults.filter(f => f.status !== 'resolved');
+  if (!open.length) ctx.dim('No open faults. The workstation is operating normally.');
+  for (const f of open) ctx.print(`  ${pad(f.id, 10)} ${pad(f.kind, 12)} ${pad(f.status, 10)} ${f.symptom}`, f.severity === 'error' ? 'err' : 'warn');
+  ctx.dim('fault diagnose <id> · fault repair <id>');
+};
+COMMANDS.diagnose = (ctx) => COMMANDS.fault({ ...ctx, args: ['diagnose', ...ctx.args] });
+COMMANDS.repair = (ctx) => COMMANDS.fault({ ...ctx, args: ['repair', ...ctx.args] });
 
 COMMANDS.save = (ctx) => {
   if (typeof ctx.app.saveGame === 'function') {

@@ -14,6 +14,7 @@ import { buildSystems, ensureSystems, tickSystems } from './systems.js';
 import {
   buildCivilization, ensureCivilization, tickCivilization, legalPenaltyMultiplier, playerCountry
 } from './civilization.js';
+import { ensureInteraction, tickInteraction } from './interaction.js';
 
 export const SAVE_KEY = 'internet-persistent-world.v1';
 export const WORLD_VERSION = 4;
@@ -149,6 +150,7 @@ export function reviveGame(game) {
   ensureSystems(game);
   ensureCivilization(game);
   ensureGrowth(game);
+  ensureInteraction(game);
   for (const s of game.servers || []) {
     if (!s.fsMeta) {
       s.fsMeta = {
@@ -1639,6 +1641,7 @@ export function tickWorld(game, minutes = 1, opts = {}) {
   ensureSystems(game);
   ensureCivilization(game);
   ensureGrowth(game);
+  ensureInteraction(game);
   const rng = makeRng((game.seed ^ Math.floor(game.worldMinutes * 2654435761) ^ (game.tickCount * 97)) >>> 0);
   minutes = Math.max(1, Math.round(minutes));
   game.worldMinutes += minutes;
@@ -1741,6 +1744,14 @@ export function tickWorld(game, minutes = 1, opts = {}) {
     }
   } catch (err) {
     console.error('civilization tick failed', err);
+  }
+
+  // background jobs, hardware telemetry, banking, NPC initiatives and lab state
+  try {
+    const interactionEvents = tickInteraction(game, minutes);
+    for (const e of interactionEvents) events.push({ type: e.type || 'feed', text: e.text || e.symptom || 'Simulation event' });
+  } catch (err) {
+    console.error('interaction tick failed', err);
   }
 
   // news + forum life
