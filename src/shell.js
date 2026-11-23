@@ -44,6 +44,11 @@ import {
   cancelOrder, financeSummary, interactionOverview
 } from './interaction.js';
 import {
+  ensureSociety, societyOverview, citizenProfile, contentDetail,
+  playerMeetNpc, playerPurchaseContent, playerPublishContent, playerReviewContent,
+  playerIdentity, testContent
+} from './society.js';
+import {
   ensureInternet, internetSummary, protocolList, networkOverview, webList, webRecord,
   resolveDomain, devEcosystem, aiEcosystem, securityOverview, socialOverview, internetHistory,
   playerHardenWebsite, playerRenewCertificate, playerAttachApi, playerPublishPackage,
@@ -366,6 +371,7 @@ COMMANDS.help = (ctx) => {
     ['INTERNET', 'net  web  registry  sec  social  nethistory  dig  curl  map'],
     ['DEV ECOSYSTEM', 'dev  repo  vuln  lab  packets  forensics  http  inspect  debug  openssl'],
     ['INTERACTION', 'hw  ops  bg  contact  friends  pcreate  pwrite  pbuild  ptest  ppublish  pdeploy  prelease  srv  invoice  transfer  order  ln  tar  session  settings'],
+    ['INHABITANTS', 'society  citizens  citizen  culture  content  meet'],
     ['CLOUD', 'cloud  docker  kubectl'],
     ['AI', 'agent  model  company'],
     ['ECONOMY', 'bank  contracts  accept  submit  market  buy  deploy  domains  site  servers  company'],
@@ -446,6 +452,12 @@ function manPage(ctx, name) {
     tar: ['tar — archives', 'tar cf <archive> <dir> | tar xf <archive> [dir]', 'Packs and unpacks bounded virtual filesystem archives with ownership and mode metadata.'],
     session: ['session — terminal sessions', 'session [1-4]', 'Opens another independent terminal session sharing the same persistent filesystem.'],
     settings: ['settings — system preferences', 'settings | settings <fontSize|reducedMotion|sound|compact> <value>', 'Reads and writes persistent workstation preferences.'],
+    society: ['society — autonomous civilization', 'society [status|feed|content]', 'Observes inhabitants, their content economy and the chronological record of their independent activities.'],
+    citizens: ['citizens — inhabitant index', 'citizens [query]', 'Lists persistent identities with simulation detail level, employment, funds and dominant need.'],
+    citizen: ['citizen — personal profile', 'citizen <handle>', 'Shows identity, emotions with causes, needs, memories, created content and explainable decisions.'],
+    culture: ['culture — content index', 'culture [query]', 'Lists actual content objects with creator, price and recorded usage, tests and reviews.'],
+    content: ['content — content economy', 'content list|show <id>|buy <id>|test <id>|review <id> <text>|publish <type> <title> <text>', 'Every usage count comes from a recorded consumption event; reviews require a prior test.'],
+    meet: ['meet — interpersonal contact', 'meet <handle> [note]', 'Creates a relationship event with an NPC. Trust and memory change as a result.'],
   };
   const p = pages[name];
   if (!p) { ctx.print(`No manual entry for ${name}`, 'err'); ctx.dim('Try: help'); return; }
@@ -5473,6 +5485,167 @@ COMMANDS.tar = (ctx) => {
     return;
   }
   ctx.err('tar: use cf or xf');
+};
+
+COMMANDS.society = (ctx) => {
+  const g = ctx.game;
+  const s = societyOverview(g);
+  const m = s.metrics;
+  const sub = (ctx.args[0] || 'status').toLowerCase();
+  if (sub === 'feed' || sub === 'events') {
+    ctx.head('CIVILIZATION FEED');
+    for (const e of s.events.slice(0, 40)) ctx.print(`  ${pad(e.category, 12)} ${pad(e.world.toFixed(0), 8)} ${e.title}`, e.severity === 'critical' ? 'err' : 'dim');
+    return;
+  }
+  if (sub === 'content') return COMMANDS.culture(ctx);
+  ctx.head('AUTONOMOUS CIVILIZATION');
+  ctx.print(`Population       ${m.population} · ${m.active} active · ${m.known} known · ${m.distant} distant`);
+  ctx.print(`Culture          ${m.content} content items · ${m.tests} real tests · ${m.reviews} reviews`);
+  ctx.print(`Economy          ${m.transactions} transactions · ${fmtMoney(m.revenue)} exchanged · ${m.relationships} relationships`);
+  ctx.print(`Mood             happiness ${m.averageHappiness >= 0 ? '+' : ''}${m.averageHappiness} · stress ${m.averageStress}`);
+  ctx.print('');
+  ctx.print('RECENT LIVES', 'head');
+  for (const e of s.events.slice(0, 10)) ctx.print(`  ${pad(e.category, 12)} ${e.title}`, 'dim');
+  ctx.print('');
+  ctx.dim('citizens | citizen <handle> | culture [query] | content <show|buy|review|test|publish> | meet <handle>');
+};
+COMMANDS.citizens = (ctx) => {
+  const s = societyOverview(ctx.game);
+  const q = ctx.args.join(' ').toLowerCase();
+  ctx.head('INHABITANTS');
+  const rows = s.citizens.filter(i => !q || `${i.handle} ${i.name} ${i.employment.role} ${i.interests.join(' ')}`.toLowerCase().includes(q));
+  for (const i of rows.slice(0, 60)) {
+    const top = Object.entries(i.needs).sort((a, b) => b[1] - a[1])[0];
+    ctx.print(`  ${pad('@' + i.handle, 14)} ${pad(i.level, 8)} age ${padLeft(i.age, 2)}  ${pad(i.employment.role, 22)} ${padLeft(fmtMoney(i.funds), 10)}  need:${top?.[0] || '—'}  mood:${i.mood}`, i.level === 'active' ? 'ok' : 'dim');
+  }
+  ctx.print('');
+  ctx.dim(`${rows.length} shown · ${s.metrics.population} total · citizen <handle> for a full profile`);
+};
+
+COMMANDS.citizen = (ctx) => {
+  const hit = citizenProfile(ctx.game, ctx.args[0]);
+  if (!hit) { ctx.err(`citizen: no inhabitant matching '${ctx.args[0] || ''}'`); return; }
+  const i = hit.identity;
+  ctx.head(`${i.name} · @${i.handle} · ${i.age}`);
+  ctx.print(`  status       ${i.level} inhabitant · ${i.mood} · health ${i.health}/100`);
+  ctx.print(`  living       ${i.living.situation} · ${i.living.location}`);
+  ctx.print(`  work         ${i.employment.role} at ${i.employment.employer} · ${fmtMoney(i.employment.salaryPerDay)}/day`);
+  ctx.print(`  personality  ${i.personality} · values ${i.values.join(', ')}`);
+  ctx.print(`  interests    ${i.interests.join(', ') || 'none recorded'}`);
+  ctx.print(`  education    ${i.education.map(e => `${e.level} ${e.field}`).join(', ') || 'none recorded'}`);
+  ctx.print(`  funds        ${fmtMoney(i.funds)} · ${i.contentIds.length} works · ${hit.sales.length} sales`);
+  ctx.print('');
+  ctx.print('EMOTIONS', 'head');
+  const emo = Object.entries(i.emotions).sort((a, b) => Math.abs(b[1]) - Math.abs(a[1])).slice(0, 10);
+  for (const [key, value] of emo) ctx.print(`  ${pad(key, 14)} ${padLeft(Math.round(value), 4)}  ${i.emotionCauses?.[key] || 'no recorded cause'}`, value < -25 ? 'warn' : 'dim');
+  ctx.print('');
+  ctx.print('NEEDS', 'head');
+  for (const [key, value] of Object.entries(i.needs).sort((a, b) => b[1] - a[1]).slice(0, 8)) ctx.print(`  ${pad(key, 14)} ${progressBar(value, 14)} ${Math.round(value)}`, 'dim');
+  if (i.memories.length) {
+    ctx.print('');
+    ctx.print('MEMORIES', 'head');
+    for (const m of i.memories.slice(-6)) ctx.print(`  ${hhmm(m.world)}  ${m.text}`, 'dim');
+  }
+  if (hit.content.length) {
+    ctx.print('');
+    ctx.print('CREATED CONTENT', 'head');
+    for (const c of hit.content.slice(0, 12)) ctx.print(`  ${pad(c.id, 12)} ${pad(c.type, 10)} ${pad(c.title, 24)} ${c.usage.views} views · ${c.usage.purchases} sales`, 'dim');
+  }
+  if (hit.decisions.length) {
+    ctx.print('');
+    ctx.print('RECENT DECISIONS', 'head');
+    for (const d of hit.decisions.slice(-8)) ctx.print(`  ${hhmm(d.world)}  ${pad(d.action, 11)} ${d.reason}`, 'dim');
+  }
+};
+
+COMMANDS.culture = (ctx) => {
+  const s = societyOverview(ctx.game);
+  const q = ctx.args.join(' ').toLowerCase();
+  ctx.head('CONTENT ECONOMY');
+  const rows = s.content.filter(c => !q || `${c.title} ${c.type} ${c.tags.join(' ')} ${c.creatorHandle}`.toLowerCase().includes(q));
+  for (const c of rows.slice(0, 50)) {
+    ctx.print(`  ${pad(c.id, 12)} ${pad(c.type, 10)} ${pad(c.title.slice(0, 28), 30)} @${pad(c.creatorHandle, 12)} ${pad(c.availability, 7)} ${padLeft(fmtMoney(c.price), 9)}  ${c.usage.views} views ${c.usage.tests} tests ${c.usage.reviews} reviews`, c.status === 'popular' ? 'ok' : 'dim');
+  }
+  ctx.print('');
+  ctx.dim('content show <id> | content buy <id> | content test <id> | content review <id> <text>');
+};
+
+COMMANDS.content = (ctx) => {
+  const sub = (ctx.args[0] || 'list').toLowerCase();
+  if (sub === 'list') return COMMANDS.culture(ctx);
+  if (sub === 'publish') {
+    const type = (ctx.args[1] || 'article').toLowerCase();
+    const title = ctx.args[2];
+    const text = ctx.args.slice(3).join(' ');
+    if (!title || !text) { ctx.err('usage: content publish <type> <title> <text>'); return; }
+    const r = playerPublishContent(ctx.game, type, title, text, Number((ctx.args.find(a => a.startsWith('--price=')) || '').split('=')[1]) || 0);
+    if (!r.ok) { ctx.err(r.error); return; }
+    ctx.ok(`Published ${r.content.id} · ${r.content.type} · ${r.content.availability}`);
+    ctx.dim(`Trace it with: content show ${r.content.id}`);
+    return;
+  }
+  const id = ctx.args[1] || ctx.args[0];
+  const hit = contentDetail(ctx.game, id);
+  if (!hit) { ctx.err(`content: no item matching '${id || ''}'`); return; }
+  const c = hit.content;
+  if (sub === 'show') {
+    ctx.head(`${c.title} · ${c.type}`);
+    ctx.print(`  id          ${c.id} · v${c.version} · ${c.availability} · ${c.status}`);
+    ctx.print(`  creator     @${c.creatorHandle} · ${c.reason}`);
+    ctx.print(`  price       ${fmtMoney(c.price)} (${c.model}) · tags ${c.tags.join(', ')}`);
+    ctx.print(`  quality     ${Object.entries(c.quality).map(([k, v]) => `${k} ${Math.round(v)}`).join(' · ')}`);
+    ctx.print(`  usage       ${c.usage.views} views · ${c.usage.downloads} downloads · ${c.usage.purchases} sales · ${c.usage.tests} tests · ${c.usage.reviews} reviews`);
+    ctx.print('');
+    if (c.data.text) { ctx.print('TEXT', 'head'); ctx.print(c.data.text); }
+    else if (c.data.html) { ctx.print('HTML', 'head'); ctx.print(c.data.html); }
+    else if (c.data.files) {
+      ctx.print('FILES', 'head');
+      const project = ctx.game.devworld?.projects?.find(p => p.id === c.projectId);
+      for (const f of c.data.files) ctx.print(`  ${pad(f, 26)} ${padLeft(project?.files?.[f]?.split('\n').length || 0, 5)} lines`, 'dim');
+      ctx.dim(`Open the source with: repo source ${project?.slug || c.title}`);
+    } else { ctx.print('REPRESENTATION', 'head'); ctx.print(JSON.stringify(c.data, null, 2)); }
+    if (hit.tests.length) {
+      ctx.print('');
+      ctx.print('TEST RESULTS', 'head');
+      for (const t of hit.tests.slice(0, 8)) ctx.print(`  ${t.id} ${t.result} · ${t.operation} · @${t.handle}${t.findings.length ? ' · ' + t.findings[0] : ''}`, t.result === 'fail' ? 'warn' : 'dim');
+    }
+    if (hit.reviews.length) {
+      ctx.print('');
+      ctx.print('REVIEWS', 'head');
+      for (const r of hit.reviews.slice(0, 8)) ctx.print(`  ${r.rating}/5 @${r.handle} · ${r.text}`, 'dim');
+    }
+    return;
+  }
+  if (sub === 'buy') {
+    const r = playerPurchaseContent(ctx.game, c.id);
+    if (!r.ok) { ctx.err(r.error); return; }
+    ctx.ok(`Acquired ${c.title} for ${fmtMoney(r.price)} · transaction ${r.transaction.id}.`);
+    ctx.print(`Test: ${r.test.operation} → ${r.test.result}${r.test.findings.length ? ' · ' + r.test.findings[0] : ''}`, r.test.result === 'fail' ? 'warn' : 'ok');
+    ctx.app.refreshUI?.();
+    return;
+  }
+  if (sub === 'test') {
+    const st = ensureSociety(ctx.game);
+    const r = testContent(ctx.game, st, playerIdentity(ctx.game), c);
+    ctx.print(`${r.operation}: ${r.result}${r.findings.length ? ' · ' + r.findings.join(' | ') : ''}`, r.result === 'fail' ? 'warn' : 'ok');
+    return;
+  }
+  if (sub === 'review') {
+    const r = playerReviewContent(ctx.game, c.id, ctx.args.slice(2).join(' '));
+    if (!r.ok) { ctx.err(r.error); return; }
+    ctx.ok(`${r.review.id}: ${r.review.rating}/5 recorded.`);
+    return;
+  }
+  ctx.err(`content: '${sub}' is not recognized. Try: list|show|buy|test|review|publish`);
+};
+
+COMMANDS.meet = (ctx) => {
+  const note = ctx.args.slice(1).join(' ');
+  const r = playerMeetNpc(ctx.game, ctx.args[0], 'conversation', note);
+  if (!r.ok) { ctx.err(r.error); return; }
+  ctx.ok(`You spoke with @${r.identity.handle}. Trust ${Math.round(r.relationship.trust)}/100, ${r.relationship.status}.`);
+  ctx.dim('Their memory and mood now include this interaction.');
+  ctx.app.refreshUI?.();
 };
 
 COMMANDS.session = (ctx) => {

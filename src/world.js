@@ -20,6 +20,7 @@ import { ensureDevWorld, tickDevWorld, devOverview } from './devworld.js';
 import {
   ensureInteraction, tickInteraction, collectOperations, interactionOverview
 } from './interaction.js';
+import { ensureSociety, tickSociety, societyOverview } from './society.js';
 
 export const SAVE_KEY = 'internet-persistent-world.v1';
 export const WORLD_VERSION = 4;
@@ -159,6 +160,7 @@ export function reviveGame(game) {
   ensureInternet(game);
   ensureDevWorld(game);
   ensureInteraction(game);
+  ensureSociety(game);
   for (const s of game.servers || []) {
     if (!s.fsMeta) {
       s.fsMeta = {
@@ -269,6 +271,7 @@ export function createGame(seed = randomSeed()) {
   ensureInternet(game);
   ensureDevWorld(game);
   ensureInteraction(game);
+  ensureSociety(game);
 
   game.feed = [
     { id: game.seq.feed++, time: now - 90000, world: game.worldMinutes - 3, text: 'NullNet Collective restarted the public shell after maintenance.', kind: 'info' },
@@ -1693,6 +1696,7 @@ export function tickWorld(game, minutes = 1, opts = {}) {
   ensureInternet(game);
   ensureDevWorld(game);
   ensureInteraction(game);
+  ensureSociety(game);
   const rng = makeRng((game.seed ^ Math.floor(game.worldMinutes * 2654435761) ^ (game.tickCount * 97)) >>> 0);
   minutes = Math.max(1, Math.round(minutes));
   game.worldMinutes += minutes;
@@ -1958,6 +1962,13 @@ export function tickWorld(game, minutes = 1, opts = {}) {
     applyInteractiveEvents(game, rng, tickInteraction(game, minutes, rng));
   } catch (err) {
     console.error('interaction tick failed', err);
+  }
+
+  // Autonomous inhabitants: lives, emotions, content and shared economy.
+  try {
+    applyInteractiveEvents(game, rng, tickSociety(game, minutes, rng));
+  } catch (err) {
+    console.error('society tick failed', err);
   }
 
   updateDerived(game);

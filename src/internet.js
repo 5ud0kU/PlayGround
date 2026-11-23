@@ -778,7 +778,7 @@ function webCadence(game, net, rng, events) {
       const availabilityTarget = badHost ? 62 : record.tls.enabled ? 98.6 : 94;
       record.availability = clamp(record.availability + (availabilityTarget - record.availability) * .18 + rng.float(-.12, .12), 30, 99.999);
       record.latencyMs = clamp(record.latencyMs + rng.float(-8, 8) + (badHost ? 40 : 0), 12, 900);
-      record.requestsPerMin = Math.max(1, Math.round(record.requestsPerMin * rng.float(.96, 1.04)));
+      // Traffic changes only through recorded visits and deployments, never a random counter.
       record.errorRate = clamp(record.errorRate + (badHost ? .002 : -.0004) + rng.float(-.0004, .0004), .00005, .25);
       record.securityHeaders = clamp(record.securityHeaders + (rng.chance(.1) ? rng.int(-1, 1) : 0), 5, 100);
       if (rng.chance(.01)) record.availability = clamp(record.availability - rng.float(.2, 2.5), 30, 99.999);
@@ -806,7 +806,7 @@ function webCadence(game, net, rng, events) {
     const online = record && record.status === 'live';
     api.uptime = clamp(api.uptime + (online ? .002 : -.05), 40, 100);
     api.latencyMs = clamp(api.latencyMs + rng.float(-4, 4), 5, 800);
-    api.requests = Math.round(api.requests + (online ? rng.int(5, 800) : 0));
+    // API request totals are advanced only by real recorded consumers elsewhere.
     if (online && rng.chance(.01)) api.errors += rng.int(1, 20);
     api.status = online ? (api.uptime > 92 ? 'live' : 'degraded') : 'offline';
   }
@@ -845,8 +845,7 @@ function bumpVersion(version) {
 
 function devCadence(game, net, rng, events) {
   for (const pkg of net.packages) {
-    pkg.weeklyDownloads = Math.max(1, Math.round(pkg.weeklyDownloads * rng.float(.97, 1.04)));
-    pkg.downloads = Math.round(pkg.downloads + pkg.weeklyDownloads / 7);
+    // Registry totals remain stable unless a simulated install is recorded.
     if (rng.chance(.006)) {
       pkg.version = bumpPackageVersion(pkg.version, rng);
       pkg.updatedWorld = game.worldMinutes;
