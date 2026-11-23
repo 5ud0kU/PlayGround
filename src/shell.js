@@ -28,10 +28,10 @@ import {
 import {
   civilizationSummary, civHistory, civEventList, educationFields, researchFields, lawDomains,
   playerStudy, playerStartResearch, playerFundResearch, playerPublish, playerBuyProperty,
-  playerSellProperty, playerLobby, playerRelocate, playerAdoptTech, playerProperties,
+  playerSellProperty, playerInsureProperty, playerRelease, playerLobby, playerRelocate, playerAdoptTech, playerProperties,
   playerCredentials, playerCompliance, getCivCountry, getCivCity, playerCountry, playerCity,
   outletFor, researchField, civKnowledge, validateLedger, sharedSnapshot, joinSharedWorld,
-  disconnectSharedPlayer, activeLegalDisputes, careerSnapshot, jobMatch, playerApplyJob,
+  disconnectSharedPlayer, applyRemoteAction, activeLegalDisputes, playerLegalAction, careerSnapshot, jobMatch, playerApplyJob,
   playerInterviewJob, playerNegotiateJob, playerAcceptJob, playerDeclineJob, playerQuitJob
 } from './civilization.js';
 
@@ -369,7 +369,7 @@ function manPage(ctx, name) {
     kubectl: ['kubectl — orchestration', 'kubectl create cluster <name> [node...] | get pods|nodes|deploy | apply -f <manifest> | scale deployment/<name> --replicas N', 'A small Kubernetes-style control plane over your own nodes. Manifests are read from the virtual filesystem.'],
     agent: ['agent — autonomous AI agents', 'agent list [--all] | models | roles | deploy <name> --role <role> --model <model> | inspect <name> | start|stop|pause <name> | assign <name> <domain>', 'Agents perform bounded work on your infrastructure. They cost money, remember what they did, and pause when something looks wrong.'],
     company: ['company — organizations', 'company list | inspect <name> | register <name> | launch <product> | products | mine', 'Register and operate your own technology company. Products generate recurring revenue based on subscribers and reputation.'],
-    civ: ['civ — civilization interface', 'civ [status|countries|country <q>|cities|laws|legal|identity|study|research|media|tech|supply|property|history|events|mp|relocate|lobby]', 'Inspect and act on the persistent civilization: governments, regulation, education, research, media, infrastructure, property, supply chains, technology, culture, identity and shared-world authority. The simulation runs whether or not you participate.'],
+    civ: ['civ — civilization interface', 'civ [status|countries|country <q>|cities|laws|legal|identity|study|research|media|tech|supply|property|society|diplomacy|release|history|events|mp|relocate|lobby]', 'Inspect and act on the persistent civilization: governments, regulation, education, research, media, infrastructure, property, supply chains, technology, culture, identity and shared-world authority. The simulation runs whether or not you participate.'],
   };
   const p = pages[name];
   if (!p) { ctx.print(`No manual entry for ${name}`, 'err'); ctx.dim('Try: help'); return; }
@@ -3410,12 +3410,20 @@ function civLaws(ctx, query) {
   ctx.print('');
   ctx.dim(`${active.length} active instruments · ${proposed.length} proposed · courts ${civ.courts.length} · regulators ${civ.regulators.length}`);
 }
-function civLegal(ctx) {
+function civLegal(ctx, args = []) {
   const g = ctx.game;
   const s = civilizationSummary(g);
   const c = s.country;
   const compliance = playerCompliance(g);
-  const disputes = activeLegalDisputes(g);
+  const action = (args[0] || '').toLowerCase();
+  if (action === 'settle' || action === 'contest') {
+    if (!args[1]) { ctx.err(`usage: civ legal ${action} <case-id>`); return; }
+    const r = playerLegalAction(g, args[1], action);
+    if (!r.ok) { ctx.err(r.error); return; }
+    ctx.ok(action === 'settle' ? `Settled ${r.dispute.id} for ${fmtMoney(r.amount)}.` : `Contesting ${r.dispute.id}; counsel retained for ${fmtMoney(r.fee)}.`);
+    return;
+  }
+  const disputes = activeLegalDisputes(g).filter(d => d.subject === 'player-company' || d.subject === 'player');
   ctx.head('LEGAL STANDING');
   ctx.print(`${c.name} · ${c.cyberPolicy} cyber policy · compliance ${compliance.score}/100`, compliance.score < 50 ? 'warn' : 'ok');
   ctx.print('');
@@ -3429,15 +3437,26 @@ function civLegal(ctx) {
     for (const r of compliance.records.slice(-8).reverse()) ctx.print(`  ${r.status.padEnd(10)} ${r.issue} · ${fmtMoney(r.fine || 0)}`, r.status === 'fined' ? 'err' : 'warn');
   }
   if (disputes.length) {
-    ctx.print('OPEN DISPUTES', 'head');
-    for (const d of disputes.slice(0, 8)) ctx.print(`  ${d.id} ${d.subject} · ${d.issue || d.kind} · ${d.status}`, 'warn');
-  } else ctx.dim('No open disputes against this operator.');
+    ctx.print('OPEN CASES AGAINST YOU', 'head');
+    for (const d of disputes.slice(0, 8)) {
+      const hearing = Math.max(0, Math.ceil((d.hearingWorld - g.worldMinutes) / 1440));
+      ctx.print(`  ${d.id} ${d.domainName} · ${d.issue} · ${d.status}${d.contested ? ' · represented' : ''}`, 'warn');
+      ctx.dim(`      evidence ${d.evidence}/100 · claimed ${fmtMoney(d.claimedFine)} · hearing ${hearing}d · civ legal settle ${d.id} | contest ${d.id}`);
+    }
+  } else ctx.dim('No open cases against this operator.');
+  const other = activeLegalDisputes(g).filter(d => d.subject !== 'player-company' && d.subject !== 'player');
+  if (other.length) {
+    ctx.print('');
+    ctx.print('COURT DOCKET — OTHER PARTIES', 'head');
+    for (const d of other.slice(0, 6)) ctx.print(`  ${d.id} ${pad(d.subjectName || d.subject, 22)} ${d.domainName} · ${d.status}`, 'dim');
+  }
   if (g.legal.length) {
+    ctx.print('');
     ctx.print('ENFORCEMENT HISTORY', 'head');
     for (const l of g.legal.slice(-6).reverse()) ctx.print(`  ${fmtDate(l.time)} · ${l.authority} · ${fmtMoney(l.fine)} · ${l.reason}`, 'err');
   }
   ctx.print('');
-  ctx.dim('Regulators, courts, and fines are simulated per jurisdiction. Conduct and evidence change the outcome.');
+  ctx.dim('Regulators, courts, and fines are simulated per jurisdiction. Contest with counsel, settle, or accept the hearing outcome.');
 }
 function civIdentity(ctx) {
   const g = ctx.game;
@@ -3658,17 +3677,23 @@ function civProperty(ctx, args) {
   const g = ctx.game;
   const civ = civilizationSummary(g).civ;
   const sub = (args[0] || '').toLowerCase();
-  if (sub === 'buy' || sub === 'sell') {
+  if (sub === 'buy' || sub === 'sell' || sub === 'insure') {
     const id = args[1];
     if (!id) { ctx.err(`usage: civ property ${sub} <property-id>`); return; }
-    const r = sub === 'buy' ? playerBuyProperty(g, id, { rented: args.includes('--rented') }) : playerSellProperty(g, id);
+    const r = sub === 'buy'
+      ? playerBuyProperty(g, id, { rented: args.includes('--rented'), mortgage: args.includes('--mortgage'), insure: args.includes('--insure') })
+      : sub === 'sell' ? playerSellProperty(g, id) : playerInsureProperty(g, id);
     if (!r.ok) { ctx.err(r.error); return; }
     if (sub === 'buy') {
-      ctx.ok(`Acquired ${r.property.label} for ${fmtMoney(r.price)}.`);
+      ctx.ok(`Acquired ${r.property.label} for ${fmtMoney(r.downPayment)}${r.mortgage ? ' down' : ''}.`);
       ctx.print(`  ${r.property.cityId} · occupancy ${r.property.occupancy} · rent ${fmtMoney(r.property.rent)}/mo · maintenance ${fmtMoney(r.property.maintenance)}/mo`);
-      ctx.dim('Property charges and rental income settle as world days pass.');
+      if (r.mortgage) ctx.print(`  mortgage ${fmtMoney(r.mortgage.principal)} at ${(r.mortgage.rate * 100).toFixed(1)}% · ${fmtMoney(r.mortgage.payment)}/mo`, 'accent');
+      if (r.property.insurance) ctx.print(`  insured at ${fmtMoney(r.property.insurance)}/mo`, 'accent');
+      ctx.dim('Property charges, mortgage payments and rental income settle as world days pass.');
+    } else if (sub === 'sell') {
+      ctx.ok(`Sold ${r.property.label} for ${fmtMoney(r.sale)}${r.payoff ? ` after ${fmtMoney(r.payoff)} mortgage payoff` : ''}.`);
     } else {
-      ctx.ok(`Sold ${r.property.label} for ${fmtMoney(r.sale)}.`);
+      ctx.ok(`${r.already ? 'Already insured' : 'Insured'}: ${r.property.label} at ${fmtMoney(r.property.insurance)}/mo.`);
     }
     return;
   }
@@ -3695,6 +3720,107 @@ function civProperty(ctx, args) {
   }
   ctx.print('');
   ctx.dim('civ property available   ·   civ property buy <id> [--rented]   ·   civ property sell <id>');
+}
+function civSociety(ctx) {
+  const g = ctx.game;
+  const civ = civilizationSummary(g).civ;
+  const society = civ.society;
+  ctx.head('SOCIETY — HOUSEHOLDS AND INDIVIDUALS');
+  if (!society || !society.households.length) {
+    ctx.dim('No households have formed in this world yet.');
+    return;
+  }
+  const households = society.households;
+  const avg = key => households.reduce((s, h) => s + (h[key] || 0), 0) / households.length;
+  const owned = households.filter(h => h.tenure === 'own').length;
+  const negative = households.filter(h => h.savings < 0).length;
+  ctx.print(`${households.length} households · ${society.moves || 0} moves recorded · ${society.decisions.length} recent individual decisions`, 'accent');
+  ctx.print(`Average morale ${Math.round(avg('morale'))}/100 · home ownership ${Math.round(owned / households.length * 100)}% · households in arrears ${negative}`);
+  ctx.print('');
+  const city = playerCity(g);
+  const local = households.filter(h => h.cityId === city?.id).slice(0, 6);
+  if (local.length) {
+    ctx.print(`HOUSEHOLDS IN ${city.name.toUpperCase()}`, 'head');
+    for (const h of local) {
+      const members = h.memberIds.map(id => civ.identities.find(i => i.id === id)).filter(Boolean);
+      ctx.print(`  ${pad(h.id, 12)} ${pad(h.tenure, 5)} income ${fmtMoney(h.income)}/mo · housing ${fmtMoney(h.housingCost)} · morale ${Math.round(h.morale)}`, h.morale < 40 ? 'warn' : 'accent');
+      ctx.dim(`      ${members.map(m => '@' + m.handle).join(' ') || 'no recorded members'} · savings ${fmtMoney(h.savings)}`);
+    }
+  }
+  const recent = society.decisions.slice(-8).reverse();
+  if (recent.length) {
+    ctx.print('');
+    ctx.print('RECENT INDIVIDUAL DECISIONS', 'head');
+    for (const d of recent) {
+      const identity = civ.identities.find(i => i.id === d.agentId);
+      ctx.print(`  @${identity?.handle || d.agentId} ${d.action} · ${d.detail}`);
+    }
+  }
+  ctx.print('');
+  ctx.dim('Households respond to income, rent, employment and opportunity. They move, buy homes and change morale without the player.');
+}
+function civDiplomacy(ctx) {
+  const g = ctx.game;
+  const civ = civilizationSummary(g).civ;
+  const relations = civ.relations;
+  const pairs = [];
+  for (const a of civ.countries) {
+    for (const b of civ.countries) {
+      if (a.id >= b.id) continue;
+      const rel = a.relations[b.id];
+      if (rel) pairs.push({ a, b, rel });
+    }
+  }
+  pairs.sort((x, y) => (y.rel.tension - y.rel.trust) - (x.rel.tension - x.rel.trust));
+  ctx.head('GEOPOLITICS AND DIPLOMACY');
+  for (const { a, b, rel } of pairs.slice(0, 8)) {
+    ctx.print(`${pad(a.name, 16)} ${pad(b.name, 16)} ${pad(rel.stance || 'neutral', 12)} trade ${padLeft(Math.round(rel.trade), 3)} tension ${padLeft(Math.round(rel.tension), 3)}${rel.sanctioned ? ' SANCTIONED' : ''}`, rel.stance === 'hostile' ? 'warn' : 'accent');
+  }
+  ctx.print('');
+  const talks = relations.negotiations.filter(n => n.status === 'active');
+  if (talks.length) {
+    ctx.print('ACTIVE NEGOTIATIONS', 'head');
+    for (const n of talks) {
+      const a = civ.countries.find(c => c.id === n.a), b = civ.countries.find(c => c.id === n.b);
+      ctx.print(`  ${pad(n.topic, 32)} ${a?.name || n.a} — ${b?.name || n.b} · ${n.stage} ${Math.round(n.progress)}%`, 'accent');
+    }
+  } else ctx.dim('No active negotiations.');
+  const sanctions = relations.sanctions.filter(s => s.status === 'active');
+  if (sanctions.length) {
+    ctx.print('');
+    ctx.print('SANCTIONS IN FORCE', 'head');
+    for (const s of sanctions.slice(0, 6)) {
+      const a = civ.countries.find(c => c.id === s.a), b = civ.countries.find(c => c.id === s.b);
+      ctx.print(`  ${a?.name || s.a} → ${b?.name || s.b} · ${s.scope}`);
+    }
+  }
+  if (relations.blocs.length) {
+    ctx.print('');
+    ctx.print('REGIONAL BLOCS', 'head');
+    for (const bloc of relations.blocs) ctx.print(`  ${pad(bloc.name, 32)} cohesion ${Math.round(bloc.cohesion)} · ${bloc.focus} · ${bloc.members.length} members`);
+  }
+  ctx.print('');
+  ctx.dim(`${relations.treaties.length} treaties · ${sanctions.length} sanctions · ${talks.length} negotiations. Diplomacy continues while you are offline.`);
+}
+function civRelease(ctx, args) {
+  const g = ctx.game;
+  const kind = (args[0] || '').toLowerCase();
+  const titleParts = [];
+  let price = null;
+  for (let i = 1; i < args.length; i++) {
+    if (args[i] === '--price' && args[i + 1]) price = Number(args[++i]);
+    else titleParts.push(args[i]);
+  }
+  const title = titleParts.join(' ').trim();
+  if (!['game', 'music', 'event'].includes(kind) || !title) {
+    ctx.err('usage: civ release <game|music|event> <title> [--price <amount>]');
+    return;
+  }
+  const r = playerRelease(g, kind, title, price == null ? {} : { price });
+  if (!r.ok) { ctx.err(r.error); return; }
+  ctx.ok(`Released ${kind} "${title}" through ${r.studio.name}.`);
+  ctx.print(`  quality ${Math.round(r.quality)}/100 · production ${fmtMoney(r.cost)} · title ${r.work.id}`, r.quality >= 65 ? 'ok' : 'accent');
+  ctx.dim('Audience, revenue and reputation evolve with the simulation.');
 }
 function civJobs(ctx, query) {
   const g = ctx.game;
@@ -3800,6 +3926,16 @@ function civMultiplayer(ctx, args) {
     ctx.ok(`@${r.player.handle} disconnected. The world continues without them.`);
     return;
   }
+  if (sub === 'action') {
+    const [handle, action, amount, ...memo] = args.slice(1);
+    if (!handle || !action) { ctx.err('usage: civ mp action <handle> <trade|property|contracts|company|research|publish|sync> [amount] [memo]'); return; }
+    const r = applyRemoteAction(g, handle, action, { amount: Number(amount) || 0, memo: memo.join(' ') || action });
+    if (!r.ok) { ctx.err(r.error); return; }
+    if (r.duplicate) ctx.warn(`Duplicate request replayed; ledger entry ${r.accepted.id} was not applied twice.`);
+    else ctx.ok(`${action} accepted for @${handle}${r.accepted?.amount ? ' · ' + fmtMoney(r.accepted.amount) : ''} · ledger ${r.accepted?.id || ''}`);
+    if (typeof r.balance === 'number') ctx.dim(`Authoritative balance: ${fmtMoney(r.balance)}`);
+    return;
+  }
   if (sub === 'validate') {
     const r = validateLedger(g);
     if (r.ok) ctx.ok(`Ledger valid · ${r.entries} entries · head ${r.head}`);
@@ -3822,7 +3958,7 @@ function civMultiplayer(ctx, args) {
   }
   ctx.print('');
   ctx.print(`Anti-cheat rejected ${civ.multiplayer.antiCheat.rejected} action(s) · permissions are role-scoped.`, 'dim');
-  ctx.dim('civ mp join <handle> · civ mp leave <handle> · civ mp validate · civ mp snapshot');
+  ctx.dim('civ mp join <handle> · civ mp leave <handle> · civ mp action <handle> trade 100 · civ mp validate · civ mp snapshot');
 }
 COMMANDS.civ = (ctx) => {
   const g = ctx.game;
@@ -3832,7 +3968,7 @@ COMMANDS.civ = (ctx) => {
   if (sub === 'countries' || sub === 'country') return rest.length ? civCountry(ctx, rest.join(' ')) : civCountries(ctx);
   if (sub === 'cities' || sub === 'city') return civCities(ctx, rest.join(' '));
   if (sub === 'laws' || sub === 'law' || sub === 'regulation') return civLaws(ctx, rest.join(' '));
-  if (sub === 'legal' || sub === 'court' || sub === 'courts') return civLegal(ctx);
+  if (sub === 'legal' || sub === 'court' || sub === 'courts') return civLegal(ctx, rest);
   if (sub === 'identity' || sub === 'id') return civIdentity(ctx);
   if (sub === 'study' || sub === 'learn') return civStudy(ctx, rest);
   if (sub === 'courses' || sub === 'course') return civCourses(ctx, rest.join(' '));
@@ -3843,6 +3979,9 @@ COMMANDS.civ = (ctx) => {
   if (sub === 'property' || sub === 'properties' || sub === 'realestate') return civProperty(ctx, rest);
   if (sub === 'jobs' || sub === 'jobmarket' || sub === 'hiring') return civJobs(ctx, rest.join(' '));
   if (sub === 'career' || sub === 'employment' || sub === 'work') return civCareer(ctx);
+  if (sub === 'society' || sub === 'households' || sub === 'population') return civSociety(ctx);
+  if (sub === 'diplomacy' || sub === 'relations' || sub === 'geopolitics') return civDiplomacy(ctx);
+  if (sub === 'release' || sub === 'publishwork') return civRelease(ctx, rest);
   if (sub === 'apply') {
     if (!rest.length) { ctx.err('usage: civ apply <job>'); return; }
     const r = playerApplyJob(g, rest.join(' '));
@@ -3920,7 +4059,7 @@ COMMANDS.civ = (ctx) => {
     ctx.print('  civ countries | civ country <name|code>');
     ctx.print('  civ cities [country]');
     ctx.print('  civ laws [country|domain]       active and proposed instruments');
-    ctx.print('  civ legal                       compliance, disputes and enforcement');
+    ctx.print('  civ legal | civ legal settle <case> | civ legal contest <case>');
     ctx.print('  civ identity                    contextual professional/social/financial record');
     ctx.print('  civ study [field] [hours] [--course id]');
     ctx.print('  civ courses [field]');
@@ -3928,11 +4067,14 @@ COMMANDS.civ = (ctx) => {
     ctx.print('  civ media [outlet] | civ publish <headline> [--outlet name] [--investigation] [--evidence]');
     ctx.print('  civ tech [query] | civ tech adopt <name>');
     ctx.print('  civ supply                      materials, components and shipments');
-    ctx.print('  civ property [available|buy id|sell id]');
+    ctx.print('  civ property [available|buy id [--rented|--mortgage|--insure]|sell id|insure id]');
+    ctx.print('  civ society                     households, morale, migration and individual decisions');
+    ctx.print('  civ diplomacy                   relations, negotiations, sanctions and blocs');
+    ctx.print('  civ release <game|music|event> <title> [--price n]');
     ctx.print('  civ jobs [query] | civ career');
     ctx.print('  civ apply <job> | civ interview <job> | civ negotiate <job> <salary> | civ accept <job> | civ decline <job> | civ quit');
     ctx.print('  civ history [query] | civ events [active|all]');
-    ctx.print('  civ mp [status|join handle|leave handle|validate|snapshot]');
+    ctx.print('  civ mp [status|join handle|leave handle|action handle action amount|validate|snapshot]');
     ctx.print('  civ relocate <country> [city] | civ lobby <country> [domain]');
     return;
   }

@@ -1876,6 +1876,15 @@ export function tickWorld(game, minutes = 1, opts = {}) {
 
   updateDerived(game);
   checkAchievements(game, true);
+
+  // Keep a bounded contract archive. Open and active work is always retained;
+  // completed jobs keep a recent working history even after years of simulation.
+  if (game.contracts.length > 260) {
+    const retained = new Set(game.contracts.filter(c => c.status === 'open' || c.status === 'active').map(c => c.id));
+    for (let i = game.contracts.length - 1; i >= 0 && retained.size < 260; i--) retained.add(game.contracts[i].id);
+    game.contracts = game.contracts.filter(c => retained.has(c.id));
+  }
+
   events.push({ type: 'summary', text: `${minutes} world minute(s) advanced`, before });
   return events;
 }

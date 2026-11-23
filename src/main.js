@@ -27,6 +27,11 @@ import {
   SHOP_ITEMS, ACHIEVEMENTS, CLOUD_PROVIDERS, CLOUD_PLANS, CONTAINER_IMAGES, AGENT_MODELS,
   AGENT_ROLES, PRODUCT_TEMPLATES
 } from './data.js';
+import {
+  civilizationSummary, civHistory, civEventList, playerCountry, playerCity, activeLegalDisputes,
+  playerProperties, playerBuyProperty, playerSellProperty, playerInsureProperty, playerRelease,
+  playerLegalAction, educationFields, researchFields
+} from './civilization.js';
 import { execute, commandNames } from './shell.js';
 
 const $ = (sel, root = document) => root.querySelector(sel);
@@ -555,6 +560,7 @@ const WINDOW_META = {
   agents: { title: 'Agents', sub: 'AI operations', w: 860, h: 570 },
   processes: { title: 'System', sub: 'processes', w: 770, h: 490 },
   profile: { title: 'Profile', sub: 'operator', w: 750, h: 570 },
+  civ: { title: 'Civilization', sub: 'persistent world', w: 900, h: 600 },
   help: { title: 'Manual', sub: 'field guide', w: 810, h: 550 }
 };
 
@@ -2648,6 +2654,348 @@ function profileAction(win, action) {
     });
   }
 }
+
+/* ============================================================
+   CIVILIZATION DASHBOARD
+   ============================================================ */
+const CIV_TABS = [
+  ['overview', 'Overview'], ['world', 'World'], ['society', 'Society'],
+  ['research', 'Research'], ['technology', 'Technology'], ['media', 'Media'],
+  ['culture', 'Culture'], ['law', 'Law'], ['property', 'Property'], ['history', 'History']
+];
+
+function civStat(label, value, note = '', cls = '') {
+  return `<div class="civ-stat ${cls}"><span>${esc(label)}</span><b>${esc(String(value))}</b>${note ? `<small>${esc(note)}</small>` : ''}</div>`;
+}
+function civMeter(label, value, note = '') {
+  const v = clamp(Number(value) || 0, 0, 100);
+  return `<div class="civ-meter"><span>${esc(label)}</span><div class="bar ${v < 34 ? 'red' : v < 55 ? 'amber' : ''}"><i style="width:${v}%"></i></div><b>${Math.round(v)}</b>${note ? `<small>${esc(note)}</small>` : ''}</div>`;
+}
+function civSection(title, body, note = '') {
+  if (!body) return '';
+  return `<section class="civ-section"><div class="civ-section-head"><h3>${esc(title)}</h3>${note ? `<span>${esc(note)}</span>` : ''}</div>${body}</section>`;
+}
+function civRow(left, right, cls = '') {
+  return `<div class="civ-row ${cls}"><div>${left}</div><div class="civ-row-right">${right}</div></div>`;
+}
+
+function renderCiv(win) {
+  const g = app.game;
+  const s = civilizationSummary(g);
+  const m = s.metrics;
+  const civ = s.civ;
+  if (!CIV_TABS.some(t => t[0] === win.civTab)) win.civTab = 'overview';
+  const tab = win.civTab;
+  const tabs = CIV_TABS.map(([id, label]) => `<button class="civ-tab ${id === tab ? 'on' : ''}" data-civ-tab="${id}">${label}</button>`).join('');
+  let content = '';
+  if (tab === 'overview') content = civOverview(g, s, m, civ);
+  else if (tab === 'world') content = civWorld(civ);
+  else if (tab === 'society') content = civSocietyView(g, civ);
+  else if (tab === 'research') content = civResearchView(g, civ);
+  else if (tab === 'technology') content = civTechView(civ);
+  else if (tab === 'media') content = civMediaView(civ);
+  else if (tab === 'culture') content = civCultureView(civ);
+  else if (tab === 'law') content = civLawView(g, civ);
+  else if (tab === 'property') content = civPropertyView(g, civ);
+  else content = civHistoryView(g);
+  win.body.innerHTML = `<div class="civ-app"><div class="civ-tabs">${tabs}</div><div class="civ-content">${content}</div></div>`;
+  win.status.innerHTML = `<span>${esc(s.country?.name || 'world')} · ${esc(s.city?.name || '')}</span><span>year ${m.year}</span><span class="st-right"><b>${m.civilizationIndex}/100</b><span>${fmtNum(civ.countries.length)} countries · ${fmtNum(civ.society.households.length)} households</span></span>`;
+}
+
+function civOverview(g, s, m, civ) {
+  const events = civ.events.filter(e => e.status === 'active').slice(0, 5);
+  const eventRows = events.map(e => civRow(
+    `<b>${esc(e.title)}</b><small>${esc(e.category)} · ${esc(e.severity)} · ${esc(civ.countries.find(c => c.id === e.countryId)?.name || 'global')}</small>`,
+    `<span class="tag ${e.severity === 'severe' ? 'r' : 'a'}">${Math.max(0, Math.ceil((e.startedWorld + e.durationWorld - civ.worldMinutes) / 1440))}d</span>`
+  )).join('');
+  const identity = civ.player;
+  const place = `${s.city?.name || 'unknown'}, ${s.country?.name || 'unknown'}`;
+  return `
+    <div class="civ-grid cols-3">
+      ${civStat('Civilization index', `${m.civilizationIndex}/100`, 'stability, freedom, technology', m.civilizationIndex >= 60 ? 'ok' : '')}
+      ${civStat('Population', fmtNum(m.population), `${fmtNum(civ.cities.length)} cities`)}
+      ${civStat('Global GDP', `$${(m.gdp / 1e12).toFixed(1)}T`, `growth ${m.growth.toFixed(1)}%`)}
+      ${civStat('Stability', `${m.stability.toFixed(0)}/100`, `unrest ${(100 - m.stability).toFixed(0)}`)}
+      ${civStat('Internet freedom', `${m.internetFreedom.toFixed(0)}/100`, 'cross-country average')}
+      ${civStat('Research level', m.researchLevel.toFixed(1), `${civ.research.discoveries.length} discoveries`)}
+    </div>
+    <div class="civ-grid cols-4">
+      ${civStat('Inflation', `${m.inflation.toFixed(1)}%`)}
+      ${civStat('Unemployment', `${m.unemployment.toFixed(1)}%`)}
+      ${civStat('Technology adoption', `${m.technologyAdoption.toFixed(0)}/100`)}
+      ${civStat('Supply pressure', `${Math.round(m.supplyPressure * 100)}%`, 'hardware index vs baseline')}
+      ${civStat('Media trust', `${m.mediaTrust.toFixed(0)}/100`)}
+      ${civStat('Legal pressure', `${m.legalPressure.toFixed(0)}/100`)}
+      ${civStat('Inequality', `${m.inequality.toFixed(0)}/100`)}
+      ${civStat('Active events', String(m.activeEvents), 'persisting consequences')}
+    </div>
+    ${civSection('ACTIVE WORLD EVENTS', eventRows || '<div class="civ-empty">The world is quiet for now.</div>', `${civ.events.filter(e => e.status === 'active').length} active`)}
+    <div class="civ-grid cols-2">
+      ${civSection('YOUR CONTEXT', `
+        ${civRow(`<b>@${esc(identity.handle)}</b><small>${esc(place)}</small>`, `<span class="tag g">${esc(identity.professional.title || 'independent')}</span>`)}
+        ${civMeter('Professional', identity.professional.score)}
+        ${civMeter('Social', identity.social.score, `${fmtNum(identity.social.followers)} followers`)}
+        ${civMeter('Financial credit', (identity.financial.credit - 300) / 5.5, `credit ${identity.financial.credit}`)}
+        ${civMeter('Academic', identity.academic.score, `${identity.academic.publications} papers`)}
+      `, 'contextual reputation')}
+      ${civSection('WHAT TO DO NEXT', `
+        ${civRow('<b>Study a field</b><small>Raise practical knowledge and credentials</small>', '<span class="tag b">civ study</span>')}
+        ${civRow('<b>Find work</b><small>Apply, interview and negotiate</small>', '<span class="tag b">civ jobs</span>')}
+        ${civRow('<b>Start research</b><small>Fund a project and wait for results</small>', '<span class="tag b">civ research</span>')}
+        ${civRow('<b>Publish or release</b><small>Media, games, music and events</small>', '<span class="tag b">civ release</span>')}
+        ${civRow('<b>Own infrastructure</b><small>Property, data centers and offices</small>', '<span class="tag b">civ property</span>')}
+      `, 'the world does not require you to succeed')}
+    </div>`;
+}
+
+function civWorld(civ) {
+  const rows = civ.countries.slice().sort((a, b) => b.population - a.population).map(c => civRow(
+    `<b>${esc(c.name)}</b> <small>${esc(c.government)} · ${esc(c.currency)} · ${esc(c.region)}</small>`,
+    `<span class="tag ${c.stability < 45 ? 'r' : c.stability < 60 ? 'a' : 'g'}">stability ${Math.round(c.stability)}</span>
+     <span class="tag b">growth ${c.economy.growth.toFixed(1)}%</span>
+     <span class="tag">net ${Math.round(c.internet.penetration)}%</span>`
+  )).join('');
+  const cities = civ.cities.slice(0, 10).map(c => civRow(
+    `<b>${esc(c.name)}</b><small>${esc(c.countryId)} · ${fmtNum(c.population)} residents</small>`,
+    `<span class="tag b">power ${c.utilities.power}</span><span class="tag">water ${c.utilities.water}</span><span class="tag">telecom ${c.utilities.telecom}</span>`
+  )).join('');
+  return `
+    ${civSection('COUNTRIES AND REGIONS', rows, `${civ.countries.length} sovereign simulations`)}
+    ${civSection('CITIES AND INFRASTRUCTURE', cities, 'prices, utilities and congestion are interconnected')}`;
+}
+
+function civSocietyView(g, civ) {
+  const society = civ.society;
+  const households = society.households;
+  const avg = key => households.length ? households.reduce((sum, h) => sum + (h[key] || 0), 0) / households.length : 0;
+  const owned = households.filter(h => h.tenure === 'own').length;
+  const arrears = households.filter(h => h.savings < 0).length;
+  const local = households.filter(h => h.cityId === playerCity(g)?.id).slice(0, 8);
+  const localRows = local.map(h => {
+    const members = h.memberIds.map(id => civ.identities.find(i => i.id === id)).filter(Boolean);
+    return civRow(
+      `<b>${esc(members.map(m => '@' + m.handle).join(' ') || h.id)}</b><small>${esc(h.tenure)} · income ${fmtMoney(h.income)}/mo · housing ${fmtMoney(h.housingCost)}</small>`,
+      `<span class="tag ${h.morale < 40 ? 'r' : h.morale < 55 ? 'a' : 'g'}">morale ${Math.round(h.morale)}</span><span class="tag">savings ${fmtMoney(h.savings)}</span>`
+    );
+  }).join('');
+  const decisions = society.decisions.slice(-12).reverse().map(d => {
+    const identity = civ.identities.find(i => i.id === d.agentId);
+    return civRow(`<b>@${esc(identity?.handle || d.agentId)}</b> <small>${esc(d.detail)}</small>`, `<span class="tag b">${esc(d.action)}</span>`);
+  }).join('');
+  return `
+    <div class="civ-grid cols-4">
+      ${civStat('Households', fmtNum(households.length), `${society.moves || 0} relocations`)}
+      ${civStat('Average morale', `${Math.round(avg('morale'))}/100`, 'household wellbeing')}
+      ${civStat('Home ownership', `${Math.round(owned / Math.max(1, households.length) * 100)}%`, 'renters and owners')}
+      ${civStat('In arrears', String(arrears), 'negative household savings')}
+    </div>
+    ${civSection('HOUSEHOLDS IN YOUR CITY', localRows || '<div class="civ-empty">No households recorded in this city.</div>', `${local.length} shown`)}
+    ${civSection('RECENT INDIVIDUAL DECISIONS', decisions || '<div class="civ-empty">No decisions recorded yet.</div>', 'bounded, contextual, not continuous AI inference')}`;
+}
+
+function civResearchView(g, civ) {
+  const knowledge = civ.education.player.knowledge || {};
+  const fields = civ.research.fields.map(f => {
+    const max = 3;
+    const pct = clamp((f.progress || 0), 0, 100);
+    return `<div class="civ-field">
+      <div class="civ-field-head"><b>${esc(f.name)}</b><span class="tag b">level ${f.level}</span><span class="tag">funding ${fmtMoney(f.funding)}</span></div>
+      <div class="bar"><i style="width:${pct}%"></i></div>
+      <small>${f.discoveries.length} discoveries · next project progress ${Math.round(pct)}%</small>
+    </div>`;
+  }).join('');
+  const learner = educationFields().map(f => civMeter(f.name, knowledge[f.id] || 0)).join('');
+  const projects = civ.research.projects.filter(p => p.status === 'active').slice(0, 8).map(p => civRow(
+    `<b>${esc(p.title || p.fieldName || p.field)}</b><small>${esc(p.institutionName || 'independent')} · funding ${fmtMoney(p.funding || 0)}</small>`,
+    `<span class="tag b">${Math.round(p.progress || 0)}%</span>`
+  )).join('');
+  const discoveries = civ.research.discoveries.slice(-10).reverse().map(d => civRow(
+    `<b>${esc(d.name)}</b><small>${esc(d.summary || d.fieldName || '')}</small>`,
+    `<span class="tag g">${esc(d.fieldName || d.field || 'research')}</span>`
+  )).join('');
+  return `
+    ${civSection('RESEARCH ECOSYSTEM', fields, 'time, funding, equipment and expertise')}
+    ${civSection('ACTIVE PROJECTS', projects || '<div class="civ-empty">No active projects. Start one with civ research start.</div>')}
+    ${civSection('RECENT DISCOVERIES', discoveries || '<div class="civ-empty">No discoveries yet.</div>')}
+    ${civSection('YOUR KNOWLEDGE', learner, 'study through courses, documentation and practice')}`;
+}
+
+function civTechView(civ) {
+  const techs = civ.tech.technologies.slice().sort((a, b) => b.adoption - a.adoption).slice(0, 24).map(t => civRow(
+    `<b>${esc(t.name)} ${esc(t.version || '')}</b><small>${esc(t.vendorName)} · ${esc(t.category)} · ${esc(t.license)}</small>`,
+    `<span class="tag ${t.standard ? 'g' : 'b'}">adoption ${Math.round(t.adoption)}</span><span class="tag">security ${Math.round(t.security)}</span><span class="tag">docs ${Math.round(t.documentation)}</span>`
+  )).join('');
+  return civSection('TECHNOLOGY MARKET', techs || '<div class="civ-empty">No technology releases yet.</div>', `${civ.tech.technologies.length} products · versions, licenses and adoption`);
+}
+
+function civMediaView(civ) {
+  const outlets = civ.media.outlets.slice().sort((a, b) => b.audience - a.audience).slice(0, 20).map(o => civRow(
+    `<b>${esc(o.name)}</b><small>${esc(o.type)} · ${esc(o.focus || 'general')} · ${esc(o.countryId)}</small>`,
+    `<span class="tag ${o.trust < 45 ? 'r' : o.trust < 60 ? 'a' : 'g'}">trust ${Math.round(o.trust)}</span><span class="tag b">${fmtNum(o.audience)}</span>`
+  )).join('');
+  const content = civ.media.content.slice(-10).reverse().map(item => civRow(
+    `<b>${esc(item.headline)}</b><small>${esc(item.outletName)} · ${esc(item.topic)} · ${fmtNum(item.reach)} reach</small>`,
+    `${item.misinformation ? '<span class="tag r">unverified</span>' : item.corrected ? '<span class="tag a">corrected</span>' : '<span class="tag g">reported</span>'}<span class="tag">${fmtNum(item.shares || 0)} shares</span>`
+  )).join('');
+  const trends = civ.media.trends.slice(0, 10).map(t => civRow(`<b>${esc(t.topic)}</b><small>volume ${Math.round(t.volume)} · sentiment ${t.sentiment}</small>`, '')).join('');
+  return `
+    ${civSection('MEDIA ORGANIZATIONS', outlets || '<div class="civ-empty">No outlets yet.</div>')}
+    ${civSection('INFORMATION SPREAD', content || '<div class="civ-empty">No reporting yet.</div>', 'audience, trust, relevance and sharing')}
+    ${civSection('PUBLIC AGENDA', trends || '<div class="civ-empty">No trends yet.</div>')}`;
+}
+
+function civCultureView(civ) {
+  const studios = civ.culture.organizations.slice(0, 12).map(o => civRow(
+    `<b>${esc(o.name)}</b><small>${esc(o.kind)} · ${esc(o.cityName || o.countryId)} · ${esc(o.desc || '')}</small>`,
+    `<span class="tag b">${fmtNum(o.audience || 0)} audience</span><span class="tag">rep ${Math.round(o.reputation || 0)}</span>`
+  )).join('');
+  const games = civ.culture.games.slice(-10).reverse().map(game => civRow(
+    `<b>${esc(game.title)}</b><small>${esc(game.genre)} · quality ${Math.round(game.quality)}</small>`,
+    `<span class="tag b">${fmtNum(game.players || 0)} players</span><span class="tag">${fmtMoney(game.revenue || 0)}</span>`
+  )).join('');
+  const music = civ.culture.music.slice(-8).reverse().map(track => civRow(
+    `<b>${esc(track.title)}</b><small>${esc(track.artist)} · ${esc(track.countryId)}</small>`,
+    `<span class="tag b">${fmtNum(track.streams || 0)} streams</span>`
+  )).join('');
+  const events = civ.culture.events.slice(-8).reverse().map(event => civRow(
+    `<b>${esc(event.name)}</b><small>${esc(event.type)} · ${esc(event.status)} · ${esc(civ.cities.find(c => c.id === event.cityId)?.name || event.cityId)}</small>`,
+    `<span class="tag ${event.status === 'live' ? 'g' : 'b'}">${fmtNum(event.attendance || 0)} attended</span>`
+  )).join('');
+  return `
+    <div class="civ-actions"><button class="tbtn small" data-civ-action="release:game">Release a game</button><button class="tbtn small" data-civ-action="release:music">Release music</button><button class="tbtn small" data-civ-action="release:event">Schedule an event</button></div>
+    ${civSection('STUDIOS AND COMMUNITIES', studios || '<div class="civ-empty">No cultural organizations yet.</div>')}
+    ${civSection('GAMES', games || '<div class="civ-empty">No games released.</div>')}
+    ${civSection('MUSIC', music || '<div class="civ-empty">No music released.</div>')}
+    ${civSection('EVENTS', events || '<div class="civ-empty">No events scheduled.</div>')}`;
+}
+
+function civLawView(g, civ) {
+  const disputes = activeLegalDisputes(g).filter(d => d.subject === 'player' || d.subject === 'player-company');
+  const caseRows = disputes.map(d => civRow(
+    `<b>${esc(d.id)} · ${esc(d.domainName)}</b><small>${esc(d.issue)} · evidence ${d.evidence}/100 · claimed ${fmtMoney(d.claimedFine)}</small>`,
+    `<span class="tag ${d.contested ? 'g' : 'a'}">${esc(d.status)}${d.contested ? ' · represented' : ''}</span>
+     <button class="tbtn small" data-civ-action="legal:settle:${esc(d.id)}">Settle</button>
+     <button class="tbtn small" data-civ-action="legal:contest:${esc(d.id)}">Contest</button>`
+  )).join('');
+  const docket = activeLegalDisputes(g).filter(d => d.subject !== 'player' && d.subject !== 'player-company').slice(0, 10).map(d => civRow(
+    `<b>${esc(d.subjectName || d.subject)}</b><small>${esc(d.domainName)} · ${esc(d.issue)}</small>`,
+    `<span class="tag a">${esc(d.status)}</span>`
+  )).join('');
+  const country = playerCountry(g);
+  return `
+    <div class="civ-grid cols-4">
+      ${civStat('Jurisdiction', country?.name || 'unknown', country?.cyberPolicy || '')}
+      ${civStat('Compliance', `${Math.round(civ.player.compliance || 0)}/100`)}
+      ${civStat('Courts', String(civ.courts.length), 'simulated dockets')}
+      ${civStat('Regulators', String(civ.regulators.length), 'sector authorities')}
+    </div>
+    ${civSection('CASES AGAINST YOU', caseRows || '<div class="civ-empty">No open cases. Compliance is quiet.</div>')}
+    ${civSection('COURT DOCKET', docket || '<div class="civ-empty">No other disputes active.</div>')}
+    ${g.legal.length ? civSection('ENFORCEMENT HISTORY', g.legal.slice(-6).reverse().map(l => civRow(`<b>${esc(l.authority)}</b><small>${esc(l.reason)}</small>`, `<span class="tag r">${fmtMoney(l.fine)}</span>`)).join('')) : ''}`;
+}
+
+function civPropertyView(g, civ) {
+  const owned = playerProperties(g);
+  const ownedRows = owned.map(p => civRow(
+    `<b>${esc(p.label)}</b><small>${esc(civ.cities.find(c => c.id === p.cityId)?.name || p.cityId)} · ${esc(p.occupancy)} · ${fmtMoney(p.rent)}/mo rent</small>`,
+    `${p.mortgage ? `<span class="tag a">mortgage ${fmtMoney(p.mortgage.payment)}/mo</span>` : ''}${p.insurance ? `<span class="tag g">insured</span>` : ''}
+     <button class="tbtn small" data-civ-action="insure:${esc(p.id)}">Insure</button>
+     <button class="tbtn small danger" data-civ-action="sell:${esc(p.id)}">Sell</button>`
+  )).join('');
+  const available = civ.property.listings.filter(p => p.status === 'available').slice(0, 10).map(p => civRow(
+    `<b>${esc(p.label)}</b><small>${esc(civ.cities.find(c => c.id === p.cityId)?.name || p.cityId)} · quality ${p.quality} · rent ${fmtMoney(p.rent)}/mo</small>`,
+    `<span class="tag b">${fmtMoney(p.price)}</span>
+     <button class="tbtn small" data-civ-action="buy:${esc(p.id)}">Buy</button>
+     <button class="tbtn small" data-civ-action="buy-mortgage:${esc(p.id)}">Mortgage</button>`
+  )).join('');
+  return `
+    <div class="civ-grid cols-4">
+      ${civStat('Market index', civ.property.market.index.toFixed(1))}
+      ${civStat('Rent index', civ.property.market.rentIndex.toFixed(1))}
+      ${civStat('Vacancy', `${civ.property.market.vacancy.toFixed(1)}%`)}
+      ${civStat('Construction', String(civ.property.construction.length), 'projects in progress')}
+    </div>
+    ${civSection('YOUR PROPERTY', ownedRows || '<div class="civ-empty">You own no property.</div>')}
+    ${civSection('AVAILABLE PROPERTY', available || '<div class="civ-empty">No listings available.</div>')}`;
+}
+
+function civHistoryView(g) {
+  const rows = civHistory(g, { limit: 30 }).map(t => civRow(
+    `<b>${esc(t.title)}</b><small>${esc(t.body)}</small>`,
+    `<span class="tag ${t.major ? 'g' : ''}">${t.year} · ${esc(t.category)}</span>`
+  )).join('');
+  return civSection('WORLD HISTORY', rows || '<div class="civ-empty">History is still being written.</div>', 'the world exists before you and continues after you');
+}
+
+function civReleaseFlow(win, kind) {
+  const label = kind === 'game' ? 'Game' : kind === 'music' ? 'Music release' : 'Event';
+  formModal({
+    title: `Release ${label.toLowerCase()}`,
+    eyebrow: 'INDEPENDENT WORK',
+    body: '<p class="dim">Production costs are paid immediately. Quality depends on your knowledge, professional standing and reputation.</p>',
+    fields: [
+      { name: 'title', label: 'Title', placeholder: kind === 'event' ? 'Open Bench Meetup' : 'Signal Run' },
+      { name: 'price', label: kind === 'event' ? 'Ticket price' : 'Price', value: kind === 'music' ? '0' : '12', type: 'number' }
+    ],
+    submit: 'Release',
+    onSubmit: vals => {
+      const title = String(vals.title || '').trim();
+      if (!title) { toast('Title required', 'Give the work a name.', 'r'); return false; }
+      const price = Number(vals.price) || 0;
+      const result = playerRelease(app.game, kind, title, { price });
+      if (!result.ok) { toast('Release failed', result.error, 'r'); return false; }
+      toast('Released', `${title} · quality ${Math.round(result.quality)}/100`, 'g');
+      win.civTab = 'culture';
+      refreshUI();
+    }
+  });
+}
+
+function handleCivClick(win, e) {
+  const tab = e.target.closest('[data-civ-tab]');
+  if (tab) { win.civTab = tab.dataset.civTab; renderCiv(win); return; }
+  const actionEl = e.target.closest('[data-civ-action]');
+  if (!actionEl) return;
+  const [action, ...rest] = actionEl.dataset.civAction.split(':');
+  const id = rest.join(':');
+  const g = app.game;
+  if (action === 'release') { civReleaseFlow(win, id); return; }
+  if (action === 'legal') {
+    const [verb, caseId] = id.split(':');
+    const r = playerLegalAction(g, caseId, verb);
+    if (!r.ok) toast('Legal action failed', r.error, 'r');
+    else toast(verb === 'settle' ? 'Case settled' : 'Case contested', `${caseId}`, verb === 'settle' ? 'a' : 'g');
+    refreshUI();
+    return;
+  }
+  if (action === 'buy' || action === 'buy-mortgage') {
+    const r = playerBuyProperty(g, id, { mortgage: action === 'buy-mortgage' });
+    if (!r.ok) toast('Purchase failed', r.error, 'r');
+    else toast('Property acquired', `${r.property.label} · ${fmtMoney(r.downPayment)} down`, 'g');
+    refreshUI();
+    return;
+  }
+  if (action === 'sell') {
+    const r = playerSellProperty(g, id);
+    if (!r.ok) toast('Sale failed', r.error, 'r');
+    else toast('Property sold', `${r.property.label} · ${fmtMoney(r.sale)}`, 'g');
+    refreshUI();
+    return;
+  }
+  if (action === 'insure') {
+    const r = playerInsureProperty(g, id);
+    if (!r.ok) toast('Insurance failed', r.error, 'r');
+    else toast(r.already ? 'Already insured' : 'Property insured', `${r.property.label}`, 'g');
+    refreshUI();
+  }
+}
+
+MOUNTS.civ = function mountCiv(win) {
+  win.civTab = win.civTab || 'overview';
+  win.body.addEventListener('click', e => handleCivClick(win, e));
+  win.render = () => renderCiv(win);
+  renderCiv(win);
+};
 
 /* ============================================================
    HELP / MANUAL
