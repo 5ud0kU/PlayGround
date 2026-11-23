@@ -536,12 +536,18 @@ function tickLoop() {
   if (app.tickNo % 9 === 0) saveGame(false);
 }
 
+function renderAppWindow(win) {
+  if (!win || win.minimized || !win.render) return;
+  const scroll = scrollSnapshot(win.body);
+  safe(() => win.render());
+  restoreScroll(win.body, scroll);
+}
+
 function softRefresh() {
   updateClock();
   updateMonitor();
-  for (const kind of ['market', 'servers', 'cloud', 'agents', 'processes', 'profile', 'map']) {
-    const win = app.windows.get(kind);
-    if (win && !win.minimized && win.render) safe(() => win.render());
+  for (const kind of ['market', 'servers', 'cloud', 'agents', 'processes', 'profile', 'map', 'civilization']) {
+    renderAppWindow(app.windows.get(kind));
   }
 }
 
@@ -578,7 +584,7 @@ function openWindow(kind, params = {}) {
     if (win.minimized) { win.minimized = false; win.el.classList.remove('minimized'); }
     focusWindow(win);
     if (win.onParams) safe(() => win.onParams(params));
-    if (win.render) safe(() => win.render());
+    renderAppWindow(win);
     updateDock();
     return win;
   }
@@ -693,7 +699,7 @@ function toggleMax(win) {
     el.style.height = 'calc(100% - 16px)';
     el.dataset.max = '1';
   }
-  if (win.render) safe(() => win.render());
+  renderAppWindow(win);
 }
 
 function startDrag(win, e) {
@@ -729,7 +735,7 @@ function startResize(win, e) {
   const up = () => {
     document.removeEventListener('pointermove', move);
     document.removeEventListener('pointerup', up);
-    if (win.render) safe(() => win.render());
+    renderAppWindow(win);
   };
   document.addEventListener('pointermove', move);
   document.addEventListener('pointerup', up);
@@ -783,13 +789,7 @@ function restoreScroll(root, snapshot) {
 
 function refreshUI() {
   updateAll();
-  for (const win of app.windows.values()) {
-    if (win.render && !win.minimized) {
-      const scroll = scrollSnapshot(win.body);
-      safe(() => win.render());
-      restoreScroll(win.body, scroll);
-    }
-  }
+  for (const win of app.windows.values()) renderAppWindow(win);
   scheduleSave();
 }
 
