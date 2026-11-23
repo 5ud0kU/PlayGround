@@ -993,6 +993,7 @@ export function tickDevWorld(game, minutes = 1, rng = null) {
       if (e.category === 'security') events.push({ type: 'news', headline: e.title, body: e.body, source: 'The Packet' });
     }
   }
+  for (let step = 0; step < advanceBucket(dw, 'player', 720, world, 4); step++) events.push(...tickPlayerProjects(game, dw, rng));
   for (const p of dw.projects) if (p.detailed) p.metrics.lines = Object.values(p.files).reduce((s, content) => s + String(content).split('\n').length, 0);
   recomputeDevMetrics(game, dw);
   bounded(dw.projects, DEV_CAPS.projects);
@@ -1172,4 +1173,223 @@ export function playerForkProject(game, query) {
   if (!fork) return { ok: false, error: 'Could not fork that project.' };
   recordCodingReward(game, 'scaffold');
   return { ok: true, fork, project: hit.project };
+}
+
+/* ---------------- interactive player project lifecycle ---------------- */
+function playerDev(game) {
+  return {
+    id: 'player-dev', handle: game.player.handle, name: game.player.name || game.player.handle,
+    style: { indent: 4, comments: 40, naming: 'snake_case' }, skill: 55,
+    reputation: game.player.reputation || 10, languages: { python: 60, javascript: 55 }
+  };
+}
+
+export function playerCreateProject(game, name, language = 'python', kind = 'cli') {
+  const dw = ensureDevWorld(game);
+  const clean = slugify(name) || '';
+  if (clean.length < 3) return { ok: false, error: 'Project name must be at least three characters.' };
+  if (dw.projects.some(p => p.slug === clean && p.ownerId === 'player-dev')) return { ok: false, error: 'You already have a project with that name.' };
+  if (dw.projects.length >= DEV_CAPS.projects) return { ok: false, error: 'The project index is full.' };
+  if (!spend(game, 25, `create project ${clean}`)) return { ok: false, error: 'Creating a project costs $25.' };
+  const rng = devRng(game, 0xc1ea);
+  const dev = playerDev(game);
+  const lang = LANGS.some(l => l.id === language) ? language : 'python';
+  const kindDef = PROJECT_KINDS.find(k => k[0] === kind) || PROJECT_KINDS[0];
+  const project = {
+    id: nextId(dw, 'project'), name: clean, slug: clean, ownerId: 'player-dev',
+    ownerHandle: game.player.handle, ownerName: dev.name, orgId: null,
+    kind: kindDef[0], language: lang, description: `${clean}, a ${kindDef[1]} maintained by @${game.player.handle}.`,
+    status: 'writing', phase: 1, phaseProgress: 0, detailed: true,
+    architecture: { modules: [], dependencies: [], database: null, auth: null, api: null, style: 'snake_case', target: 'local workstation' },
+    requirements: ['must have a documented entry point', 'must ship with a smoke test', 'must remain readable by other developers'],
+    quality: computeQuality(dev, rng, true), metrics: defaultProjectMetrics(), files: {},
+    git: { branch: 'main', commits: [], tags: [], prs: [] }, issues: [], releases: [], bugs: [],
+    collaborators: [], dependencies: [], createdWorld: game.worldMinutes || 0,
+    updatedWorld: game.worldMinutes || 0, lastTestWorld: 0, lastBuildWorld: 0,
+    nextCycleWorld: (game.worldMinutes || 0) + 600, repoPath: `/srv/git/${game.player.handle}/${clean}.git`,
+    published: false, license: 'MIT', deployedSiteId: null
+  };
+  project.files = generateFiles(project, dev);
+  project.metrics.files = Object.keys(project.files).length;
+  project.metrics.lines = Object.values(project.files).reduce((s, c) => s + String(c).split('\n').length, 0);
+  project.releases.push({ version: '0.1.0', world: game.worldMinutes || 0, notes: 'Initial source import.', signed: false, vulnerabilities: 0 });
+  project.metrics.releases = 1;
+  commit(project, 'initial import', Object.keys(project.files), rng);
+  dw.projects.push(project);
+  recordCodingReward(game, 'scaffold');
+  pushEvent(dw, { world: game.worldMinutes || 0, category: 'development', title: `${game.player.handle} created ${clean}`, body: `${lang} ${kindDef[1]} with ${project.metrics.files} generated files.`, actors: [game.player.handle], targetId: project.id });
+  return { ok: true, project };
+}
+
+export function playerWriteFile(game, query, path, content) {
+  const hit = projectDetail(game, query);
+  if (!hit || hit.project.ownerId !== 'player-dev') return { ok: false, error: 'You can only edit your own projects.' };
+  const clean = normalizeProjectPath(path);
+  if (!clean) return { ok: false, error: 'Invalid project path.' };
+  const before = hit.project.files[clean] || '';
+  hit.project.files[clean] = String(content ?? '');
+  hit.project.updatedWorld = game.worldMinutes || 0;
+  hit.project.metrics.files = Object.keys(hit.project.files).length;
+  hit.project.metrics.lines = Object.values(hit.project.files).reduce((s, c) => s + String(c).split('\n').length, 0);
+  if (!before) commit(hit.project, `add ${clean}`, [clean], devRng(game, 0xe4d1));
+  else commit(hit.project, `edit ${clean}`, [clean], devRng(game, 0xe4d2));
+  return { ok: true, project: hit.project, path: clean, lines: hit.project.files[clean].split('\n').length };
+}
+function normalizeProjectPath(path) {
+  const parts = String(path || '').replace(/^\/+/, '').split('/').filter(p => p && p !== '.' && p !== '..');
+  if (!parts.length || parts.length > 8) return '';
+  return parts.join('/').slice(0, 120);
+}
+
+export function playerBuildProject(game, query) {
+  const hit = projectDetail(game, query);
+  if (!hit || hit.project.ownerId !== 'player-dev') return { ok: false, error: 'You can only build your own projects.' };
+  const p = hit.project;
+  const errors = [];
+  let warnings = 0;
+  for (const [path, content] of Object.entries(p.files)) {
+    if (!/\.(py|js|ts|c|cpp|go|rs|sh|sql|html|json)$/.test(path)) continue;
+    for (const problem of lint(content, languageFor(path, content).id, path)) {
+      if (problem.severity === 'error') errors.push(`${path}:${problem.line} ${problem.message}`);
+      else if (problem.severity === 'warning') warnings++;
+    }
+  }
+  p.metrics.builds++;
+  p.lastBuildWorld = game.worldMinutes || 0;
+  const speed = game.interact?.hardware ? hardwareSpeed(game) : 1;
+  const duration = Math.max(2, Math.round((4 + p.metrics.files * .8) / speed));
+  if (errors.length) {
+    p.bugs.push({ id: nextId(ensureDevWorld(game), 'review'), title: errors[0], status: 'open', openedWorld: game.worldMinutes || 0 });
+    recordCodingReward(game, 'fail');
+    return { ok: false, errors, warnings, duration, message: 'Build failed: static analysis found errors.' };
+  }
+  const version = bumpVersion(p.releases.length ? p.releases[p.releases.length - 1].version : '0.1.0');
+  p.releases.push({ version, world: game.worldMinutes || 0, notes: 'Interactive build passed static checks.', signed: false, vulnerabilities: 0 });
+  bounded(p.releases, 40);
+  commit(p, `build ${version}`, Object.keys(p.files), devRng(game, 0xb011));
+  recordCodingReward(game, 'build');
+  return { ok: true, errors: [], warnings, duration, version, message: `Build ${version} succeeded in ~${duration} world minutes.` };
+}
+function hardwareSpeed(game) {
+  const h = game.interact?.hardware;
+  if (!h) return 1;
+  const cores = h.cpu?.cores || 4;
+  const clock = h.cpu?.ghz || 2.5;
+  return clamp((cores * clock) / 10, .4, 4) * clamp(h.health / 100, .4, 1);
+}
+
+export function playerTestProject(game, query) {
+  const hit = projectDetail(game, query);
+  if (!hit || hit.project.ownerId !== 'player-dev') return { ok: false, error: 'You can only test your own projects.' };
+  const p = hit.project;
+  const rng = devRng(game, 0x7e57);
+  const pass = rng.chance(clamp(.4 + p.quality.testing / 150, .2, .95));
+  p.metrics.builds++;
+  p.lastTestWorld = game.worldMinutes || 0;
+  if (pass) {
+    p.metrics.coverage = clampv(p.metrics.coverage + rng.int(4, 12));
+    recordCodingReward(game, 'pass');
+    return { ok: true, pass: true, cases: rng.int(2, 12), message: 'All simulated smoke tests passed.' };
+  }
+  const title = rng.pick(['empty input crashes the parser','retry loop never exits','unsafe default survives configuration','memory grows with every request']);
+  p.bugs.push({ id: nextId(ensureDevWorld(game), 'review'), title, status: 'open', openedWorld: game.worldMinutes || 0 });
+  p.metrics.bugsOpen++;
+  recordCodingReward(game, 'fail');
+  return { ok: true, pass: false, cases: rng.int(2, 12), message: `Test failure: ${title}` };
+}
+
+export function playerPublishProject(game, query) {
+  const dw = ensureDevWorld(game);
+  const hit = projectDetail(game, query);
+  if (!hit || hit.project.ownerId !== 'player-dev') return { ok: false, error: 'You can only publish your own projects.' };
+  if (hit.project.published) return { ok: false, error: 'That project is already published.' };
+  if (!spend(game, 40, `publish project ${hit.project.slug}`)) return { ok: false, error: 'Publishing costs $40.' };
+  publishProject(game, dw, hit.project);
+  hit.project.status = 'published';
+  pushEvent(dw, { world: game.worldMinutes || 0, category: 'development', title: `${game.player.handle} published ${hit.project.name}`, body: `Version ${hit.project.releases.at(-1)?.version || '0.1.0'} entered git.nullnet.`, actors: [game.player.handle], targetId: hit.project.id, major: false });
+  recordCodingReward(game, 'publish');
+  return { ok: true, project: hit.project };
+}
+
+export function playerDeployProject(game, query, domain) {
+  const dw = ensureDevWorld(game);
+  const hit = projectDetail(game, query);
+  if (!hit || hit.project.ownerId !== 'player-dev') return { ok: false, error: 'You can only deploy your own projects.' };
+  if (!hit.project.published) return { ok: false, error: 'Publish the project before deploying it.' };
+  const site = (game.sites || []).find(s => s.domain === domain && (s.ownerType === 'player' || s.ownerId === 'player'));
+  if (!site) return { ok: false, error: 'You need a website you control at that domain.' };
+  const server = (game.servers || []).find(s => s.id === site.serverId);
+  if (!server || server.status === 'offline') return { ok: false, error: 'The hosting server is offline.' };
+  if ((server.services || []).some(s => s.state === 'stopped' && [80,443].includes(s.port))) return { ok: false, error: 'Start the web service on the host before deploying.' };
+  const duration = Math.max(3, Math.round(12 / hardwareSpeed(game)));
+  hit.project.deployedSiteId = site.id;
+  hit.project.status = 'deployed';
+  hit.project.updatedWorld = game.worldMinutes || 0;
+  publishProject(game, dw, hit.project);
+  pushEvent(dw, { world: game.worldMinutes || 0, category: 'development', title: `${hit.project.name} deployed to ${site.domain}`, body: `Release ${hit.project.releases.at(-1)?.version || '0.1.0'} is serving traffic.`, actors: [game.player.handle], targetId: hit.project.id });
+  recordCodingReward(game, 'deploy');
+  return { ok: true, project: hit.project, site, server, duration };
+}
+
+export function playerUpdateProject(game, query, notes) {
+  const hit = projectDetail(game, query);
+  if (!hit || hit.project.ownerId !== 'player-dev') return { ok: false, error: 'You can only release updates to your own projects.' };
+  const p = hit.project;
+  const version = bumpVersion(p.releases.length ? p.releases[p.releases.length - 1].version : '0.1.0');
+  p.releases.push({ version, world: game.worldMinutes || 0, notes: cap(notes || 'maintenance update', 120), signed: false, vulnerabilities: 0 });
+  bounded(p.releases, 40);
+  commit(p, `release ${version}: ${notes || 'update'}`, Object.keys(p.files), devRng(game, 0x9e4a));
+  if (p.published) publishProject(game, ensureDevWorld(game), p);
+  recordCodingReward(game, 'publish');
+  return { ok: true, project: p, version };
+}
+
+export function tickPlayerProjects(game, dw = ensureDevWorld(game), rng = null) {
+  rng = rng || devRng(game, 0xf1ed);
+  const events = [];
+  const mine = dw.projects.filter(p => p.ownerId === 'player-dev' && p.published);
+  if (!mine.length) return events;
+  for (const project of mine) {
+    project.metrics.downloads += rng.int(1, 40);
+    for (const viewer of rng.picks(dw.developers, rng.int(1, 3))) {
+      if (!rng.chance(.08 + (viewer.interests || []).includes('oss') ? .06 : 0)) continue;
+      const roll = rng.next();
+      if (roll < .3 && project.metrics.stars < 100000) {
+        project.metrics.stars++;
+        events.push({ type: 'feed', text: `@${viewer.handle} starred ${project.name}.`, kind: 'good' });
+      } else if (roll < .5 && dw.contributions.length < DEV_CAPS.contributions) {
+        const contribution = {
+          id: nextId(dw, 'contrib'), projectId: project.id, contributorId: viewer.id, handle: viewer.handle,
+          world: game.worldMinutes || 0, change: rng.pick(['additional test case','documentation fix','edge-case patch','dependency bump']),
+          lines: rng.int(2, 30), status: rng.chance(.7) ? 'merged' : 'open'
+        };
+        dw.contributions.push(contribution);
+        project.metrics.contributions++;
+        if (contribution.status === 'merged') commit(project, `merge: ${contribution.change} from @${viewer.handle}`, [Object.keys(project.files)[0]].filter(Boolean), rng);
+        remember(viewer, game.worldMinutes || 0, `Contributed "${contribution.change}" to ${project.name}.`);
+        events.push({ type: 'feed', text: `@${viewer.handle} contributed to ${project.name}.`, kind: 'info' });
+      } else if (roll < .62) {
+        const vuln = vulnerabilityFromProject(game, dw, project, rng, viewer.handle);
+        if (vuln) {
+          publishAdvisory(game, dw, vuln);
+          events.push({ type: 'feed', text: `${vuln.cve} reported in ${project.name} by @${viewer.handle}.`, kind: 'warn' });
+          events.push({ type: 'mail', from: viewer.handle, subject: `Bug in ${project.name}`, body: `I found ${vuln.category} in ${vuln.file}:${vuln.line}. ${vuln.technical} Suggested fix: ${vuln.remediation}.` });
+        }
+      } else if (roll < .74) {
+        const site = project.deployedSiteId && (game.sites || []).find(s => s.id === project.deployedSiteId);
+        if (site) { site.visits += rng.int(2, 20); site.revenue += rng.int(1, 12); }
+        events.push({ type: 'feed', text: `@${viewer.handle} visited ${project.name}${site ? ' on ' + site.domain : ''}.`, kind: 'info' });
+      } else if (roll < .82) {
+        const fork = createFork(game, dw, project, rng);
+        if (fork) { project.metrics.forks++; events.push({ type: 'feed', text: `@${fork.ownerHandle} forked ${project.name}.`, kind: 'info' }); }
+      } else if (roll < .9) {
+        const co = rng.pick(game.companies || []);
+        if (co) events.push({ type: 'mail', from: co.ceo || co.contact || 'recruiter', subject: `Interest in ${project.name}`, body: `We use ${project.name} internally. Would you consider a short contract to extend it? Reply with your rate.` });
+      } else if (roll < .96) {
+        const competing = createProject(game, dw, viewer, rng, { detailed: false, kind: project.kind });
+        if (competing) events.push({ type: 'feed', text: `@${viewer.handle} started a competing project, ${competing.name}.`, kind: 'warn' });
+      }
+    }
+  }
+  return events;
 }

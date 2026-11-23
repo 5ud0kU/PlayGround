@@ -247,6 +247,21 @@ button:focus-visible,input:focus-visible,textarea:focus-visible,a:focus-visible{
 /* ---------------- generic app panels ---------------- */
 .panel-pad{padding:12px 14px;overflow:auto;flex:1;min-height:0}
 .win-scroll{padding:10px 11px;overflow:auto;flex:1;min-height:0;background:#0a0e11}
+.browser-tabs{display:flex;gap:2px;padding:4px 8px 0;background:#0a0e11;border-bottom:1px solid #1a2229;overflow-x:auto;flex:0 0 auto}
+.browser-tab{display:flex;align-items:center;gap:7px;max-width:190px;padding:5px 8px;font-family:var(--mono);font-size:8px;color:var(--dim);border:1px solid #1b242b;border-bottom:0;border-radius:3px 3px 0 0;background:#0d1216;white-space:nowrap;overflow:hidden}
+.browser-tab.on{color:var(--text);background:#121a20;border-color:#2a3a44}
+.browser-tab span{overflow:hidden;text-overflow:ellipsis}
+.browser-tab b{color:var(--faint);font-size:11px;padding:0 2px}.browser-tab b:hover{color:var(--red)}
+.browser-devtools,.browser-source{border-top:1px solid #1b242b;background:#090d10;padding:8px 10px;font-family:var(--mono);font-size:8px;color:var(--dim)}
+.devtools-head{display:flex;justify-content:space-between;letter-spacing:.12em;color:var(--green);margin-bottom:7px}
+.devtools-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:3px 14px}
+.devtools-grid div{display:flex;justify-content:space-between;gap:8px;border-bottom:1px solid #141c21;padding:3px 0}
+.devtools-grid b{color:var(--faint);font-weight:400}.devtools-grid span{color:var(--text2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.browser-source pre{margin:0;white-space:pre-wrap;line-height:1.5;color:#9ed6a0;max-height:240px;overflow:auto}
+.reduced-motion *{animation:none!important;transition:none!important}
+.compact-ui .win-body{padding:0}
+.compact-ui .app-toolbar{padding:4px 7px}
+.compact-ui .tbtn{height:20px;font-size:8px}
 .app-toolbar{display:flex;align-items:center;gap:7px;padding:7px 10px;border-bottom:1px solid #1e272e;background:#0d1216;flex:0 0 auto}
 .app-toolbar .spacer{flex:1}
 .tbtn{display:inline-flex;align-items:center;gap:5px;height:24px;padding:0 8px;border:1px solid #26313a;border-radius:3px;background:#11171c;font-family:var(--mono);font-size:9px;letter-spacing:.03em;color:var(--text2);white-space:nowrap}
