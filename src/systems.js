@@ -429,9 +429,24 @@ export function launchProduct(game, company, templateName) {
   if (company.products.length >= 8) return { ok: false, error: 'Product portfolio is full. Retire something first.' };
   const fee = 150;
   if (game.player.money < fee) return { ok: false, error: `Launching a product costs ${fmtMoney(fee)}.` };
-  game.player.money -= fee;
-  game.stats.spent += fee;
-  game.player.transactions.unshift({ time: Date.now(), amount: -fee, memo: `product launch ${t.name}`, balance: game.player.money });
+  // Durable products consume real supply-chain capacity. A constrained
+  // component market raises the launch cost and can block production entirely.
+  const supply = game.civ?.supply;
+  if (supply?.components) {
+    const componentId = t.category === 'ai' ? 'semiconductor' : t.category === 'hosting' || t.category === 'monitoring' || t.category === 'dns' ? 'network-chip' : 'circuit-board';
+    const component = supply.components[componentId];
+    if (component) {
+      if ((component.availability || 0) < 16) return { ok: false, error: `${component.name} supply is constrained (${Math.round(component.availability)}% availability). Wait for factories to recover.` };
+      component.stock = Math.max(0, (component.stock || 0) - 8);
+      component.demand = clamp(component.demand + 2, 0, 100);
+    }
+  }
+  const hardwareMultiplier = clamp((supply?.hardwareIndex || 100) / 100, .6, 2.4);
+  const launchCost = Math.max(fee, Math.round(fee * hardwareMultiplier));
+  if (game.player.money < launchCost) return { ok: false, error: `Launching a product costs ${fmtMoney(launchCost)} at current component prices.` };
+  game.player.money -= launchCost;
+  game.stats.spent += launchCost;
+  game.player.transactions.unshift({ time: Date.now(), amount: -launchCost, memo: `product launch ${t.name}`, balance: game.player.money });
   const product = {
     id: `prod-${String(game.seq.product++).padStart(4, '0')}`,
     companyId: company.id, name: `${company.name} ${t.name}`, category: t.category,
