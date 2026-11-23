@@ -48,6 +48,13 @@ import {
   societyOverview, citizenProfile, contentDetail, playerPurchaseContent, playerPublishContent
 } from './society.js';
 import {
+  itOverview, componentCatalog, assembleRig, selectRig, setBios, stressTest, installOS,
+  bootRig, createNetwork, addNetworkNode, connectNodes, configNode, testNetwork, testCircuit,
+  createStudio, hireDeveloper, createGameProject, testGame, publishGame,
+  createAIExperiment, benchmarkAI, diagnoseTicket, resolveTicket, attemptChallenge,
+  marketplace, buyCollectible, skillOverview, takeCertification
+} from './ituniverse.js';
+import {
   interactionOverview, hardwareSummary, upgradeHardware, maintainHardware, HARDWARE_TIERS,
   cancelOperation, contactNpc, relationshipSummary, serverAdmin, issueInvoice, payInvoice,
   collectInvoice, placeOrder, cancelOrder, startOperation
@@ -560,7 +567,7 @@ function tickLoop() {
 function softRefresh() {
   updateClock();
   updateMonitor();
-  for (const kind of ['market', 'servers', 'cloud', 'agents', 'processes', 'profile', 'map', 'dev', 'internet', 'workstation', 'society']) {
+  for (const kind of ['market', 'servers', 'cloud', 'agents', 'processes', 'profile', 'map', 'dev', 'internet', 'workstation', 'society', 'itlab']) {
     const win = app.windows.get(kind);
     if (win && !win.minimized && win.render) safe(() => win.render());
   }
@@ -589,6 +596,7 @@ const WINDOW_META = {
   workstation: { title: 'Workstation', sub: 'hardware + operations + finance', w: 900, h: 600 },
   settings: { title: 'Settings', sub: 'system preferences', w: 620, h: 480 },
   society: { title: 'Society', sub: 'autonomous inhabitants', w: 920, h: 620 },
+  itlab: { title: 'IT Universe', sub: 'builders, labs and challenges', w: 940, h: 640 },
   help: { title: 'Manual', sub: 'field guide', w: 810, h: 550 }
 };
 
@@ -3656,6 +3664,102 @@ function handleSocietyClick(win, e) {
 }
 
 /* ============================================================
+   IT UNIVERSE
+   ============================================================ */
+const IT_TABS = [['rig','Rig'],['os','OS'],['electronics','Electronics'],['networks','Networks'],['studios','Studios'],['ai','AI'],['support','Support'],['skills','Skills']];
+
+MOUNTS.itlab = function mountIT(win) {
+  win.itTab = win.itTab || 'rig';
+  win.body.addEventListener('click', e => handleITClick(win, e));
+  win.render = () => renderIT(win);
+  renderIT(win);
+};
+
+function renderIT(win) {
+  const g = app.game;
+  const s = itOverview(g);
+  const m = s.metrics;
+  if (!IT_TABS.some(t => t[0] === win.itTab)) win.itTab = 'rig';
+  const tab = win.itTab;
+  const tabs = IT_TABS.map(([id, label]) => `<button class="civ-tab ${id === tab ? 'on' : ''}" data-it-tab="${id}">${label}</button>`).join('');
+  let content = '';
+  if (tab === 'rig') {
+    const rig = s.st.rigs.find(r => r.id === s.st.activeRigId) || s.st.rigs[0];
+    content = `<div class="civ-grid cols-4">${civStat('Rigs', m.rigs, `${m.circuits} devices`, 'b')}${civStat('Performance', rig?.performance || 0, `${Math.round(rig?.powerW || 0)} W`, 'ok')}${civStat('Temperature', `${Math.round(rig?.temperature || 0)}°C`, `health ${Math.round(rig?.health || 0)}%`, (rig?.temperature || 0) > 80 ? 'r' : '')}${civStat('Hardware skill', `L${m.skills.hardware}`, 'component work')}</div>` +
+      civSection('Computer rack', s.st.rigs.map(r => `<div class="civ-row"><div><b>${esc(r.name)} · ${esc(r.preset)}</b><small>${Object.keys(r.parts).length} components · boot ${r.bootCount} · ${r.status}</small></div><div class="civ-row-right"><span class="tag">${r.performance} pts</span><button class="tbtn small ${r.id === s.st.activeRigId ? 'primary' : ''}" data-it-action="select-rig" data-id="${esc(r.id)}">${r.id === s.st.activeRigId ? 'Active' : 'Select'}</button></div></div>`).join('')) +
+      `<div class="civ-row"><div><b>Assemble a preset rig</b><small>Compatibility, power and cooling are checked before it boots</small></div><div class="civ-row-right">${['gaming','workstation','server','ai','compact','retro'].map(p => `<button class="tbtn small" data-it-build="${p}">${p}</button>`).join('')}</div></div>` +
+      (rig ? `<div class="civ-row"><div><b>Stress test ${esc(rig.name)}</b><small>Thermal and stability validation</small></div><div class="civ-row-right"><button class="tbtn small primary" data-it-action="stress" data-id="${esc(rig.id)}">Run test</button></div></div>` : '');
+  } else if (tab === 'os') {
+    const rig = s.st.rigs.find(r => r.id === s.st.activeRigId) || s.st.rigs[0];
+    const installs = s.st.installs.filter(i => i.rigId === rig?.id && !i.removed);
+    content = civSection('Installed systems', installs.map(i => `<div class="civ-row"><div><b>${esc(i.distroName)}</b><small>${esc(i.kernel)} · ${esc(i.bootloader)} · ${esc(i.desktop)} desktop</small></div><div class="civ-row-right"><button class="tbtn small" data-it-action="boot" data-id="${esc(i.id)}">Boot</button></div></div>`).join('') || '<div class="empty-state">No OS installed.</div>') +
+      `<div class="civ-row"><div><b>Install a distribution</b><small>Requires free disk space and compatible CPU/RAM</small></div><div class="civ-row-right">${['distro-nullDesktop','distro-nullServer','distro-freebsd','distro-winlike','distro-embedded','distro-security','distro-retro'].map(d => `<button class="tbtn small" data-it-os="${d}">${d.replace('distro-','')}</button>`).join('')}</div></div>`;
+  } else if (tab === 'electronics') {
+    content = civSection('Devices', s.st.circuits.map(c => `<div class="civ-row"><div><b>${esc(c.name)}</b><small>${esc(c.boardName)} · ${c.pinsUsed} pins · ${c.powerW}W · ${c.status}</small></div><div class="civ-row-right"><button class="tbtn small" data-it-action="circuit-test" data-id="${esc(c.id)}">Test</button></div></div>`).join('') || '<div class="empty-state">Build a device in the terminal: circuit build sensor-node board-uno sensor-temp</div>') +
+      `<div class="civ-row"><div><b>Open electronics workbench</b><small>Boards, sensors, firmware and pin constraints</small></div><div class="civ-row-right"><button class="tbtn small primary" data-it-cmd="circuit list">Workbench</button></div></div>`;
+  } else if (tab === 'networks') {
+    content = civSection('Network designs', s.st.networks.map(n => `<div class="civ-row"><div><b>${esc(n.name)}</b><small>${n.nodes.length} nodes · ${n.links.length} links · ${n.tests.length} tests</small></div><div class="civ-row-right"><button class="tbtn small" data-it-cmd="netlab show ${esc(n.id)}">Inspect</button></div></div>`).join('') || '<div class="empty-state">Create a topology with: netlab create labnet</div>') +
+      `<div class="civ-row"><div><b>Create a network sandbox</b><small>Routers, switches, VLANs, DHCP, DNS and firewall rules</small></div><div class="civ-row-right"><button class="tbtn small primary" data-it-action="new-network">Create</button></div></div>`;
+  } else if (tab === 'studios') {
+    content = civSection('Game studios', s.studios.map(t => `<div class="civ-row"><div><b>${esc(t.name)}</b><small>${t.staff.length} staff · ${t.projects.length} projects · rep ${t.reputation}</small></div><div class="civ-row-right"><button class="tbtn small" data-it-cmd="studio list">Open</button></div></div>`).join('') || '<div class="empty-state">No studio registered.</div>') +
+      `<div class="civ-row"><div><b>Register a studio</b><small>Hire developers, build games, publish to the shared economy</small></div><div class="civ-row-right"><button class="tbtn small primary" data-it-action="new-studio">Register</button></div></div>` +
+      civSection('Games', s.games.map(g => `<div class="civ-row"><div><b>${esc(g.title)}</b><small>${esc(g.engine)} · ${esc(g.genre)} · ${Math.round(g.progress)}% · ${g.status}</small></div><div class="civ-row-right"><span class="tag">${g.sales} sales</span></div></div>`).join(''));
+  } else if (tab === 'ai') {
+    content = civSection('Models', s.ai.map(a => `<div class="civ-row"><div><b>${esc(a.name)}</b><small>${esc(a.base)} · ${esc(a.gpu)} · ${esc(a.status)} · ${a.benchmarks.length} benchmarks</small></div><div class="civ-row-right"><span class="tag">q${a.quality}</span><button class="tbtn small" data-it-action="bench" data-id="${esc(a.id)}">Benchmark</button></div></div>`).join('') || '<div class="empty-state">Train a model with: ailab train helper lumen-8b</div>') +
+      civSection('Agents', s.st.agents.map(a => `<div class="civ-row"><div><b>${esc(a.name)}</b><small>tools ${esc(a.tools.join(', '))} · budget ${fmtMoney(a.budget)}</small></div><div class="civ-row-right"><span class="tag ${a.status === 'active' ? 'g' : ''}">${esc(a.status)}</span></div></div>`).join(''));
+  } else if (tab === 'support') {
+    content = civSection('Support tickets', s.tickets.slice(0, 40).map(t => `<div class="civ-row"><div><b>${esc(t.title)}</b><small>${esc(t.symptom)}</small></div><div class="civ-row-right"><span class="tag ${t.status === 'open' ? 'a' : 'g'}">${esc(t.status)}</span>${t.status === 'open' ? `<button class="tbtn small" data-it-action="diagnose" data-id="${esc(t.id)}">Diagnose</button>` : ''}</div></div>`).join('') || '<div class="empty-state">No active incidents. The world is boringly healthy.</div>') +
+      civSection('Challenges', s.challenges.map(c => `<div class="civ-row"><div><b>${esc(c.title)}</b><small>${esc(c.kind)} · ${fmtMoney(c.reward.money)} · ${c.reward.xp} XP</small></div><div class="civ-row-right"><button class="tbtn small primary" data-it-action="challenge" data-id="${esc(c.id)}">Attempt</button></div></div>`).join(''));
+  } else {
+    const sk = skillOverview(g);
+    content = civSection('Skill trees', sk.skills.map(k => `<div class="civ-row"><div><b>${esc(k.key)}</b><small>${fmtNum(k.xp)} XP from real activities</small></div><div class="civ-row-right"><span class="tag">L${k.level}</span></div></div>`).join('')) +
+      civSection('Certifications', sk.available.map(c => `<div class="civ-row"><div><b>${esc(c.name)}</b><small>requires ${esc(c.skill)} L${c.required} · ${fmtMoney(c.cost)}</small></div><div class="civ-row-right"><span class="tag ${c.eligible ? 'g' : ''}">${sk.certifications.some(x => x.id === c.id) ? 'HELD' : c.eligible ? 'ELIGIBLE' : 'LOCKED'}</span>${c.eligible && !sk.certifications.some(x => x.id === c.id) ? `<button class="tbtn small primary" data-it-action="cert" data-id="${esc(c.id)}">Take exam</button>` : ''}</div></div>`).join('')) +
+      civSection('Collectibles', marketplace(g).slice(0, 20).map(i => `<div class="civ-row"><div><b>${esc(i.name)}</b><small>${esc(i.rarity)} · ${i.condition}% condition</small></div><div class="civ-row-right"><span class="tag">${i.owned ? 'OWNED' : fmtMoney(Math.round(i.base * i.condition / 100 * (1 + i.demand / 200)))}</span></div></div>`).join(''));
+  }
+  win.body.innerHTML = `<div class="civ-tabs">${tabs}</div><div class="win-scroll">${content}</div>`;
+  win.status.innerHTML = `<span>${m.rigs} rigs · ${m.networks} networks · ${m.studios} studios</span><span>${m.openTickets} open tickets · ${m.openChallenges} challenges</span><span class="st-right"><b>${m.certifications} certifications</b><span>hardware L${m.skills.hardware}</span></span>`;
+}
+
+function handleITClick(win, e) {
+  const tab = e.target.closest('[data-it-tab]');
+  if (tab) { win.itTab = tab.dataset.itTab; renderIT(win); return; }
+  const cmd = e.target.closest('[data-it-cmd]');
+  if (cmd) { openWindow('terminal'); runCommand(cmd.dataset.itCmd); return; }
+  const build = e.target.closest('[data-it-build]');
+  if (build) {
+    const r = assembleRig(app.game, `${build.dataset.itBuild}-rig`, {}, build.dataset.itBuild);
+    if (r.ok) { toast('Rig assembled', `${r.rig.name} · ${r.check.ok ? 'compatible' : 'faulty'}`, r.check.ok ? 'g' : 'r'); refreshUI(); }
+    else toast('Build failed', r.error, 'r');
+    return;
+  }
+  const os = e.target.closest('[data-it-os]');
+  if (os) {
+    const st = app.game.it;
+    const rig = st.rigs.find(r => r.id === st.activeRigId) || st.rigs[0];
+    const r = installOS(app.game, rig?.id, os.dataset.itOs);
+    toast(r.ok ? 'OS installed' : 'Install failed', r.ok ? `${r.install.distroName} on ${rig.name}` : r.error, r.ok ? 'g' : 'r');
+    refreshUI();
+    return;
+  }
+  const action = e.target.closest('[data-it-action]');
+  if (!action) return;
+  const kind = action.dataset.itAction, id = action.dataset.id;
+  let r = null;
+  if (kind === 'select-rig') r = selectRig(app.game, id);
+  else if (kind === 'stress') r = stressTest(app.game, id, 60);
+  else if (kind === 'boot') r = bootRig(app.game, id);
+  else if (kind === 'circuit-test') r = testCircuit(app.game, id);
+  else if (kind === 'bench') r = benchmarkAI(app.game, id);
+  else if (kind === 'diagnose') r = diagnoseTicket(app.game, id);
+  else if (kind === 'challenge') r = attemptChallenge(app.game, id);
+  else if (kind === 'cert') r = takeCertification(app.game, id);
+  else if (kind === 'new-network') { openWindow('terminal'); runCommand('netlab create labnet'); return; }
+  else if (kind === 'new-studio') { openWindow('terminal'); runCommand('studio create indie-studio'); return; }
+  if (r) toast(kind, r.ok ? (r.result ? `${r.result.result || r.result.passed}` : 'done') : r.error, r.ok ? 'g' : 'r');
+  refreshUI();
+}
+
+/* ============================================================
    SETTINGS
    ============================================================ */
 function applySettings() {
@@ -3864,6 +3968,18 @@ const CMD_HELP = {
   culture: 'Browse content created by inhabitants.',
   content: 'Inspect, buy, test, review or publish content.',
   meet: 'Meet an inhabitant and form a relationship.',
+  it: 'Overview of the interactive IT universe.',
+  parts: 'Browse PC component catalog.',
+  rig: 'Build, configure and boot computers.',
+  circuit: 'Build and test electronic devices.',
+  netlab: 'Construct and troubleshoot networks.',
+  studio: 'Run a game studio and publish games.',
+  ailab: 'Train, benchmark and deploy AI models.',
+  tickets: 'Diagnose and repair real support incidents.',
+  challenge: 'Take optional world challenges.',
+  skills: 'View skill trees and certifications.',
+  cert: 'Attempt a professional certification.',
+  collect: 'Trade collectible technology.',
   save: 'Save the persistent world.',
   reset: 'Erase the world and start over.'
 };

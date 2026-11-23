@@ -49,6 +49,15 @@ import {
   playerIdentity, testContent
 } from './society.js';
 import {
+  ensureIT, itOverview, componentCatalog, assembleRig, selectRig, setBios, stressTest,
+  partitionDisk, installOS, bootRig, configureOS, publishDistro, createCircuit, testCircuit,
+  createNetwork, addNetworkNode, connectNodes, configNode, testNetwork, createStudio,
+  hireDeveloper, createGameProject, testGame, publishGame, createAIExperiment, benchmarkAI,
+  deployAgent as itDeployAgent, generateTickets, diagnoseTicket, resolveTicket, generateChallenges,
+  attemptChallenge, marketplace, buyCollectible, sellCollectible, skillOverview, takeCertification,
+  partName
+} from './ituniverse.js';
+import {
   ensureInternet, internetSummary, protocolList, networkOverview, webList, webRecord,
   resolveDomain, devEcosystem, aiEcosystem, securityOverview, socialOverview, internetHistory,
   playerHardenWebsite, playerRenewCertificate, playerAttachApi, playerPublishPackage,
@@ -372,6 +381,7 @@ COMMANDS.help = (ctx) => {
     ['DEV ECOSYSTEM', 'dev  repo  vuln  lab  packets  forensics  http  inspect  debug  openssl'],
     ['INTERACTION', 'hw  ops  bg  contact  friends  pcreate  pwrite  pbuild  ptest  ppublish  pdeploy  prelease  srv  invoice  transfer  order  ln  tar  session  settings'],
     ['INHABITANTS', 'society  citizens  citizen  culture  content  meet'],
+    ['IT UNIVERSE', 'it  parts  rig  circuit  netlab  studio  ailab  tickets  challenge  skills  cert  collect'],
     ['CLOUD', 'cloud  docker  kubectl'],
     ['AI', 'agent  model  company'],
     ['ECONOMY', 'bank  contracts  accept  submit  market  buy  deploy  domains  site  servers  company'],
@@ -458,6 +468,15 @@ function manPage(ctx, name) {
     culture: ['culture — content index', 'culture [query]', 'Lists actual content objects with creator, price and recorded usage, tests and reviews.'],
     content: ['content — content economy', 'content list|show <id>|buy <id>|test <id>|review <id> <text>|publish <type> <title> <text>', 'Every usage count comes from a recorded consumption event; reviews require a prior test.'],
     meet: ['meet — interpersonal contact', 'meet <handle> [note]', 'Creates a relationship event with an NPC. Trust and memory change as a result.'],
+    rig: ['rig — PC building laboratory', 'rig list|build <name> <preset>|select <id>|show|bios <key> <value>|stress|part <scheme>|os <distro> [dual]|boot|config|publish', 'Assembles component-level machines with compatibility checks, BIOS tuning, partitioning and real boot logs.'],
+    netlab: ['netlab — network construction', 'netlab list|create <name>|<net> node|link|config|test|show', 'Builds a topology and tests actual connectivity with VLAN, DHCP, DNS, firewall and routing checks.'],
+    circuit: ['circuit — electronics workbench', 'circuit list|build <name> <board> <sensors> <firmware>|test <id>', 'Builds boards with real pin and power constraints, then tests stored firmware.'],
+    studio: ['studio — game studio', 'studio list|create <name>|<studio> hire|game|test|publish', 'Runs a game studio: staff, projects, simulated test suites and releases into the shared content economy.'],
+    ailab: ['ailab — AI playground', 'ailab list|train <name> [base]|bench <model>|agent <model> <tools> <budget>', 'Trains models using real background operations and GPU capacity, benchmarks them and deploys permissioned agents.'],
+    tickets: ['tickets — IT support desk', 'tickets [list|scan|diagnose <id>|fix <id> <action>]', 'Tickets are generated from actual broken state. A fix is accepted only when the underlying state recovers.'],
+    challenge: ['challenge — optional challenges', 'challenge [list|scan|try <id>]', 'Challenges require real activities and pay out from the shared economy.'],
+    skills: ['skills — independent skill trees', 'skills', 'Shows ten independent disciplines and professional certifications earned through real actions.'],
+    collect: ['collect — technology collecting', 'collect [list|buy <id>|sell <id>]', 'A marketplace for vintage and rare hardware with condition, rarity and changing demand.'],
   };
   const p = pages[name];
   if (!p) { ctx.print(`No manual entry for ${name}`, 'err'); ctx.dim('Try: help'); return; }
@@ -5646,6 +5665,377 @@ COMMANDS.meet = (ctx) => {
   ctx.ok(`You spoke with @${r.identity.handle}. Trust ${Math.round(r.relationship.trust)}/100, ${r.relationship.status}.`);
   ctx.dim('Their memory and mood now include this interaction.');
   ctx.app.refreshUI?.();
+};
+
+/* ============================================================
+   COMPLETE IT UNIVERSE
+   ============================================================ */
+COMMANDS.it = (ctx) => {
+  const s = itOverview(ctx.game);
+  const m = s.metrics;
+  ctx.head('IT UNIVERSE');
+  ctx.print(`Rigs ${m.rigs} · circuits ${m.circuits} · networks ${m.networks} · studios ${m.studios}`);
+  ctx.print(`Games ${m.games} · AI models ${m.aiModels} · agents ${m.agents} · certifications ${m.certifications}`);
+  ctx.print(`Support ${m.openTickets} open / ${m.resolvedTickets} resolved · challenges ${m.openChallenges} · collectibles ${m.collectibles}`);
+  ctx.print('');
+  ctx.print('SKILLS', 'head');
+  for (const [key, level] of Object.entries(m.skills)) ctx.print(`  ${pad(key, 14)} ${progressBar(level, 14)} L${level}`, 'dim');
+  ctx.print('');
+  ctx.dim('rig | parts | circuit | netlab | studio | ailab | tickets | challenge | skills | cert | collect');
+};
+
+COMMANDS.parts = (ctx) => {
+  const cat = componentCatalog(ctx.game);
+  const group = (ctx.args[0] || 'cpu').toLowerCase();
+  const rows = cat[group];
+  if (!rows) { ctx.err(`parts: unknown group '${group}'. Try: ${Object.keys(cat).join(', ')}`); return; }
+  ctx.head(`COMPONENT CATALOG · ${group.toUpperCase()}`);
+  for (const p of rows) {
+    const specs = Object.entries(p).filter(([k]) => !['id','name','price','vintage'].includes(k)).map(([k, v]) => `${k}:${v}`).join(' ');
+    ctx.print(`  ${pad(p.id, 14)} ${pad(p.name, 28)} ${padLeft(fmtMoney(p.price), 10)}  ${specs}`, p.vintage ? 'warn' : 'dim');
+  }
+};
+
+COMMANDS.rig = (ctx) => {
+  const g = ctx.game;
+  const st = ensureIT(g);
+  const sub = (ctx.args[0] || 'list').toLowerCase();
+  const rest = ctx.args.slice(1);
+  if (sub === 'list') {
+    ctx.head('COMPUTER RACK');
+    for (const r of st.rigs) ctx.print(`  ${pad(r.id, 10)} ${pad(r.name, 18)} ${pad(r.preset, 12)} perf ${padLeft(r.performance, 4)} ${padLeft(Math.round(r.temperature), 3)}°C ${padLeft(Math.round(r.powerW), 5)}W  ${r.status}${r.id === st.activeRigId ? '  ACTIVE' : ''}`, r.status === 'faulty' ? 'err' : 'dim');
+    return;
+  }
+  if (sub === 'build') {
+    const name = rest[0] || `rig-${st.rigs.length + 1}`;
+    const preset = (rest[1] || 'custom').toLowerCase();
+    const presets = {
+      gaming: { cpu:'cpu-i7', mobo:'mb-z790', ram:'ram-32', gpu:'gpu-4070', storage:'ssd-1t', psu:'psu-750', cooling:'cool-240', case:'case-atx' },
+      workstation: { cpu:'cpu-r9', mobo:'mb-x670', ram:'ram-64', gpu:'gpu-ig', storage:'ssd-4t', psu:'psu-750', cooling:'cool-360', case:'case-atx' },
+      server: { cpu:'cpu-epyc', mobo:'mb-sp5', ram:'ram-512', gpu:'gpu-ig', storage:'ssd-4t', psu:'psu-1200', cooling:'cool-360', case:'case-rack' },
+      ai: { cpu:'cpu-r9', mobo:'mb-x670', ram:'ram-64', gpu:'gpu-a6000', storage:'ssd-4t', psu:'psu-1200', cooling:'cool-360', case:'case-rack' },
+      mining: { cpu:'cpu-i3', mobo:'mb-h610', ram:'ram-8', gpu:'gpu-4090', storage:'ssd-256', psu:'psu-1200', cooling:'cool-240', case:'case-atx' },
+      compact: { cpu:'cpu-i3', mobo:'mb-h610', ram:'ram-16', gpu:'gpu-ig', storage:'ssd-256', psu:'psu-450', cooling:'cool-air', case:'case-matx' },
+      retro: { cpu:'cpu-retro', mobo:'mb-845', ram:'ram-1', gpu:'gpu-ig', storage:'ssd-256', psu:'psu-450', cooling:'cool-fan', case:'case-vintage' }
+    };
+    if (!presets[preset]) { ctx.err(`rig: unknown preset '${preset}'. Try: ${Object.keys(presets).join(', ')}`); return; }
+    const r = assembleRig(g, name, presets[preset], preset);
+    if (!r.ok) { ctx.err(r.error); return; }
+    ctx.ok(`Assembled ${r.rig.name} · ${r.check.ok ? 'compatible' : 'FAULTY'}`);
+    for (const p of r.check.problems) ctx.print(`  ${p}`, 'err');
+    ctx.dim(`Install an OS with: rig os ${r.rig.id} distro-nullDesktop`);
+    return;
+  }
+  const rig = st.rigs.find(r => r.id === rest[0] || r.name === rest[0]) || st.rigs.find(r => r.id === st.activeRigId);
+  if (!rig) { ctx.err('rig: no such machine'); return; }
+  if (sub === 'select') {
+    const r = selectRig(g, rest[0]);
+    if (!r.ok) { ctx.err(r.error); return; }
+    ctx.ok(`${r.rig.name} is now the active workstation.`);
+    ctx.app.refreshUI?.();
+    return;
+  }
+  if (sub === 'show') {
+    ctx.head(`${rig.name} · ${rig.preset}`);
+    for (const [key, id] of Object.entries(rig.parts)) ctx.print(`  ${pad(key, 10)} ${findPartName(id)}`, 'dim');
+    ctx.print(`  status     ${rig.status} · performance ${rig.performance} · ${Math.round(rig.powerW)} W · ${Math.round(rig.temperature)}°C · health ${Math.round(rig.health)}/100`);
+    ctx.print(`  BIOS       multiplier ${rig.bios.multiplier}% · voltage ${rig.bios.voltage} · fan ${rig.bios.fan} · secure boot ${rig.bios.secureBoot ? 'on' : 'off'}`);
+    if (rig.faults?.length) for (const f of rig.faults) ctx.print(`  fault      ${f}`, 'err');
+    const installs = st.installs.filter(i => i.rigId === rig.id && !i.removed);
+    ctx.print(`  OS         ${installs.map(i => i.distroName).join(', ') || 'none'}`);
+    return;
+  }
+  if (sub === 'bios') {
+    if (!rest[1]) { ctx.print(JSON.stringify(rig.bios, null, 2)); return; }
+    const r = setBios(g, rig.id, rest[1], rest[2]);
+    if (!r.ok) { ctx.err(r.error); return; }
+    ctx.ok(`${rest[1]} updated on ${rig.name}.`);
+    return;
+  }
+  if (sub === 'stress') {
+    const r = stressTest(g, rig.id, Number(rest[1]) || 60);
+    if (!r.ok) { ctx.err(r.error); return; }
+    ctx.print(`${r.stable ? 'STABLE' : 'UNSTABLE'} · ${r.temperature}°C · ${r.powerW} W · performance ${r.performance}`, r.stable ? 'ok' : 'err');
+    return;
+  }
+  if (sub === 'part') {
+    if (!rest[1]) { ctx.print(`Partitions: ${rig.partitions.map(p => `${p.mount}:${p.sizeGb}GB:${p.fs}`).join(' ') || 'none'}`); return; }
+    const r = partitionDisk(g, rig.id, rest[1]);
+    if (!r.ok) { ctx.err(r.error); return; }
+    ctx.ok(`Partition table written: ${r.partitions.map(p => `${p.mount} ${p.sizeGb}GB ${p.fs}`).join(', ')}`);
+    return;
+  }
+  if (sub === 'os') {
+    const distro = rest[1];
+    if (!distro) { ctx.err('rig: use rig os <distro-id> [dual]'); ctx.dim('distro-nullDesktop distro-nullServer distro-freebsd distro-winlike distro-embedded distro-security distro-retro'); return; }
+    const r = installOS(g, rig.id, distro, { dualBoot: rest.includes('dual') });
+    if (!r.ok) { ctx.err(r.error); return; }
+    ctx.ok(`${r.install.distroName} installed on ${rig.name}.`);
+    for (const line of r.logs) ctx.dim(`  ${line}`);
+    return;
+  }
+  if (sub === 'boot') {
+    const r = bootRig(g, rig.id);
+    if (!r.ok) { ctx.err(r.error); return; }
+    ctx.head(`BOOT · ${r.install.distroName}`);
+    for (const line of r.logs) ctx.print(`  ${line}`, 'dim');
+    return;
+  }
+  if (sub === 'config') {
+    const install = st.installs.find(i => i.rigId === rig.id && !i.removed);
+    if (!install) { ctx.err('No OS installed on that rig.'); return; }
+    if (!rest[1]) { ctx.print(JSON.stringify(install.config, null, 2)); return; }
+    const r = configureOS(g, install.id, rest[1], rest[2]);
+    if (!r.ok) { ctx.err(r.error); return; }
+    ctx.ok(`${rest[1]} configured on ${install.distroName}.`);
+    return;
+  }
+  if (sub === 'publish') {
+    const install = st.installs.find(i => i.rigId === rig.id && !i.removed);
+    const r = publishDistro(g, install?.id, rest.join(' '));
+    if (!r.ok) { ctx.err(r.error); return; }
+    ctx.ok(`Published custom distribution as content ${r.content.id}.`);
+    return;
+  }
+  ctx.err(`rig: '${sub}' is not recognized. Try: list|build|select|show|bios|stress|part|os|boot|config|publish`);
+};
+function findPartName(id) { return partName(id); }
+
+COMMANDS.circuit = (ctx) => {
+  const st = ensureIT(ctx.game);
+  const sub = (ctx.args[0] || 'list').toLowerCase();
+  if (sub === 'list') {
+    ctx.head('ELECTRONICS WORKBENCH');
+    ctx.print('Boards: ' + ['board-uno','board-pico','board-rpi','board-fpga','board-esp'].join(', '), 'dim');
+    ctx.print('Modules: ' + ['sensor-temp','sensor-motion','sensor-cam','sensor-relay','sensor-led','sensor-gps'].join(', '), 'dim');
+    for (const c of st.circuits) ctx.print(`  ${pad(c.id, 11)} ${pad(c.name, 20)} ${pad(c.boardName, 16)} ${c.pinsUsed} pins ${c.powerW}W ${c.status}`, c.status === 'working' ? 'ok' : 'warn');
+    return;
+  }
+  if (sub === 'build') {
+    const name = ctx.args[1] || 'device';
+    const board = ctx.args[2] || 'board-uno';
+    const sensors = (ctx.args[3] || '').split(',').filter(Boolean);
+    const firmware = ctx.args.slice(4).join(' ') || 'void setup() { pinMode(0, INPUT); }\nvoid loop() { readPin(0); }';
+    const r = createCircuit(ctx.game, name, board, sensors, firmware);
+    if (!r.ok) { ctx.err(r.error); return; }
+    ctx.ok(`Built ${r.circuit.name} · ${r.circuit.pinsUsed} pins · ${r.circuit.powerW} W`);
+    ctx.dim(`Test it with: circuit test ${r.circuit.id}`);
+    return;
+  }
+  if (sub === 'test') {
+    const r = testCircuit(ctx.game, ctx.args[1]);
+    if (!r.ok) { ctx.err(r.error); return; }
+    ctx.print(`${r.test.result.toUpperCase()} · ${r.test.notes}`, r.test.result === 'pass' ? 'ok' : 'warn');
+    return;
+  }
+  ctx.err('circuit: use list|build <name> <board> <sensors> <firmware>|test <id>');
+};
+
+COMMANDS.netlab = (ctx) => {
+  const st = ensureIT(ctx.game);
+  const sub = (ctx.args[0] || 'list').toLowerCase();
+  if (sub === 'list') {
+    ctx.head('NETWORK SANDBOX');
+    for (const n of st.networks) ctx.print(`  ${pad(n.id, 11)} ${pad(n.name, 20)} ${n.nodes.length} nodes · ${n.links.length} links · ${n.tests.length} tests`, 'dim');
+    return;
+  }
+  if (sub === 'create') {
+    const r = createNetwork(ctx.game, ctx.args[1] || 'labnet');
+    ctx.ok(`Created ${r.network.name} (${r.network.id}).`);
+    return;
+  }
+  const net = st.networks.find(n => n.id === ctx.args[1] || n.name === ctx.args[1]);
+  if (!net) { ctx.err('netlab: no such network'); return; }
+  if (sub === 'node') {
+    const r = addNetworkNode(ctx.game, net.id, ctx.args[2], ctx.args[3], ctx.args[4]);
+    if (!r.ok) { ctx.err(r.error); return; }
+    ctx.ok(`Added ${r.node.name} (${r.node.type}) at ${r.node.ip}.`);
+    return;
+  }
+  if (sub === 'link') {
+    const r = connectNodes(ctx.game, net.id, ctx.args[2], ctx.args[3], { latency: Number(ctx.args[4]) || 2 });
+    if (!r.ok) { ctx.err(r.error); return; }
+    ctx.ok(`Connected ${ctx.args[2]} ↔ ${ctx.args[3]} · ${r.link.latencyMs} ms`);
+    return;
+  }
+  if (sub === 'config') {
+    const r = configNode(ctx.game, net.id, ctx.args[2], ctx.args[3], ctx.args[4]);
+    if (!r.ok) { ctx.err(r.error); return; }
+    ctx.ok(`${r.node.name}: ${ctx.args[3]} configured.`);
+    return;
+  }
+  if (sub === 'test') {
+    const r = testNetwork(ctx.game, net.id, ctx.args[2], ctx.args[3]);
+    if (!r.ok) { ctx.err(r.error); return; }
+    ctx.print(`Route: ${r.path.join(' → ') || 'none'}`, r.success ? 'ok' : 'err');
+    ctx.print(`Latency ${r.latencyMs} ms · loss ${r.lossPct}%`, 'dim');
+    for (const p of r.problems) ctx.print(`  problem: ${p}`, 'err');
+    return;
+  }
+  if (sub === 'show') {
+    ctx.head(net.name);
+    for (const n of net.nodes) ctx.print(`  ${pad(n.name, 16)} ${pad(n.type, 10)} ${pad(n.ip, 16)} vlan ${n.config.vlan} up ${n.config.up}`, 'dim');
+    for (const l of net.links) ctx.print(`  link ${net.nodes.find(x => x.id === l.from)?.name} ↔ ${net.nodes.find(x => x.id === l.to)?.name} · ${l.latencyMs} ms · ${l.bandwidthMbps} Mbps`, 'dim');
+    return;
+  }
+  ctx.err('netlab: use list|create <name>|<net> node|link|config|test|show');
+};
+
+COMMANDS.studio = (ctx) => {
+  const st = ensureIT(ctx.game);
+  const sub = (ctx.args[0] || 'list').toLowerCase();
+  if (sub === 'list') {
+    ctx.head('GAME STUDIOS');
+    for (const s of st.studios) ctx.print(`  ${pad(s.id, 11)} ${pad(s.name, 20)} ${s.staff.length} staff · ${s.projects.length} projects · rep ${s.reputation}`, 'dim');
+    for (const g of st.games) ctx.print(`  ${pad(g.id, 10)} ${pad(g.title, 24)} ${pad(g.status, 12)} ${Math.round(g.progress)}% · ${g.sales} sales`, g.status === 'released' ? 'ok' : 'dim');
+    return;
+  }
+  if (sub === 'create') {
+    const r = createStudio(ctx.game, ctx.args[1]);
+    if (!r.ok) { ctx.err(r.error); return; }
+    ctx.ok(`Studio ${r.studio.name} registered.`);
+    return;
+  }
+  const studio = st.studios.find(s => s.id === ctx.args[1] || s.name === ctx.args[1]);
+  if (!studio) { ctx.err('studio: no such studio'); return; }
+  if (sub === 'hire') {
+    const r = hireDeveloper(ctx.game, studio.id, ctx.args[2], ctx.args[3] || 'programmer');
+    if (!r.ok) { ctx.err(r.error); return; }
+    ctx.ok(`Hired @${r.staff.handle} as ${r.staff.role} · ${fmtMoney(r.staff.salary)}/day`);
+    return;
+  }
+  if (sub === 'game') {
+    const r = createGameProject(ctx.game, studio.id, ctx.args.slice(2).join(' ') || 'untitled', ctx.args[3] || 'NullEngine 2D');
+    if (!r.ok) { ctx.err(r.error); return; }
+    ctx.ok(`${r.project.title} entered development (${r.project.engine}).`);
+    return;
+  }
+  if (sub === 'test') {
+    const r = testGame(ctx.game, ctx.args[1]);
+    if (!r.ok) { ctx.err(r.error); return; }
+    ctx.print(`${r.result.passed ? 'PASS' : 'FAIL'} · ${r.result.notes}`, r.result.passed ? 'ok' : 'warn');
+    return;
+  }
+  if (sub === 'publish') {
+    const r = publishGame(ctx.game, ctx.args[1], Number(ctx.args[2]) || 15);
+    if (!r.ok) { ctx.err(r.error); return; }
+    ctx.ok(`${r.project.title} published as content ${r.content.id}.`);
+    return;
+  }
+  ctx.err('studio: use list|create <name>|<studio> hire|game|test|publish');
+};
+
+COMMANDS.ailab = (ctx) => {
+  const st = ensureIT(ctx.game);
+  const sub = (ctx.args[0] || 'list').toLowerCase();
+  if (sub === 'list') {
+    ctx.head('AI PLAYGROUND');
+    for (const m of st.ai) ctx.print(`  ${pad(m.id, 10)} ${pad(m.name, 20)} ${pad(m.status, 8)} q${m.quality} ${m.gpu} · ${m.benchmarks.length} benchmarks`, 'dim');
+    for (const a of st.agents) ctx.print(`  agent ${pad(a.id, 8)} ${pad(a.name, 20)} tools ${a.tools.join('/')} budget ${fmtMoney(a.budget)}`, 'dim');
+    return;
+  }
+  if (sub === 'train') {
+    const r = createAIExperiment(ctx.game, ctx.args[1] || 'model', ctx.args[2] || 'lumen-8b', ctx.args[3] || 'local-corpus');
+    if (!r.ok) { ctx.err(r.error); return; }
+    ctx.ok(`Training ${r.model.name} on ${r.model.gpu} · operation ${r.operation.id}`);
+    return;
+  }
+  if (sub === 'bench') {
+    const r = benchmarkAI(ctx.game, ctx.args[1]);
+    if (!r.ok) { ctx.err(r.error); return; }
+    ctx.print(`Quality ${r.benchmark.quality}/100 · ${r.benchmark.latencyMs} ms · ${fmtNum(r.benchmark.tokens)} tokens`, 'ok');
+    return;
+  }
+  if (sub === 'agent') {
+    const r = itDeployAgent(ctx.game, ctx.args[1], ctx.args[2] || 'read,write', Number(ctx.args[3]) || 100);
+    if (!r.ok) { ctx.err(r.error); return; }
+    ctx.ok(`Deployed ${r.agent.name} with tools ${r.agent.tools.join(', ')}.`);
+    return;
+  }
+  ctx.err('ailab: use list|train <name> [base] [dataset]|bench <model>|agent <model> <tools> <budget>');
+};
+
+COMMANDS.tickets = (ctx) => {
+  const sub = (ctx.args[0] || 'list').toLowerCase();
+  const st = ensureIT(ctx.game);
+  if (sub === 'scan') {
+    const found = generateTickets(ctx.game);
+    ctx.ok(`${found.length} open ticket(s) derived from live world state.`);
+    return;
+  }
+  if (sub === 'diagnose') {
+    const r = diagnoseTicket(ctx.game, ctx.args[1]);
+    if (!r.ok) { ctx.err(r.error); return; }
+    ctx.head(`EVIDENCE · ${r.ticket.title}`);
+    ctx.print(`  symptom  ${r.ticket.symptom}`);
+    ctx.print(`  evidence ${JSON.stringify(r.ticket.evidence)}`, 'dim');
+    ctx.dim('Fix with: tickets fix <id> <action>');
+    return;
+  }
+  if (sub === 'fix') {
+    const r = resolveTicket(ctx.game, ctx.args[1], ctx.args[2]);
+    if (!r.ok) { ctx.err(r.error); return; }
+    ctx.ok(`Resolved ${r.ticket.title} · reward ${fmtMoney(r.reward)}.`);
+    ctx.app.refreshUI?.();
+    return;
+  }
+  ctx.head('SUPPORT DESK');
+  for (const t of st.tickets.slice(-30).reverse()) ctx.print(`  ${pad(t.id, 14)} ${pad(t.status, 9)} ${pad(t.kind, 10)} ${t.title}`, t.status === 'open' ? 'warn' : 'dim');
+  ctx.dim('tickets scan | tickets diagnose <id> | tickets fix <id> <action>');
+};
+
+COMMANDS.challenge = (ctx) => {
+  const sub = (ctx.args[0] || 'list').toLowerCase();
+  const st = ensureIT(ctx.game);
+  if (sub === 'scan') { generateChallenges(ctx.game); ctx.ok('Challenges refreshed from current skills and world state.'); return; }
+  if (sub === 'try') {
+    const r = attemptChallenge(ctx.game, ctx.args[1]);
+    if (!r.ok) { ctx.err(r.error); return; }
+    ctx.ok(`Completed ${r.challenge.title} · ${fmtMoney(r.challenge.reward.money)} · ${r.challenge.reward.xp} XP`);
+    return;
+  }
+  ctx.head('OPTIONAL CHALLENGES');
+  for (const c of st.challenges.filter(x => x.status === 'open')) ctx.print(`  ${pad(c.id, 12)} ${pad(c.kind, 10)} ${c.title} · ${fmtMoney(c.reward.money)}`, 'dim');
+  ctx.dim('challenge scan | challenge try <id>');
+};
+
+COMMANDS.skills = (ctx) => {
+  const s = skillOverview(ctx.game);
+  ctx.head('SKILL TREES');
+  for (const k of s.skills) ctx.print(`  ${pad(k.key, 14)} ${progressBar(k.level, 18)} L${padLeft(k.level, 2)}  ${fmtNum(k.xp)} XP`, 'dim');
+  ctx.print('');
+  ctx.print('CERTIFICATIONS', 'head');
+  for (const c of s.available) ctx.print(`  ${pad(c.id, 12)} ${pad(c.name, 34)} req ${c.skill} L${c.required} ${fmtMoney(c.cost)} ${s.certifications.some(x => x.id === c.id) ? 'HELD' : c.eligible ? 'ELIGIBLE' : 'locked'}`, c.eligible ? 'ok' : 'dim');
+  ctx.dim('cert take <id> | cert list');
+};
+
+COMMANDS.cert = (ctx) => {
+  if ((ctx.args[0] || 'list') === 'take') {
+    const r = takeCertification(ctx.game, ctx.args[1]);
+    if (!r.ok) { ctx.err(r.error); return; }
+    ctx.ok(`Certified: ${r.cert.name}.`);
+    return;
+  }
+  return COMMANDS.skills(ctx);
+};
+
+COMMANDS.collect = (ctx) => {
+  const sub = (ctx.args[0] || 'list').toLowerCase();
+  if (sub === 'buy') {
+    const r = buyCollectible(ctx.game, ctx.args[1]);
+    if (!r.ok) { ctx.err(r.error); return; }
+    ctx.ok(`Acquired ${r.item.name} for ${fmtMoney(r.price)}.`);
+    return;
+  }
+  if (sub === 'sell') {
+    const r = sellCollectible(ctx.game, ctx.args[1]);
+    if (!r.ok) { ctx.err(r.error); return; }
+    ctx.ok(`Sold ${r.item.name} for ${fmtMoney(r.price)}.`);
+    return;
+  }
+  ctx.head('TECHNOLOGY COLLECTIBLES');
+  for (const item of marketplace(ctx.game)) ctx.print(`  ${pad(item.id, 14)} ${pad(item.name, 38)} ${pad(item.rarity, 10)} condition ${item.condition}% ${item.owned ? 'OWNED' : fmtMoney(Math.round(item.base * item.condition / 100 * (1 + item.demand / 200)))}`, item.owned ? 'ok' : 'dim');
+  ctx.dim('collect buy <id> | collect sell <id>');
 };
 
 COMMANDS.session = (ctx) => {
