@@ -44,38 +44,14 @@ export function dirname(p) {
 }
 export function splitPath(p) { return normalize(p).split('/').filter(Boolean); }
 
-export function newSymlink(target, opts = {}) {
-  return { type: 'symlink', target: String(target), mode: opts.mode || '777', owner: opts.owner || 'operator', mtime: opts.mtime || Date.now() };
-}
-
-export function getNode(root, abs, depth = 0) {
-  if (depth > 8) return null;
+export function getNode(root, abs) {
   const parts = splitPath(abs);
   let node = root;
-  let current = '/';
   for (const part of parts) {
     if (!node || node.type !== 'dir' || !node.children[part]) return null;
     node = node.children[part];
-    current = joinPath(current, part);
-    if (node.type === 'symlink') {
-      const target = resolvePath(dirname(current), node.target, HOME);
-      const resolved = getNode(root, target, depth + 1);
-      if (!resolved) return null;
-      node = resolved;
-      current = target;
-    }
   }
   return node;
-}
-
-export function writeSymlink(root, abs, target, opts = {}) {
-  const dir = ensureDir(root, dirname(abs), opts.owner || 'operator');
-  if (!dir) return null;
-  const name = basename(abs);
-  if (dir.children[name] && dir.children[name].type === 'dir') return null;
-  const link = newSymlink(target, opts);
-  dir.children[name] = link;
-  return link;
 }
 
 export function exists(root, abs) { return !!getNode(root, abs); }

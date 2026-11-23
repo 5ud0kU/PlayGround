@@ -28,11 +28,6 @@ import {
   AGENT_ROLES, PRODUCT_TEMPLATES
 } from './data.js';
 import { execute, commandNames } from './shell.js';
-import {
-  civilizationSummary, validateLedger, careerSnapshot, playerProperties, civKnowledge,
-  civEventList, civHistory
-} from './civilization.js';
-import { interactionSummary } from './interaction.js';
 
 const $ = (sel, root = document) => root.querySelector(sel);
 const $$ = (sel, root = document) => Array.from(root.querySelectorAll(sel));
@@ -537,18 +532,12 @@ function tickLoop() {
   if (app.tickNo % 9 === 0) saveGame(false);
 }
 
-function renderAppWindow(win) {
-  if (!win || win.minimized || !win.render) return;
-  const scroll = scrollSnapshot(win.body);
-  safe(() => win.render());
-  restoreScroll(win.body, scroll);
-}
-
 function softRefresh() {
   updateClock();
   updateMonitor();
-  for (const kind of ['market', 'servers', 'cloud', 'agents', 'processes', 'profile', 'map', 'civilization']) {
-    renderAppWindow(app.windows.get(kind));
+  for (const kind of ['market', 'servers', 'cloud', 'agents', 'processes', 'profile', 'map']) {
+    const win = app.windows.get(kind);
+    if (win && !win.minimized && win.render) safe(() => win.render());
   }
 }
 
@@ -565,7 +554,6 @@ const WINDOW_META = {
   cloud: { title: 'Cloud', sub: 'instances + orchestration', w: 880, h: 570 },
   agents: { title: 'Agents', sub: 'AI operations', w: 860, h: 570 },
   processes: { title: 'System', sub: 'processes', w: 770, h: 490 },
-  civilization: { title: 'World', sub: 'digital civilization', w: 900, h: 600 },
   profile: { title: 'Profile', sub: 'operator', w: 750, h: 570 },
   help: { title: 'Manual', sub: 'field guide', w: 810, h: 550 }
 };
@@ -585,7 +573,7 @@ function openWindow(kind, params = {}) {
     if (win.minimized) { win.minimized = false; win.el.classList.remove('minimized'); }
     focusWindow(win);
     if (win.onParams) safe(() => win.onParams(params));
-    renderAppWindow(win);
+    if (win.render) safe(() => win.render());
     updateDock();
     return win;
   }
@@ -700,7 +688,7 @@ function toggleMax(win) {
     el.style.height = 'calc(100% - 16px)';
     el.dataset.max = '1';
   }
-  renderAppWindow(win);
+  if (win.render) safe(() => win.render());
 }
 
 function startDrag(win, e) {
@@ -736,7 +724,7 @@ function startResize(win, e) {
   const up = () => {
     document.removeEventListener('pointermove', move);
     document.removeEventListener('pointerup', up);
-    renderAppWindow(win);
+    if (win.render) safe(() => win.render());
   };
   document.addEventListener('pointermove', move);
   document.addEventListener('pointerup', up);
@@ -748,49 +736,11 @@ function updateDock() {
   for (const b of $$('.dock-item')) b.classList.toggle('active', active.has(b.dataset.open));
 }
 
-function scrollSnapshot(root) {
-  const out = [];
-  if (!root) return out;
-  for (const el of root.querySelectorAll('*')) {
-    if (el.classList?.contains('tline')) continue;
-    const scrollableY = el.scrollHeight > el.clientHeight + 1;
-    const scrollableX = el.scrollWidth > el.clientWidth + 1;
-    if (!scrollableY && !scrollableX) continue;
-    const style = getComputedStyle(el);
-    const autoY = /(auto|scroll)/.test(style.overflowY);
-    const autoX = /(auto|scroll)/.test(style.overflowX);
-    if (!autoY && !autoX) continue;
-    const path = [];
-    let cur = el;
-    while (cur && cur !== root) {
-      const parent = cur.parentElement;
-      const index = parent ? Array.prototype.indexOf.call(parent.children, cur) + 1 : 1;
-      path.unshift(`${cur.tagName.toLowerCase()}:nth-child(${index})`);
-      cur = parent;
-    }
-    if (!path.length) continue;
-    out.push({ selector: path.join('>'), top: el.scrollTop, left: el.scrollLeft });
-  }
-  return out;
-}
-
-function restoreScroll(root, snapshot) {
-  if (!root) return;
-  for (const item of snapshot) {
-    try {
-      const el = root.querySelector(item.selector);
-      if (!el) continue;
-      if (el.scrollTop !== item.top) el.scrollTop = item.top;
-      if (el.scrollLeft !== item.left) el.scrollLeft = item.left;
-    } catch (e) {
-      // A structural render may invalidate a saved path; skip that container.
-    }
-  }
-}
-
 function refreshUI() {
   updateAll();
-  for (const win of app.windows.values()) renderAppWindow(win);
+  for (const win of app.windows.values()) {
+    if (win.render && !win.minimized) safe(() => win.render());
+  }
   scheduleSave();
 }
 
@@ -822,7 +772,6 @@ MOUNTS.terminal = function mountTerminal(win) {
       <button class="tbtn" data-term-cmd="mail">mail</button>
       <button class="tbtn" data-term-cmd="map">map</button>
       <button class="tbtn" data-term-cmd="clear">clear</button>
-      <button class="tbtn" data-term-bottom title="Jump to latest output">↓ bottom</button>
       <div class="right"><span class="conn" data-term-conn>local</span><span data-term-cwd>~</span><span>bash</span><span data-term-hist>0 cmd</span></div>
     </div>
     <div class="term-body">
@@ -906,12 +855,6 @@ MOUNTS.terminal = function mountTerminal(win) {
 
   scroll.addEventListener('click', () => input.focus());
   win.el.addEventListener('click', e => {
-    const bottom = e.target.closest('[data-term-bottom]');
-    if (bottom) {
-      scroll.scrollTop = scroll.scrollHeight;
-      input.focus();
-      return;
-    }
     const b = e.target.closest('[data-term-cmd]');
     if (b) submitLine(term, b.dataset.termCmd);
   });
@@ -922,6 +865,7 @@ MOUNTS.terminal = function mountTerminal(win) {
 };
 
 function appendTermLine(scroll, text, cls = '') {
+  const nearBottom = scroll.scrollHeight - scroll.scrollTop - scroll.clientHeight < 48;
   const lines = String(text ?? '').split('\n');
   for (const line of lines) {
     const div = document.createElement('div');
@@ -930,6 +874,7 @@ function appendTermLine(scroll, text, cls = '') {
     scroll.appendChild(div);
   }
   while (scroll.children.length > 2200) scroll.firstElementChild.remove();
+  if (nearBottom) scroll.scrollTop = scroll.scrollHeight;
 }
 
 function promptHTML(term) {
@@ -945,6 +890,7 @@ function appendEcho(term, line, mask = false) {
   div.className = 'tline';
   div.innerHTML = promptHTML(term) + esc(mask ? '•'.repeat(Math.max(1, line.length)) : line);
   term.scroll.appendChild(div);
+  term.scroll.scrollTop = term.scroll.scrollHeight;
 }
 
 function updateTerminalChrome(win) {
@@ -991,6 +937,7 @@ async function submitLine(term, line) {
   if (term.input) {
     term.input.disabled = false;
     term.input.focus();
+    term.scroll.scrollTop = term.scroll.scrollHeight;
   }
 }
 
@@ -1018,6 +965,7 @@ function completeInput(term) {
     return;
   }
   appendTermLine(term.scroll, matches.join('   '), 'dim');
+  term.scroll.scrollTop = term.scroll.scrollHeight;
 }
 
 function printBanner(term) {
@@ -2699,166 +2647,6 @@ function profileAction(win, action) {
       actions: [{ label: 'Cancel' }, { label: 'Reset world', kind: 'danger', onClick: () => resetWorld() }]
     });
   }
-}
-
-/* ============================================================
-   WORLD / DIGITAL CIVILIZATION
-   ============================================================ */
-MOUNTS.civilization = function mountCivilization(win) {
-  win.render = () => renderCivilization(win);
-  renderCivilization(win);
-};
-
-function civRow(label, value, color = '') {
-  return `<div style="display:flex;justify-content:space-between;gap:8px;padding:3px 0;border-bottom:1px solid #161e24;font-family:var(--mono);font-size:8.5px"><span style="color:var(--dim)">${esc(label)}</span><b style="color:${color || 'var(--text2)'};text-align:right">${value}</b></div>`;
-}
-function civNeed(label, value) {
-  const v = Math.round(clamp(Number(value) || 0, 0, 100));
-  return `<div style="display:flex;align-items:center;gap:6px;padding:2px 0;font-family:var(--mono);font-size:8px"><span style="width:78px;color:var(--dim)">${esc(label)}</span><div class="bar ${v < 35 ? 'red' : v < 55 ? 'amber' : ''}" style="flex:1"><i style="width:${v}%"></i></div><b style="width:24px;text-align:right">${v}</b></div>`;
-}
-function renderCivilization(win) {
-  const g = app.game;
-  const s = civilizationSummary(g);
-  const civ = s.civ;
-  const m = s.metrics;
-  const house = civ.households.find(h => h.id === 'house-player');
-  const career = careerSnapshot(g);
-  const properties = playerProperties(g);
-  const ledger = validateLedger(g);
-  const countries = civ.countries.slice().sort((a, b) => (b.economy.gdp || 0) - (a.economy.gdp || 0)).slice(0, 6);
-  const cities = civ.cities.slice(0, 6);
-  const tech = civ.tech.technologies.slice(0, 5);
-  const projects = civ.tech.projects.filter(p => p.status === 'active' || p.ownerType === 'player').slice(0, 4);
-  const events = civEventList(g, true).slice(0, 5);
-  const timeline = civHistory(g, { limit: 6 });
-  const knowledge = Object.entries(civKnowledge(g)).sort((a, b) => b[1] - a[1]).slice(0, 4);
-  const cultures = civ.culture.organizations.slice(0, 4);
-  const games = civ.culture.games.slice(-3).reverse();
-  const ops = interactionSummary(g);
-  const stats = [
-    ['POPULATION', fmtNum(m.population)],
-    ['GDP', fmtMoney(m.gdp)],
-    ['GROWTH', `${m.growth.toFixed(1)}%`],
-    ['INFLATION', `${m.inflation.toFixed(1)}%`],
-    ['UNEMPLOYMENT', `${m.unemployment.toFixed(1)}%`],
-    ['STABILITY', m.stability.toFixed(1)],
-    ['INTERNET FREEDOM', m.internetFreedom.toFixed(1)],
-    ['MEDIA TRUST', m.mediaTrust.toFixed(1)],
-    ['RESEARCH', m.researchLevel.toFixed(2)],
-    ['ADOPTION', `${m.technologyAdoption.toFixed(1)}%`],
-    ['SUPPLY', `${Math.round(m.supplyPressure * 100)}%`],
-    ['INEQUALITY', m.inequality.toFixed(1)]
-  ];
-  const countryRows = countries.map(c => `<div style="display:flex;gap:6px;padding:3px 0;border-bottom:1px solid #161e24;font-family:var(--mono);font-size:8px">
-      <b style="flex:1;color:var(--text)">${esc(c.name)}</b>
-      <span style="width:58px;text-align:right;color:${c.economy.growth >= 0 ? 'var(--green)' : 'var(--red)'}">${c.economy.growth.toFixed(1)}%</span>
-      <span style="width:44px;text-align:right;color:var(--dim)">${Math.round(c.stability)}</span>
-      <span style="width:48px;text-align:right;color:var(--dim)">${c.internet.penetration}%</span>
-    </div>`).join('');
-  const cityRows = cities.map(c => `<div style="display:flex;gap:6px;padding:3px 0;border-bottom:1px solid #161e24;font-family:var(--mono);font-size:8px">
-      <b style="flex:1;color:var(--text)">${esc(c.name)}</b>
-      <span style="width:46px;text-align:right;color:var(--dim)">pwr ${Math.round(c.utilities.power)}</span>
-      <span style="width:46px;text-align:right;color:var(--dim)">tel ${Math.round(c.utilities.telecom)}</span>
-      <span style="width:54px;text-align:right;color:var(--dim)">${fmtMoney(c.prices.housing)}</span>
-    </div>`).join('');
-  const techRows = tech.map(t => `<div style="display:flex;gap:6px;padding:3px 0;border-bottom:1px solid #161e24;font-family:var(--mono);font-size:8px">
-      <b style="flex:1;color:var(--text)">${esc(t.name)} ${esc(t.version)}</b>
-      <span style="color:var(--dim)">${esc(t.license)}</span>
-      <span style="width:48px;text-align:right;color:var(--accent)">${t.adoption.toFixed(1)}%</span>
-    </div>`).join('');
-  const projectRows = projects.map(p => `<div style="padding:3px 0;border-bottom:1px solid #161e24;font-family:var(--mono);font-size:8px">
-      <div style="display:flex;gap:6px"><b style="flex:1;color:var(--text)">${esc(p.name)}</b><span style="color:${p.ownerType === 'player' ? 'var(--green)' : 'var(--dim)'}">${Math.round(p.progress)}%</span></div>
-      <div class="bar" style="margin-top:3px"><i style="width:${clamp(p.progress, 0, 100)}%"></i></div>
-    </div>`).join('');
-  const eventRows = events.map(e => `<div style="padding:4px 0;border-bottom:1px solid #161e24;font-family:var(--mono);font-size:8px">
-      <div style="color:var(--amber)">${esc(e.title)}</div>
-      <div style="color:var(--dim)">${esc(e.category)} · ${esc(e.severity || '')} · ${esc(e.body || '').slice(0, 90)}</div>
-    </div>`).join('') || '<div class="dim" style="font-size:8px">No active world events.</div>';
-  const timelineRows = timeline.map(t => `<div style="display:flex;gap:6px;padding:3px 0;border-bottom:1px solid #161e24;font-family:var(--mono);font-size:8px">
-      <span style="width:34px;color:var(--dim)">${t.year}</span><b style="flex:1;color:var(--text2)">${esc(t.title)}</b><span style="color:var(--faint)">${esc(t.category)}</span>
-    </div>`).join('');
-  win.body.innerHTML = `<div class="profile-layout">
-    <div class="profile-head">
-      <div class="profile-avatar">◈</div>
-      <div style="flex:1">
-        <h2>${esc(s.country.name)} · ${esc(s.city.name)}</h2>
-        <p>Year ${s.year} · ${fmtNum(m.population)} people · ${fmtMoney(m.gdp)} GDP · index ${m.civilizationIndex}/100</p>
-        <div class="badges">${tag(`${s.activeLaws} laws`, 'b')}${tag(`${s.countries || civ.countries.length} countries`, 'b')}${tag(`${civ.households.length} households`, 'g')}${tag(ledger.ok ? 'shared ledger valid' : 'ledger broken', ledger.ok ? 'g' : 'r')}</div>
-      </div>
-      <div style="display:flex;gap:4px;flex-wrap:wrap;justify-content:flex-end">
-        <button class="tbtn small" data-civ-cmd="civ">Overview</button>
-        <button class="tbtn small" data-civ-cmd="civ legal">Legal</button>
-        <button class="tbtn small" data-civ-cmd="civ tech projects">Technology</button>
-        <button class="tbtn small" data-civ-cmd="civ culture">Culture</button>
-        <button class="tbtn small" data-civ-cmd="civ history">History</button>
-      </div>
-    </div>
-    <div class="profile-grid">${stats.map(([k, v]) => `<div class="pstat"><span>${k}</span><b>${v}</b></div>`).join('')}</div>
-
-    <div class="section-label" style="margin-top:14px">COUNTRIES <span class="dim">GDP · growth · stability · internet</span></div>
-    ${countryRows}
-
-    <div class="section-label" style="margin-top:14px">CITIES <span class="dim">power · telecom · housing</span></div>
-    ${cityRows}
-
-    <div class="section-label" style="margin-top:14px">HOUSEHOLD AND CAREER</div>
-    ${house ? `
-      ${civRow('Housing', `${esc(house.housing.label)} · ${esc(house.housing.tenure)} · ${fmtMoney(house.housing.rent)}/mo`)}
-      ${civRow('Income', `${fmtMoney(house.monthlyIncome)}/mo · costs ${fmtMoney(house.expenses)}/mo`)}
-      ${civRow('Satisfaction', String(Math.round(house.satisfaction)), house.satisfaction < 35 ? 'var(--red)' : 'var(--green)')}
-      ${civNeed('housing', house.needs.housing)}
-      ${civNeed('income', house.needs.income)}
-      ${civNeed('connectivity', house.needs.connectivity)}
-      ${civNeed('security', house.needs.security)}
-      ${civNeed('community', house.needs.community)}
-    ` : '<div class="dim" style="font-size:8px">No household record.</div>'}
-    <div style="margin-top:8px">
-      ${civRow('Career', career.employed ? `${esc(career.professional.role)} · ${fmtMoney(career.professional.salary)}/yr` : 'independent')}
-      ${civRow('Professional', String(Math.round(career.professional.score)))}
-      ${civRow('Compliance', String(Math.round(civ.player.compliance)))}
-      ${civRow('Properties', String(properties.length))}
-      ${civRow('Open cases', String(s.playerDisputes))}
-    </div>
-    <div style="margin-top:8px">${knowledge.map(([field, value]) => civNeed(field, value)).join('') || '<div class="dim" style="font-size:8px">No studied fields yet.</div>'}</div>
-
-    <div class="section-label" style="margin-top:14px">TECHNOLOGY</div>
-    ${techRows || '<div class="dim" style="font-size:8px">No released technologies.</div>'}
-    ${projectRows}
-
-    <div class="section-label" style="margin-top:14px">CULTURE</div>
-    ${cultures.map(o => `<div style="display:flex;gap:6px;padding:3px 0;border-bottom:1px solid #161e24;font-family:var(--mono);font-size:8px"><b style="flex:1;color:var(--text)">${esc(o.name)}</b><span style="color:var(--dim)">${esc(o.kind)}</span><span style="width:58px;text-align:right;color:var(--accent)">${fmtNum(o.audience)}</span></div>`).join('')}
-    ${games.map(x => `<div style="padding:3px 0;font-family:var(--mono);font-size:8px;color:var(--dim)">${esc(x.title)} · ${fmtNum(x.players)} players · ${x.rating.toFixed(1)}★</div>`).join('')}
-
-    <div class="section-label" style="margin-top:14px">OPERATIONS <span class="dim">jobs · hardware · faults</span></div>
-    ${ops.running.length ? ops.running.map(j => `<div style="padding:3px 0;border-bottom:1px solid #161e24;font-family:var(--mono);font-size:8px"><div style="display:flex;gap:6px"><b style="flex:1;color:var(--text)">${esc(j.label)}</b><span style="color:var(--accent)">${Math.round(j.progress)}%</span></div><div class="bar" style="margin-top:3px"><i style="width:${clamp(j.progress, 0, 100)}%"></i></div></div>`).join('') : '<div class="dim" style="font-size:8px">No background jobs running.</div>'}
-    <div style="margin-top:6px">
-      ${civRow('CPU', `${esc(ops.hardware.cpu.model)} · ${Math.round(ops.hardware.cpu.load)}% · ${Math.round(ops.hardware.temp)}°C`)}
-      ${civRow('Memory', `${ops.hardware.ram.used}/${ops.hardware.ram.total} GB`)}
-      ${civRow('Storage', `${ops.hardware.storage.used.toFixed(1)}/${ops.hardware.storage.total} GB`)}
-      ${civRow('Open faults', String(ops.faults.length), ops.faults.length ? 'var(--red)' : 'var(--green)')}
-      ${civRow('Conversations', String(ops.conversations.length))}
-      ${civRow('Bank balance', fmtMoney(ops.bank.accounts.primary.balance))}
-    </div>
-    <div style="display:flex;gap:4px;flex-wrap:wrap;margin-top:8px">
-      <button class="tbtn small" data-civ-cmd="bg">Jobs</button>
-      <button class="tbtn small" data-civ-cmd="hw">Hardware</button>
-      <button class="tbtn small" data-civ-cmd="fault">Faults</button>
-      <button class="tbtn small" data-civ-cmd="dev">Projects</button>
-      <button class="tbtn small" data-civ-cmd="lab">Lab</button>
-    </div>
-
-    <div class="section-label" style="margin-top:14px">ACTIVE WORLD EVENTS</div>
-    ${eventRows}
-
-    <div class="section-label" style="margin-top:14px">RECENT HISTORY</div>
-    ${timelineRows}
-
-    <div style="margin-top:14px;font-family:var(--mono);font-size:8px;color:var(--faint);line-height:1.6">
-      ${civ.multiplayer.players.length} shared operator(s) · ${civ.multiplayer.players.filter(p => p.connected).length} connected · anti-cheat rejected ${civ.multiplayer.antiCheat.rejected} · world ${esc(civ.multiplayer.worldId)}
-    </div>
-  </div>`;
-  for (const b of $$('[data-civ-cmd]', win.body)) b.addEventListener('click', () => runCommand(b.dataset.civCmd));
-  win.status.innerHTML = `<span>${esc(s.country.name)} · ${s.year}</span><span>${s.activeEvents} active event(s)</span><span class="st-right"><b>${m.civilizationIndex}/100</b><span>civilization index</span></span>`;
 }
 
 /* ============================================================

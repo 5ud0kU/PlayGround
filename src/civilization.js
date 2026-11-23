@@ -18,7 +18,7 @@ export const CAPS = Object.freeze({
   music: 80, communities: 80, esports: 40, cultureEvents: 60, events: 220,
   timeline: 280, ledger: 400, identities: 480, outages: 40, policies: 60,
   treaties: 80, sanctions: 60, content: 180, jobs: 80, applications: 24,
-  households: 140, techProjects: 32, courtCases: 120, tenancies: 120
+  households: 120, lawFirms: 48, negotiations: 60, instructors: 220
 });
 
 const REGION_LABEL = {
@@ -504,20 +504,6 @@ function makeCity(def, country, rng) {
     education: rng.int(3, 14), medical: rng.int(2, 12), datacenter: rng.int(1, 10),
     logistics: rng.int(3, 18), leisure: rng.int(4, 20)
   };
-  const buildings = {
-    residential: Math.round(population / rng.int(180, 460)),
-    offices: districts.commercial * rng.int(8, 26),
-    shops: districts.commercial * rng.int(12, 42),
-    industrial: districts.industrial * rng.int(5, 18),
-    schools: Math.max(1, Math.round(districts.education * rng.float(.6, 1.4))),
-    hospitals: Math.max(1, Math.round(districts.medical * rng.float(.5, 1.2))),
-    universities: Math.max(0, Math.round(districts.education / rng.int(4, 9))),
-    dataCenters: Math.max(1, Math.round(districts.datacenter / 3)),
-    warehouses: Math.max(1, Math.round(districts.logistics * rng.float(.4, 1.1))),
-    fireStations: Math.max(1, Math.round(population / 420000)),
-    policeStations: Math.max(1, Math.round(population / 360000)),
-    parks: districts.leisure * rng.int(2, 7)
-  };
   return {
     id, countryId, name, population, region, costIndex: cost, character,
     districts,
@@ -534,20 +520,7 @@ function makeCity(def, country, rng) {
       labor: Math.round(28 * cost * rng.float(.8, 1.2))
     },
     conditions: { congestion: rng.int(18, 72), pollution: rng.int(8, 58), resilience: rng.int(40, 92) },
-    buildings,
-    transport: {
-      roads: Math.round(population / rng.int(900, 2200)),
-      rail: rng.int(0, 46), busRoutes: rng.int(12, 180),
-      port: rng.chance(.28), airport: rng.chance(.42),
-      condition: rng.int(44, 94)
-    },
-    services: {
-      schools: buildings.schools, hospitals: buildings.hospitals,
-      clinics: Math.max(1, Math.round(buildings.hospitals * rng.float(1.4, 3.2))),
-      emergencyLoad: rng.int(18, 72), maintenanceBacklog: rng.int(4, 68)
-    },
-    budget: Math.round(population * rng.float(18, 54)),
-    dataCenterIds: [], households: 0, createdAtWorld: 0
+    buildings: [], dataCenterIds: [], createdAtWorld: 0
   };
 }
 
@@ -686,6 +659,7 @@ function makeContent(civ, outlet, rng, opts = {}) {
     authorId: opts.authorId || (gameNpcIds(civ).length ? rng.pick(gameNpcIds(civ)).id : null),
     topic, headline, type: opts.type || 'report', reach: opts.reach ?? rng.int(200, 90000),
     trustDelta: opts.trustDelta ?? rng.int(-2, 3), sentiment: opts.sentiment ?? rng.int(-40, 40),
+    accuracy: opts.accuracy ?? clamp(90 - Math.abs(outlet.bias) * 2.6 + rng.int(-20, 12), 28, 99),
     world: opts.world ?? civ.worldMinutes, corrections: 0, status: 'published',
     body: opts.body || `${headline} The reporting is based on public records and interviews. Some details remain unverified.`
   };
@@ -784,19 +758,13 @@ function makeSupply(civ, rng) {
       availability: rng.int(48, 96), demand: rng.int(38, 92), stock: Math.round(rng.int(200, 4000))
     };
   }
-  const factoryCities = civ.cities.filter(c => c.countryId === 'rhine' || c.countryId === 'sakura' || c.countryId === 'novaria' || c.countryId === 'sundara');
-  const factories = rng.picks(civ._companies, 10).map(co => {
-    const output = rng.pick(['semiconductor', 'circuit-board', 'battery', 'network-chip', 'display', 'cooling']);
-    const city = rng.pick(factoryCities.length ? factoryCities : civ.cities);
-    return {
-      id: nextId(civ, 'factory'), companyId: co.id, companyName: co.name,
-      name: `${co.name} ${components[output]?.name || output} plant`,
-      cityId: city.id,
-      output,
-      capacity: rng.int(40, 960), utilization: rng.int(30, 92), efficiency: rng.int(45, 94),
-      energyUse: rng.int(20, 90), status: 'operating', ownerId: null, ownerName: co.name, ownerType: 'company'
-    };
-  });
+  const factories = rng.picks(civ._companies, 10).map(co => ({
+    id: nextId(civ, 'factory'), companyId: co.id, companyName: co.name,
+    cityId: rng.pick(civ.cities.filter(c => c.countryId === 'rhine' || c.countryId === 'sakura' || c.countryId === 'novaria' || c.countryId === 'sundara')).id,
+    output: rng.pick(['semiconductor', 'circuit-board', 'battery', 'network-chip', 'display', 'cooling']),
+    capacity: rng.int(40, 960), utilization: rng.int(30, 92), efficiency: rng.int(45, 94),
+    energyUse: rng.int(20, 90), status: 'operating'
+  }));
   const warehouses = rng.picks(civ.cities, 12).map(city => ({
     id: nextId(civ, 'warehouse'), cityId: city.id, countryId: city.countryId,
     name: `${city.name} distribution`, capacity: rng.int(100, 1400), inventory: rng.int(40, 900),
@@ -875,188 +843,6 @@ function countryForCompany(civ, company) {
   return civ.countries.find(c => c.id === company.hqCountryId) || civ.countries.find(c => c.hq && c.capital === company.hq) || civ.countries[0];
 }
 
-const HOUSEHOLD_NEEDS = ['housing', 'income', 'connectivity', 'security', 'community'];
-
-function makeHousehold(civ, game, members, rng, opts = {}) {
-  const lead = members[0];
-  const company = lead?.companyId ? (civ._companies || []).find(c => c.id === lead.companyId) : null;
-  const country = opts.country || countryForCompany(civ, company) || rng.pick(civ.countries);
-  const cities = civ.cities.filter(c => c.countryId === country.id);
-  const city = opts.city || rng.pick(cities.length ? cities : civ.cities);
-  const identities = members.map(m => civ.identities.find(i => i.id === m.id)).filter(Boolean);
-  const annualIncome = Math.max(9000, Math.round(
-    identities.reduce((sum, i) => sum + 9000 + (i.professional?.score || 20) * 620, 0) * rng.float(.86, 1.18)
-  ));
-  const quality = clamp(rng.int(30, 92), 5, 100);
-  const tenure = opts.tenure || (rng.chance(.24) ? 'owned' : 'renting');
-  const rent = tenure === 'owned' ? 0 : Math.round((city.prices.housing || 1200) * rng.float(.72, 1.2));
-  const household = {
-    id: nextId(civ, 'house'), name: `${(lead?.name || 'Independent').split(' ').slice(-1)[0]} household`,
-    cityId: city.id, countryId: country.id,
-    members: members.map(m => m.id), handles: members.map(m => m.handle),
-    dependents: rng.chance(.38) ? rng.int(1, 3) : 0,
-    income: annualIncome, monthlyIncome: Math.round(annualIncome / 12),
-    savings: Math.max(0, Math.round(annualIncome * rng.float(.04, .42))),
-    expenses: Math.round(annualIncome / 12 * rng.float(.48, .78)) + rent,
-    housing: { tenure, propertyId: null, label: `${city.name} ${quality > 70 ? 'residence' : 'housing'}`, rent, quality, sinceWorld: civ.worldMinutes },
-    needs: {
-      housing: clamp(quality - Math.round(rent / Math.max(1, city.prices.housing) * 18), 5, 100),
-      income: clamp(Math.round(annualIncome / 2200), 5, 100),
-      connectivity: clamp(city.utilities.telecom + rng.int(-12, 8), 5, 100),
-      security: clamp(country.stability - rng.int(0, 22), 5, 100),
-      community: clamp(city.buildings.parks * 2 + rng.int(15, 55), 5, 100)
-    },
-    satisfaction: clamp(52 + (quality - 50) * .28 + (country.stability - 60) * .18 + rng.int(-8, 8), 5, 98),
-    status: 'settled', lastDecisionWorld: civ.worldMinutes,
-    history: []
-  };
-  for (const member of members) {
-    member.householdId = household.id;
-    member.cityId = city.id;
-    member.countryId = country.id;
-  }
-  return household;
-}
-
-function makePlayerHousehold(game, civ, rng) {
-  const country = civ.countries.find(c => c.id === civ.player.countryId) || civ.countries[0];
-  const city = civ.cities.find(c => c.id === civ.player.cityId) || civ.cities.find(c => c.countryId === country.id) || civ.cities[0];
-  const housing = { tenure: 'renting', propertyId: null, label: `${city.name} apartment`, rent: Math.round((city.prices.housing || 1200) * .82), quality: 58, sinceWorld: civ.worldMinutes };
-  return {
-    id: 'house-player', name: `${game.player.handle} household`, cityId: city.id, countryId: country.id,
-    members: ['player'], handles: [game.player.handle], dependents: 0,
-    income: 0, monthlyIncome: 0, savings: Math.max(0, game.player.money || 0), expenses: housing.rent + Math.round(city.prices.energy || 20),
-    housing,
-    needs: { housing: 58, income: 35, connectivity: clamp(city.utilities.telecom, 5, 100), security: clamp(country.stability, 5, 100), community: 32 },
-    satisfaction: 58, status: 'settled', lastDecisionWorld: civ.worldMinutes,
-    lastChargeWorld: civ.worldMinutes, history: []
-  };
-}
-
-const TECH_FIELD_BY_CATEGORY = {
-  os: 'programming', language: 'programming', devtools: 'programming',
-  framework: 'programming', database: 'programming', platform: 'programming',
-  ai: 'ai', cpu: 'hardware', gpu: 'hardware', hardware: 'hardware',
-  networking: 'networks', cloud: 'networks', security: 'cybersecurity'
-};
-const TECH_CATEGORIES = Object.keys(TECH_FIELD_BY_CATEGORY);
-
-function makeTechProject(civ, game, opts, rng) {
-  const category = opts.category || 'devtools';
-  const field = opts.field || TECH_FIELD_BY_CATEGORY[category] || 'programming';
-  const ambition = clamp(opts.ambition || 1, 1, 3);
-  const knowledge = opts.knowledge ?? 20;
-  return {
-    id: nextId(civ, 'techproj'), name: opts.name || 'Untitled system',
-    category, field, ownerType: opts.ownerType || 'npc', ownerId: opts.ownerId || null,
-    ownerName: opts.ownerName || 'independent project', companyId: opts.companyId || null,
-    license: opts.license || (rng.chance(.35) ? 'open-source' : 'source-available'),
-    version: opts.version || '0.1', ambition,
-    progress: opts.progress ?? rng.int(0, 18), funding: opts.funding || 0,
-    fundingNeeded: opts.fundingNeeded || Math.round((22000 + ambition * 76000) * rng.float(.8, 1.3)),
-    expertise: opts.expertise ?? knowledge,
-    equipment: opts.equipment ?? clamp(24 + knowledge * .45, 10, 96),
-    difficulty: clamp(30 + ambition * 17 + rng.int(-6, 10), 20, 96),
-    startedWorld: opts.startedWorld ?? civ.worldMinutes,
-    etaWorld: opts.etaWorld ?? civ.worldMinutes + Math.round((18 + ambition * 24) * DAY),
-    status: opts.status || 'active', notes: [], techId: null
-  };
-}
-
-function makeCourtCase(civ, game, opts, rng) {
-  const country = opts.country || rng.pick(civ.countries);
-  const courts = civ.courts.filter(c => c.countryId === country.id);
-  const court = opts.court || rng.pick(courts.length ? courts : civ.courts);
-  const claim = Math.max(0, Math.round(opts.claim || rng.int(800, 90000)));
-  return {
-    id: nextId(civ, 'case'), countryId: country.id, courtId: court?.id || null,
-    courtName: court?.name || `${country.name} Civil Tribunal`,
-    kind: opts.kind || rng.pick(['civil', 'commercial', 'regulatory', 'labor', 'intellectual-property']),
-    subject: opts.subject || 'npc-company', subjectName: opts.subjectName || 'Unnamed party',
-    plaintiff: opts.plaintiff || 'claimant', defendant: opts.defendant || 'respondent',
-    issue: opts.issue || 'unresolved digital service dispute',
-    claim, evidence: clamp(opts.evidence ?? rng.int(20, 70), 0, 100),
-    lawyer: opts.lawyer || null, public: opts.public !== false,
-    status: opts.status || 'filed', filedWorld: opts.filedWorld ?? civ.worldMinutes,
-    hearingWorld: opts.hearingWorld ?? civ.worldMinutes + rng.int(2, 18) * DAY,
-    decisionWorld: opts.decisionWorld ?? civ.worldMinutes + rng.int(20, 90) * DAY,
-    outcome: opts.outcome || null, fine: 0, damages: 0, costs: 0,
-    history: opts.history || [], resolvedWorld: opts.resolvedWorld || null
-  };
-}
-
-function caseStrength(civ, dispute) {
-  const country = civ.countries.find(c => c.id === dispute.countryId);
-  const strict = clamp(((country?.regulation?.contracts || 50) + (country?.regulation?.consumer || 50) + (country?.regulation?.data || 50)) / 300, 0, 1);
-  const evidence = clamp(dispute.evidence || 0, 0, 100) / 100;
-  const representation = dispute.lawyer ? .14 : 0;
-  const subjectCompliance = dispute.subject === 'player' || dispute.subject === 'player-company'
-    ? clamp((civ.player?.compliance ?? 70) / 100, 0, 1) : .52;
-  return clamp(.26 + evidence * .34 + representation + strict * .12 + (subjectCompliance - .5) * .18, .08, .92);
-}
-
-function resolveCourtCase(game, civ, dispute, rng, events, opts = {}) {
-  if (!dispute || !['filed', 'hearing', 'judgment'].includes(dispute.status)) return null;
-  const country = civ.countries.find(c => c.id === dispute.countryId);
-  const strength = opts.strength ?? caseStrength(civ, dispute);
-  const roll = opts.roll ?? rng.next();
-  const upheld = roll < strength;
-  dispute.status = 'decided';
-  dispute.resolvedWorld = civ.worldMinutes;
-  dispute.outcome = upheld ? 'upheld' : 'dismissed';
-  dispute.history.push({ world: civ.worldMinutes, text: `${dispute.courtName} ${upheld ? 'found for the claimant' : 'dismissed the claim'}.` });
-  const multiplier = legalPenaltyMultiplier(game, dispute.countryId);
-  if (upheld) {
-    dispute.damages = Math.round(dispute.claim * rng.float(.28, .72));
-    dispute.costs = Math.round(dispute.claim * rng.float(.02, .08));
-  } else {
-    dispute.costs = Math.round(dispute.claim * rng.float(.01, .04));
-  }
-  if (dispute.subject === 'player' || dispute.subject === 'player-company') {
-    if (dispute.plaintiff === 'player' || dispute.plaintiff === 'player-company') {
-      if (upheld) {
-        const award = Math.max(0, dispute.damages - dispute.costs);
-        game.player.money += award;
-        game.stats.earned += award;
-        if (award) game.player.transactions.unshift({ time: Date.now(), amount: award, memo: `court award · ${dispute.issue}`, balance: game.player.money });
-        emitPlayerFeed(game, `Court award: ${fmtMoney(award)} in ${dispute.issue}.`, 'good');
-      } else {
-        const cost = Math.max(20, Math.round(dispute.costs * .35));
-        game.player.money = Math.max(0, game.player.money - cost);
-        game.stats.spent += cost;
-        emitPlayerFeed(game, `Claim dismissed; ${fmtMoney(cost)} in costs.`, 'warn');
-      }
-    } else {
-      const liability = upheld ? Math.max(40, Math.round((dispute.damages + dispute.costs) * multiplier)) : Math.round(dispute.costs * .4);
-      game.player.money = Math.max(0, game.player.money - liability);
-      game.stats.spent += liability;
-      civ.player.compliance = clamp((civ.player.compliance || 70) - (upheld ? rng.int(3, 9) : 0), 0, 100);
-      pushMail(game, 'courts', `Judgment: ${dispute.issue}`, `${dispute.courtName} ${upheld ? 'found against you' : 'dismissed the claim'}.\n\nLiability: ${fmtMoney(liability)}\nCase: ${dispute.id}\n\nThe ruling is part of your persistent civil record.`);
-      emitPlayerFeed(game, `Court judgment: ${upheld ? fmtMoney(liability) + ' liability' : 'claim dismissed'}.`, upheld ? 'bad' : 'good');
-    }
-    if (game.player.transactions.length > 120) game.player.transactions.length = 120;
-  } else if (dispute.subject && dispute.subject.startsWith('co-')) {
-    const company = (game.companies || []).find(c => c.id === dispute.subject);
-    if (company) {
-      const liability = upheld ? Math.max(40, Math.round((dispute.damages + dispute.costs) * multiplier)) : 0;
-      company.funds = Math.max(0, (company.funds || 0) - liability);
-      company.rep = clamp((company.rep || 50) - (upheld ? 2 : 0), 0, 100);
-    }
-  }
-  const fine = upheld && dispute.kind === 'regulatory' ? Math.max(80, Math.round((country?.regulation?.data || 60) * 12 * multiplier)) : 0;
-  dispute.fine = fine;
-  if (fine) {
-    if (country) country.economy.budget += fine;
-    if (dispute.subject === 'player' || dispute.subject === 'player-company') {
-      game.player.money = Math.max(0, game.player.money - fine);
-      game.stats.spent += fine;
-    }
-  }
-  recordTimeline(civ, 'law', `${dispute.courtName} rules on ${dispute.issue}`, `${upheld ? 'The claim was upheld' : 'The claim was dismissed'} in ${country?.name || dispute.countryId}. ${dispute.public ? 'The judgment is public.' : 'The record is sealed.'}`, { countryId: dispute.countryId, actors: [dispute.subject, dispute.plaintiff], major: dispute.claim > 20000 });
-  emit(events, 'news', `Court rules on ${dispute.issue}`, { body: `${dispute.courtName} ${upheld ? 'upheld' : 'dismissed'} a ${dispute.kind} claim involving ${dispute.subjectName}.`, source: 'Public Record' });
-  return dispute;
-}
-
 function assignCompanyJurisdictions(civ, game, rng = null) {
   const byRegion = {
     'us-east': ['novaria'], 'us-west': ['novaria'], 'eu-west': ['albion', 'rhine'],
@@ -1072,6 +858,87 @@ function assignCompanyJurisdictions(civ, game, rng = null) {
   }
 }
 
+const FIRM_PREFIX = ['Harbor', 'Klein', 'Aster', 'Northline', 'Vale', 'Morrow', 'Sable', 'Quill', 'Cinder', 'Atlas', 'Meridian', 'Greyhaven'];
+const FIRM_SUFFIX = ['Counsel', 'Chambers', 'Partners', 'Regulatory', 'Advocates', 'Legal Group', '& Vale', '& Morrow'];
+
+function makeLawFirm(civ, country, rng, specialty = null) {
+  const domain = specialty || rng.pick(LAW_DOMAINS);
+  return {
+    id: nextId(civ, 'firm'),
+    name: `${rng.pick(FIRM_PREFIX)} ${rng.pick(FIRM_SUFFIX)}`,
+    countryId: country.id, specialty: domain.id, specialtyName: domain.name,
+    fee: rng.int(320, 5400), winRate: rng.int(34, 89), partners: rng.int(2, 68),
+    compliancePractice: rng.chance(.55), status: 'active'
+  };
+}
+
+function npcMonthlyIncome(npc, rng) {
+  if (!npc) return 0;
+  if (!npc.companyId) return Math.round(6800 + (npc.skill || 40) * 150 + rng.int(-1800, 2600));
+  return Math.round(24000 + (npc.skill || 50) * 980 + rng.int(-4200, 6800));
+}
+
+function buildHouseholds(game, civ, rng, npcList = null) {
+  const npcs = npcList || game.npcs || [];
+  const households = [];
+  const limit = Math.max(1, CAPS.households - 1 - civ.households.length);
+  let index = 0;
+  while (index < npcs.length && households.length < limit) {
+    const size = Math.min(npcs.length - index, rng.int(1, 3));
+    const members = npcs.slice(index, index + size);
+    index += size;
+    const head = members[0];
+    const company = head.companyId ? civ._companies.find(c => c.id === head.companyId) : null;
+    const country = countryForCompany(civ, company) || rng.pick(civ.countries);
+    const city = rng.pick(civ.cities.filter(c => c.countryId === country.id)) || rng.pick(civ.cities);
+    const memberRows = members.map(npc => {
+      const income = npcMonthlyIncome(npc, rng);
+      return { id: npc.id, handle: npc.handle, name: npc.name, role: npc.role, income, employerId: npc.companyId || null, employed: !!npc.companyId };
+    });
+    const income = memberRows.reduce((sum, m) => sum + m.income, 0);
+    const rent = Math.max(140, Math.round(city.prices.housing * rng.float(.62, 1.28) * (members.length > 1 ? 1.14 : 1)));
+    const expenses = rent + Math.round(city.prices.energy * 2 + income * .22);
+    const savings = rng.int(0, Math.max(1200, Math.round(income * 2.1)));
+    const satisfaction = clamp(55 + (income - expenses) / Math.max(1, income) * 30 + (city.utilities.power - 70) * .08 - country.economy.unemployment * 1.25 + rng.int(-8, 10), 4, 97);
+    const relationships = [];
+    for (let i = 1; i < memberRows.length; i++) {
+      relationships.push({ a: memberRows[0].id, b: memberRows[i].id, kind: rng.pick(['partner', 'roommate', 'family']), strength: rng.int(35, 96) });
+    }
+    households.push({
+      id: nextId(civ, 'household'), name: `${head.handle} household`, headId: head.id,
+      cityId: city.id, countryId: country.id, members: memberRows,
+      income, savings, expenses,
+      housing: { type: rng.pick(['apartment', 'house', 'shared flat', 'rented room']), rent, ownedId: null },
+      satisfaction, relationships,
+      needs: { housing: clamp(100 - rent / Math.max(1, income) * 250, 5, 100), income: clamp(income / 900, 5, 100), community: rng.int(22, 92) },
+      status: 'active', formedWorld: game.worldMinutes - rng.int(1, 24) * YEAR,
+      lastMoveWorld: game.worldMinutes - rng.int(1, 40) * DAY, player: false
+    });
+    for (const m of memberRows) {
+      const identity = civ.identities.find(i => i.id === m.id);
+      if (identity) identity.householdId = households[households.length - 1].id;
+    }
+  }
+  return households;
+}
+
+function buildPlayerHousehold(game, civ) {
+  const city = civ.cities.find(c => c.id === civ.player.cityId) || civ.cities[0];
+  const country = civ.countries.find(c => c.id === civ.player.countryId) || civ.countries[0];
+  return {
+    id: 'household-player', name: `${game.player.name} household`, headId: 'player',
+    cityId: city.id, countryId: country.id,
+    members: [{ id: 'player', handle: game.player.handle, name: game.player.name, role: civ.player.professional.role || 'operator', income: civ.player.professional.salary || 0, employerId: civ.player.professional.employerId || null, employed: !!civ.player.professional.employerId }],
+    income: civ.player.professional.salary || 0, savings: Math.max(0, game.player.money), expenses: 0,
+    housing: { type: 'operator residence', rent: 0, ownedId: null },
+    satisfaction: clamp(50 + (game.player.reputation || 0) * .2, 10, 94),
+    relationships: [],
+    needs: { housing: 70, income: clamp((civ.player.professional.salary || 0) / 2200, 5, 100), community: 45 },
+    status: 'active', formedWorld: game.worldMinutes, lastMoveWorld: game.worldMinutes, player: true
+  };
+}
+
+
 /* ============================================================
    BUILD ROOT
    ============================================================ */
@@ -1084,12 +951,12 @@ export function buildCivilization(game, rng = null) {
     relations: { treaties: [], sanctions: [], negotiations: [], blocs: [] },
     education: { institutions: [], courses: [], certifications: [], enrollments: [], player: { knowledge: {}, credentials: [], studyHours: 0, enrolled: null } },
     research: { fields: RESEARCH_FIELDS.map(f => ({ id: f.id, name: f.name, code: f.code, level: 1, progress: rng.int(0, 40), funding: rng.int(100000, 4000000), discoveries: [] })), labs: [], projects: [], discoveries: [] },
-    media: { outlets: [], content: [], publicOpinion: {}, trends: [], playerPublished: [] },
+    media: { outlets: [], content: [], publicOpinion: {}, trends: [], playerPublished: [], misinformation: 0 },
     infrastructure: null, property: { listings: [], owned: [], market: { index: 100, rentIndex: 100, vacancy: 7, lastUpdateWorld: game.worldMinutes } },
-    supply: null, tech: { technologies: [], standards: [], projects: [], lastReleaseWorld: game.worldMinutes },
+    supply: null, tech: { technologies: [], standards: [], lastReleaseWorld: game.worldMinutes },
     culture: { organizations: [], games: [], music: [], communities: [], esports: [], events: [] },
-    identities: [], households: [], player: null,
-    events: [], timeline: [], cadence: { continuous: 0, politics: 0, economy: 0, supply: 0, media: 0, research: 0, events: 0, history: 0, property: 0, education: 0, infrastructure: 0, city: 0, household: 0, legal: 0, tech: 0, culture: 0 },
+    identities: [], player: null, lawFirms: [], households: [],
+    events: [], timeline: [], cadence: { continuous: 0, politics: 0, economy: 0, supply: 0, media: 0, research: 0, events: 0, history: 0, property: 0, education: 0, infrastructure: 0, jobs: 0, legal: 0, households: 0, tech: 0 },
     metrics: {}, multiplayer: null, _companies: (game.companies || []).slice(), _npcIds: []
   };
   civ.worldMinutes = game.worldMinutes;
@@ -1103,11 +970,17 @@ export function buildCivilization(game, rng = null) {
     country.institutions = [
       makeInstitution(civ, country, 'legislature', `${country.name} National Assembly`, rng),
       makeInstitution(civ, country, 'court', `${country.name} High Court`, rng),
-      makeInstitution(civ, country, 'regulator', `${country.name} ${country.cyberPolicy === 'strict' ? 'Cyber Oversight Board' : 'Digital Services Office'}`, rng)
+      makeInstitution(civ, country, 'regulator', `${country.name} ${country.cyberPolicy === 'strict' ? 'Cyber Oversight Board' : 'Digital Services Office'}`, rng),
+      makeInstitution(civ, country, 'investigator', `${country.name} Digital Investigations Unit`, rng)
     ];
+    country.institutions[3].cases = rng.int(2, 74);
     civ.institutions.push(...country.institutions);
     civ.courts.push({ ...country.institutions[1], jurisdiction: country.id, type: 'high', cases: rng.int(20, 320) });
     civ.regulators.push({ ...country.institutions[2], domain: 'digital', investigations: rng.int(2, 80) });
+    civ.regulators.push({ ...country.institutions[3], domain: 'cyber', investigations: country.institutions[3].cases });
+    civ.lawFirms.push(makeLawFirm(civ, country, rng));
+    if (rng.chance(.6)) civ.lawFirms.push(makeLawFirm(civ, country, rng));
+    if (rng.chance(.28)) civ.lawFirms.push(makeLawFirm(civ, country, rng, LAW_DOMAINS.find(d => d.id === 'ip')));
     for (const domain of LAW_DOMAINS) {
       civ.laws.push(makeLaw(civ, country, domain, rng));
     }
@@ -1144,6 +1017,20 @@ export function buildCivilization(game, rng = null) {
       signedWorld: game.worldMinutes - rng.int(1, 16) * YEAR, status: 'active', compliance: rng.int(42, 94)
     });
     a.relations[b.id].treaty = true; b.relations[a.id].treaty = true;
+  }
+  civ.relations.blocs.push(
+    { id: nextId(civ, 'bloc'), name: 'North Atlantic Digital Compact', members: ['novaria', 'albion', 'nordhavn'], focus: 'cross-border data and incident response', cohesion: rng.int(52, 82), foundedWorld: game.worldMinutes - rng.int(4, 18) * YEAR },
+    { id: nextId(civ, 'bloc'), name: 'Pacific Standards Forum', members: ['sakura', 'coral', 'sundara'], focus: 'device standards and spectrum allocation', cohesion: rng.int(45, 76), foundedWorld: game.worldMinutes - rng.int(3, 14) * YEAR },
+    { id: nextId(civ, 'bloc'), name: 'Southern Infrastructure Group', members: ['atlas', 'pampas', 'sundara'], focus: 'fibre investment and energy resilience', cohesion: rng.int(38, 70), foundedWorld: game.worldMinutes - rng.int(2, 10) * YEAR }
+  );
+  for (let i = 0; i < 3; i++) {
+    const a = rng.pick(civ.countries), b = rng.pick(civ.countries.filter(c => c.id !== a.id));
+    civ.relations.negotiations.push({
+      id: nextId(civ, 'neg'), a: a.id, b: b.id,
+      topic: rng.pick(['cross-border data transfer', 'mutual recognition of digital signatures', 'incident notification protocol', 'spectrum coordination', 'semiconductor export licensing']),
+      status: 'open', progress: rng.int(8, 62), startedWorld: game.worldMinutes - rng.int(10, 90) * DAY,
+      resolveWorld: game.worldMinutes + rng.int(20, 120) * DAY
+    });
   }
 
   // Education.
@@ -1227,17 +1114,6 @@ export function buildCivilization(game, rng = null) {
   for (const seed of TECH_SEEDS) civ.tech.technologies.push(makeTech(civ, seed, rng));
   civ.tech.technologies.sort((a, b) => b.adoption - a.adoption);
   for (const tech of civ.tech.technologies.slice(0, 4)) if (tech.license.includes('open') && tech.adoption > 25) tech.standard = true;
-  for (let i = 0; i < 6; i++) {
-    const company = rng.pick(civ._companies.length ? civ._companies : [{ name: 'Independent developer', id: null, sector: 'software' }]);
-    const category = rng.pick(['os', 'devtools', 'ai', 'security', 'database', 'networking', 'framework']);
-    civ.tech.projects.push(makeTechProject(civ, game, {
-      name: `${company.name.split(' ')[0]} ${rng.pick(['Runtime', 'Protocol', 'Studio', 'Fabric', 'Engine', 'Ledger'])} ${rng.int(2, 9)}`,
-      category, ownerType: company.id ? 'company' : 'independent', ownerId: company.id,
-      ownerName: company.name, companyId: company.id,
-      funding: rng.int(14000, 180000), ambition: rng.int(1, 2),
-      progress: rng.int(8, 70), etaWorld: game.worldMinutes + rng.int(20, 180) * DAY
-    }, rng));
-  }
 
   // Culture.
   for (const seed of CULTURE_SEEDS) civ.culture.organizations.push(makeCulture(civ, seed, rng));
@@ -1267,44 +1143,35 @@ export function buildCivilization(game, rng = null) {
     security: { score: 45, incidents: 0, credentials: [] },
     financial: { score: 35, credit: 620, assets: Math.max(0, game.player.money) },
     academic: { score: 8, publications: 0, citations: 0, field: null },
-    credentials: [], published: [], compliance: 82, updatedWorld: game.worldMinutes,
-    industrial: { inventory: {}, facilityIds: [], revenue: 0, spend: 0 },
-    culture: { organizationIds: [], gameIds: [], musicIds: [], eventIds: [], communityIds: [] },
-    householdId: 'house-player'
+    credentials: [], published: [], compliance: 82, supply: {}, updatedWorld: game.worldMinutes
   };
 
-  // Households exist independently of the player. The player has one too.
-  const householdPool = (game.npcs || []).slice();
-  for (let i = 0; i < householdPool.length && civ.households.length < CAPS.households - 1;) {
-    const size = i + 1 < householdPool.length && rng.chance(.32) ? 2 : 1;
-    const members = householdPool.slice(i, i + size);
-    if (members.length) civ.households.push(makeHousehold(civ, game, members, rng));
-    i += size;
-  }
-  const playerHouse = makePlayerHousehold(game, civ, rng);
-  civ.households.push(playerHouse);
-  civ.player.household = playerHouse;
-
-  // Existing court business gives the legal system a past before the player.
+  // Courts and regulators already have a docket when the player arrives.
   for (let i = 0; i < 8; i++) {
-    const company = rng.pick((game.companies || []).filter(c => c.id));
-    const country = company ? countryForCompany(civ, company) : rng.pick(civ.countries);
-    const filedWorld = game.worldMinutes - rng.int(40, 620) * DAY;
-    const dispute = makeCourtCase(civ, game, {
-      country: country || rng.pick(civ.countries), subject: company?.id || 'npc-company',
-      subjectName: company?.name || 'Independent operator',
-      plaintiff: rng.pick(['customer', 'supplier', 'regulator', 'former employee']),
-      defendant: company ? 'company' : 'individual',
-      issue: rng.pick(['undisclosed data transfer', 'software license breach', 'failed service delivery', 'worker classification', 'consumer refund refusal', 'intellectual property claim']),
-      claim: rng.int(1200, 180000), status: 'decided',
-      filedWorld, hearingWorld: filedWorld + rng.int(4, 20) * DAY,
-      decisionWorld: filedWorld + rng.int(21, 80) * DAY, resolvedWorld: filedWorld + rng.int(81, 150) * DAY,
-      outcome: rng.chance(.48) ? 'upheld' : 'dismissed',
-      history: [{ world: filedWorld + rng.int(81, 150) * DAY, text: 'The court published its judgment.' }]
-    }, rng);
-    civ.disputes.push(dispute);
+    const country = rng.pick(civ.countries);
+    const domain = rng.pick(LAW_DOMAINS);
+    const company = rng.pick((game.companies || []).filter(c => c.ownerType !== 'player')) || null;
+    const firm = rng.pick(civ.lawFirms.filter(f => f.countryId === country.id)) || rng.pick(civ.lawFirms);
+    const filed = game.worldMinutes - rng.int(8, 180) * DAY;
+    const hearing = filed + rng.int(3, 18) * DAY;
+    const judgment = hearing + rng.int(8, 45) * DAY;
+    const closed = judgment < game.worldMinutes;
+    const issue = rng.pick(['data retention evidence', 'license disclosure', 'consumer renewal terms', 'breach notification timing', 'worker classification', 'copyright takedown procedure']);
+    civ.disputes.push({
+      id: nextId(civ, 'case'), countryId: country.id, domain: domain.id, kind: rng.pick(['regulatory', 'contract', 'ip', 'labor', 'consumer']),
+      issue, subject: company?.id || 'market', subjectName: company?.name || 'Unnamed operator',
+      plaintiff: `${country.name} ${domain.regulator}`, plaintiffName: `${country.name} ${domain.regulator}`,
+      defendant: company?.id || null, defendantName: company?.name || 'Unknown operator',
+      lawFirmId: firm?.id || null, status: closed ? 'closed' : hearing < game.worldMinutes ? 'hearing' : 'open',
+      filedWorld: filed, hearingWorld: hearing, judgmentWorld: judgment,
+      exposure: Math.max(600, Math.round((company?.revenue || 0) * .03 + rng.int(200, 3200))),
+      settled: false, defense: null, outcome: closed ? rng.pick(['liable', 'dismissed', 'settled']) : null,
+      fine: 0, compensation: 0, resolvedWorld: closed ? judgment : null
+    });
   }
-  bounded(civ.disputes, CAPS.courtCases);
+  civ.households = buildHouseholds(game, civ, rng);
+  civ.households.push(buildPlayerHousehold(game, civ));
+  civ.player.householdId = 'household-player';
 
   // Historical timeline before the player.
   for (const [year, category, title, body] of HISTORY_SEEDS) {
@@ -1360,7 +1227,7 @@ export function ensureCivilization(game) {
   assignCompanyJurisdictions(civ, game, makeRng((game.seed ^ 0x6d21) >>> 0));
   const defaults = {
     countries: [], cities: [], institutions: [], laws: [], courts: [], regulators: [], disputes: [], compliance: [], policies: [],
-    identities: [], households: [], events: [], timeline: [], jobs: [], applications: []
+    identities: [], events: [], timeline: [], jobs: [], applications: [], lawFirms: [], households: []
   };
   for (const [key, value] of Object.entries(defaults)) if (!Array.isArray(civ[key])) civ[key] = value;
 
@@ -1376,33 +1243,6 @@ export function ensureCivilization(game) {
     if (typeof country.baseStability !== 'number') country.baseStability = def?.stability ?? (typeof country.stability === 'number' ? country.stability : 60);
     if (typeof country.baseApproval !== 'number') country.baseApproval = def?.approval ?? 50;
   }
-  for (const city of civ.cities) {
-    if (!city.buildings || typeof city.buildings !== 'object') {
-      city.buildings = {
-        residential: Math.round((city.population || 100000) / 320),
-        offices: (city.districts?.commercial || 20) * 16,
-        shops: (city.districts?.commercial || 20) * 24,
-        industrial: (city.districts?.industrial || 14) * 10,
-        schools: Math.max(1, city.districts?.education || 6),
-        hospitals: Math.max(1, city.districts?.medical || 5),
-        universities: Math.max(0, Math.round((city.districts?.education || 6) / 6)),
-        dataCenters: Math.max(1, city.districts?.datacenter || 3),
-        warehouses: Math.max(1, city.districts?.logistics || 8),
-        fireStations: Math.max(1, Math.round((city.population || 100000) / 420000)),
-        policeStations: Math.max(1, Math.round((city.population || 100000) / 360000)),
-        parks: (city.districts?.leisure || 8) * 4
-      };
-    }
-    if (!city.transport || typeof city.transport !== 'object') {
-      city.transport = { roads: Math.round((city.population || 100000) / 1400), rail: 12, busRoutes: 40, port: false, airport: true, condition: 68 };
-    }
-    if (!city.services || typeof city.services !== 'object') {
-      city.services = { schools: city.buildings.schools, hospitals: city.buildings.hospitals, clinics: Math.max(1, city.buildings.hospitals * 2), emergencyLoad: 44, maintenanceBacklog: 22 };
-    }
-    if (typeof city.budget !== 'number') city.budget = Math.round((city.population || 100000) * 24);
-    if (typeof city.households !== 'number') city.households = 0;
-    if (typeof city.createdAtWorld !== 'number') city.createdAtWorld = 0;
-  }
   civ.relations = civ.relations || { treaties: [], sanctions: [], negotiations: [], blocs: [] };
   for (const key of ['treaties', 'sanctions', 'negotiations', 'blocs']) if (!Array.isArray(civ.relations[key])) civ.relations[key] = [];
   civ.education = civ.education || { institutions: [], courses: [], certifications: [], enrollments: [], player: { knowledge: {}, credentials: [], studyHours: 0, enrolled: null } };
@@ -1411,11 +1251,13 @@ export function ensureCivilization(game) {
   civ.education.player.credentials = civ.education.player.credentials || [];
   civ.research = civ.research || { fields: RESEARCH_FIELDS.map(f => ({ id: f.id, name: f.name, code: f.code, level: 1, progress: 0, funding: 0, discoveries: [] })), labs: [], projects: [], discoveries: [] };
   civ.research.fields = civ.research.fields || [];
-  civ.media = civ.media || { outlets: [], content: [], publicOpinion: {}, trends: [], playerPublished: [] };
+  civ.media = civ.media || { outlets: [], content: [], publicOpinion: {}, trends: [], playerPublished: [], misinformation: 0 };
   civ.media.outlets = civ.media.outlets || [];
   civ.media.content = civ.media.content || [];
   civ.media.publicOpinion = civ.media.publicOpinion || {};
   civ.media.trends = civ.media.trends || [];
+  civ.media.playerPublished = civ.media.playerPublished || [];
+  if (typeof civ.media.misinformation !== 'number') civ.media.misinformation = 0;
   civ.infrastructure = civ.infrastructure || { grids: [], fiber: [], dataCenters: [], logistics: [], outages: [] };
   for (const key of ['grids', 'fiber', 'dataCenters', 'logistics', 'outages']) if (!Array.isArray(civ.infrastructure[key])) civ.infrastructure[key] = [];
   civ.property = civ.property || { listings: [], owned: [], market: { index: 100, rentIndex: 100, vacancy: 7, lastUpdateWorld: game.worldMinutes } };
@@ -1446,9 +1288,8 @@ export function ensureCivilization(game) {
       ? Math.round(comps.reduce((sum, c) => sum + c.price / Math.max(1, c.basePrice || 1) * 100, 0) / comps.length)
       : 100;
   }
-  civ.tech = civ.tech || { technologies: [], standards: [], projects: [], lastReleaseWorld: game.worldMinutes };
+  civ.tech = civ.tech || { technologies: [], standards: [], lastReleaseWorld: game.worldMinutes };
   civ.tech.technologies = civ.tech.technologies || [];
-  civ.tech.projects = civ.tech.projects || [];
   civ.culture = civ.culture || { organizations: [], games: [], music: [], communities: [], esports: [], events: [] };
   for (const key of ['organizations', 'games', 'music', 'communities', 'esports', 'events']) if (!Array.isArray(civ.culture[key])) civ.culture[key] = [];
   civ.player = civ.player || {
@@ -1465,72 +1306,68 @@ export function ensureCivilization(game) {
   civ.player.compliance = typeof civ.player.compliance === 'number' ? civ.player.compliance : 82;
   civ.player.credentials = civ.player.credentials || [];
   civ.player.published = civ.player.published || [];
-  civ.player.industrial = civ.player.industrial || { inventory: {}, facilityIds: [], revenue: 0, spend: 0 };
-  civ.player.industrial.inventory = civ.player.industrial.inventory || {};
-  civ.player.industrial.facilityIds = civ.player.industrial.facilityIds || [];
-  civ.player.culture = civ.player.culture || { organizationIds: [], gameIds: [], musicIds: [], eventIds: [], communityIds: [] };
-  for (const key of ['organizationIds', 'gameIds', 'musicIds', 'eventIds', 'communityIds']) {
-    if (!Array.isArray(civ.player.culture[key])) civ.player.culture[key] = [];
-  }
+  civ.player.supply = civ.player.supply && typeof civ.player.supply === 'object' ? civ.player.supply : {};
   civ.player.professional = civ.player.professional || { score: 12, title: 'unproven', endorsements: 0, employmentHistory: [], verified: false };
   const profDefaults = { score: 12, title: 'unproven', role: null, employerId: null, employerName: null, salary: 0, sinceWorld: null, lastPayWorld: null, performance: 60, endorsements: 0, employmentHistory: [], verified: false };
   for (const [key, value] of Object.entries(profDefaults)) {
     if (key === 'employmentHistory') { if (!Array.isArray(civ.player.professional[key])) civ.player.professional[key] = []; }
     else if (civ.player.professional[key] == null) civ.player.professional[key] = value;
   }
+
+  // Legal dockets predate the player's arrival. Older saves may not carry the
+  // supporting firms or the lifecycle timestamps, so restore both without
+  // rewriting a case that was already decided.
+  if (!Array.isArray(civ.lawFirms)) civ.lawFirms = [];
+  if (!civ.lawFirms.length) {
+    const firmRng = makeRng((game.seed ^ 0x2b71) >>> 0);
+    for (const country of civ.countries) {
+      civ.lawFirms.push(makeLawFirm(civ, country, firmRng));
+      if (firmRng.chance(.5)) civ.lawFirms.push(makeLawFirm(civ, country, firmRng));
+    }
+    bounded(civ.lawFirms, CAPS.lawFirms);
+  }
+  for (const firm of civ.lawFirms) {
+    firm.status = firm.status || 'active';
+    if (typeof firm.winRate !== 'number') firm.winRate = 48;
+    if (typeof firm.fee !== 'number') firm.fee = 900;
+  }
+  for (const dispute of civ.disputes) {
+    const stamp = typeof dispute.filedWorld === 'number' ? dispute.filedWorld : game.worldMinutes - 30 * DAY;
+    dispute.filedWorld = stamp;
+    if (typeof dispute.hearingWorld !== 'number') dispute.hearingWorld = stamp + 7 * DAY;
+    if (typeof dispute.judgmentWorld !== 'number') dispute.judgmentWorld = dispute.hearingWorld + 21 * DAY;
+    if (typeof dispute.exposure !== 'number') dispute.exposure = 2400;
+    dispute.status = dispute.status || (civ.worldMinutes >= dispute.judgmentWorld ? 'closed' : 'open');
+  }
+  // Households are rebuilt once from the live NPC roster. Their members are
+  // persistent NPC ids, so later ticks read employment and income from world state.
+  if (!Array.isArray(civ.households)) civ.households = [];
+  if (!civ.households.length) {
+    const homeRng = makeRng((game.seed ^ 0x5ea1) >>> 0);
+    civ.households = buildHouseholds(game, civ, homeRng);
+    civ.households.push(buildPlayerHousehold(game, civ));
+  }
+  if (!civ.households.some(h => h.player || h.id === 'household-player')) {
+    civ.households.push(buildPlayerHousehold(game, civ));
+  }
+  civ.player.householdId = civ.households.find(h => h.player)?.id || 'household-player';
+
   civ.cadence = civ.cadence || {};
   const cadenceIntervals = {
     continuous: 30, politics: DAY, economy: DAY, supply: DAY, media: 360, research: 360,
     events: DAY * 3, history: YEAR, property: DAY, education: 720, infrastructure: 180, jobs: 360,
-    city: DAY, household: DAY, legal: DAY, tech: 360, culture: 360
+    legal: DAY * 3, households: DAY * 30, tech: DAY * 45, culture: DAY * 7
   };
   for (const [key, interval] of Object.entries(cadenceIntervals)) {
     if (typeof civ.cadence[key] !== 'number') civ.cadence[key] = Math.floor((game.worldMinutes || 0) / interval);
   }
   civ.seq = civ.seq || {};
-  for (const key of ['law', 'inst', 'course', 'disc', 'proj', 'lab', 'outlet', 'content', 'grid', 'fiber', 'dc', 'logi', 'prop', 'factory', 'warehouse', 'ship', 'tech', 'culture', 'game', 'music', 'comm', 'esport', 'cevent', 'event', 'hist', 'policy', 'treaty', 'dispute', 'case', 'house', 'techproj', 'enroll', 'comp', 'ledger', 'player', 'job', 'app']) if (typeof civ.seq[key] !== 'number') civ.seq[key] = 1;
+  for (const key of ['law', 'inst', 'course', 'disc', 'proj', 'lab', 'outlet', 'content', 'grid', 'fiber', 'dc', 'logi', 'prop', 'factory', 'warehouse', 'ship', 'tech', 'culture', 'game', 'music', 'comm', 'esport', 'cevent', 'event', 'hist', 'policy', 'treaty', 'dispute', 'ledger', 'player', 'job', 'app', 'firm', 'household', 'case', 'neg', 'bloc', 'sanction']) if (typeof civ.seq[key] !== 'number') civ.seq[key] = 1;
   const knownIdentities = new Set(civ.identities.map(i => i.id));
   for (const npc of game.npcs || []) {
     if (knownIdentities.has(npc.id)) continue;
     civ.identities.push(makeIdentity(game, civ, npc, makeRng((game.seed ^ hash32(npc.id)) >>> 0)));
   }
-  civ.households = civ.households.filter(h => h && typeof h === 'object');
-  const housed = new Set(civ.households.flatMap(h => h.members || []));
-  const householdRng = makeRng((game.seed ^ 0x4a11) >>> 0);
-  const unassigned = (game.npcs || []).filter(n => !housed.has(n.id) && !n.householdId);
-  for (let i = 0; i < unassigned.length && civ.households.length < CAPS.households - 1;) {
-    const size = i + 1 < unassigned.length && householdRng.chance(.3) ? 2 : 1;
-    const members = unassigned.slice(i, i + size);
-    if (members.length) civ.households.push(makeHousehold(civ, game, members, householdRng));
-    i += size;
-  }
-  let playerHouse = civ.households.find(h => h.id === 'house-player');
-  if (!playerHouse) {
-    playerHouse = makePlayerHousehold(game, civ, householdRng);
-    civ.households.push(playerHouse);
-  }
-  playerHouse.members = ['player'];
-  playerHouse.handles = [game.player.handle];
-  playerHouse.name = `${game.player.handle} household`;
-  playerHouse.cityId = civ.player.cityId || playerHouse.cityId;
-  playerHouse.countryId = civ.player.countryId || playerHouse.countryId;
-  playerHouse.savings = Math.max(0, game.player.money || 0);
-  playerHouse.needs = playerHouse.needs || { housing: 50, income: 35, connectivity: 60, security: 60, community: 32 };
-  for (const need of HOUSEHOLD_NEEDS) if (typeof playerHouse.needs[need] !== 'number') playerHouse.needs[need] = 50;
-  if (typeof playerHouse.satisfaction !== 'number') playerHouse.satisfaction = 55;
-  if (typeof playerHouse.lastChargeWorld !== 'number') playerHouse.lastChargeWorld = game.worldMinutes;
-  civ.player.householdId = 'house-player';
-  civ.player.household = playerHouse;
-  for (const household of civ.households) {
-    household.members = household.members || [];
-    household.handles = household.handles || [];
-    household.history = household.history || [];
-    household.needs = household.needs || {};
-    for (const need of HOUSEHOLD_NEEDS) if (typeof household.needs[need] !== 'number') household.needs[need] = 50;
-    if (typeof household.satisfaction !== 'number') household.satisfaction = 55;
-    if (!household.housing) household.housing = { tenure: 'renting', propertyId: null, label: 'housing', rent: 0, quality: 50, sinceWorld: game.worldMinutes };
-  }
-  bounded(civ.households, CAPS.households);
   for (const server of game.servers || []) {
     if (typeof server.latency !== 'number') server.latency = 6 + (hash32(server.id) % 54);
     if (!server.civStatus) server.civStatus = 'nominal';
@@ -1540,16 +1377,6 @@ export function ensureCivilization(game) {
   civ.multiplayer = civ.multiplayer || makeMultiplayer(game, civ);
   civ.multiplayer.players = civ.multiplayer.players || [];
   civ.multiplayer.ledger = civ.multiplayer.ledger || [];
-  civ.multiplayer.accounts = civ.multiplayer.accounts || {};
-  civ.multiplayer.accounts.player = civ.multiplayer.accounts.player || {
-    id: 'player', handle: game.player.handle, balance: game.player.money, reconciledWorld: game.worldMinutes
-  };
-  for (const player of civ.multiplayer.players) {
-    if (typeof player.balance !== 'number') player.balance = civ.multiplayer.accounts[player.id]?.balance ?? 2500;
-    civ.multiplayer.accounts[player.id] = civ.multiplayer.accounts[player.id] || {
-      id: player.id, handle: player.handle, balance: player.balance, reconciledWorld: game.worldMinutes
-    };
-  }
   civ.multiplayer.antiCheat = civ.multiplayer.antiCheat || { rejected: 0, flagged: [], rate: {}, lastAuditWorld: game.worldMinutes };
   recomputeMetrics(civ, game);
   return civ;
@@ -1577,13 +1404,15 @@ function trimCiv(civ) {
   bounded(civ.institutions, CAPS.courts + CAPS.regulators);
   bounded(civ.courts, CAPS.courts);
   bounded(civ.regulators, CAPS.regulators);
-  bounded(civ.disputes, CAPS.courtCases);
+  bounded(civ.disputes, CAPS.disputes);
   bounded(civ.compliance, CAPS.disputes);
-  bounded(civ.households, CAPS.households);
-  bounded(civ.tech.projects, CAPS.techProjects);
   bounded(civ.policies, CAPS.policies);
   bounded(civ.relations.treaties, CAPS.treaties);
   bounded(civ.relations.sanctions, CAPS.sanctions);
+  bounded(civ.relations.negotiations, CAPS.negotiations);
+  bounded(civ.relations.blocs, 12);
+  bounded(civ.lawFirms, CAPS.lawFirms);
+  bounded(civ.households, CAPS.households);
   bounded(civ.research.projects, CAPS.projects);
   bounded(civ.research.discoveries, CAPS.discoveries);
   bounded(civ.education.courses, 80);
@@ -1982,6 +1811,76 @@ function dailyPolitics(game, civ, rng, events) {
       recordTimeline(civ, 'geopolitics', `${a.name} and ${b.name} sign a digital accord`, 'The agreement lowers barriers for cross-border services and establishes incident notification channels.', { countryId: a.id, actors: [a.id, b.id], major: true });
     }
   }
+
+  // Open negotiations advance and either become agreements or fail.
+  for (const neg of civ.relations.negotiations) {
+    if (neg.status !== 'open') continue;
+    neg.progress = clamp((neg.progress || 0) + rng.int(1, 6), 0, 100);
+    if (civ.worldMinutes < neg.resolveWorld && neg.progress < 96) continue;
+    const a = civ.countries.find(c => c.id === neg.a);
+    const b = civ.countries.find(c => c.id === neg.b);
+    if (!a || !b) { neg.status = 'failed'; continue; }
+    if (neg.progress > 55 || rng.chance(.32)) {
+      neg.status = 'agreed';
+      a.relations[b.id].trust = clamp(a.relations[b.id].trust + 8, 0, 100);
+      b.relations[a.id].trust = clamp(b.relations[a.id].trust + 8, 0, 100);
+      a.relations[b.id].tension = clamp(a.relations[b.id].tension - 6, 0, 100);
+      b.relations[a.id].tension = clamp(b.relations[a.id].tension - 6, 0, 100);
+      const already = civ.relations.treaties.some(t => (t.a === a.id && t.b === b.id) || (t.a === b.id && t.b === a.id));
+      if (!already) {
+        civ.relations.treaties.push({
+          id: nextId(civ, 'treaty'), a: a.id, b: b.id, name: `${neg.topic} agreement`,
+          signedWorld: civ.worldMinutes, status: 'active', compliance: rng.int(42, 92)
+        });
+      }
+      recordTimeline(civ, 'geopolitics', `${a.name} and ${b.name} conclude ${neg.topic} talks`, 'The negotiated text is adopted after technical review. Implementation is phased over the next year.', { countryId: a.id, actors: [a.id, b.id], major: true });
+      emit(events, 'news', `${a.name} and ${b.name} reach a ${neg.topic} agreement`, { body: 'Negotiators concluded a framework after months of technical work. Regulated firms are assessing the implementation timetable.', source: 'Greyhaven Record' });
+    } else {
+      neg.status = 'failed';
+      recordTimeline(civ, 'geopolitics', `${neg.topic} talks between ${a.name} and ${b.name} collapse`, 'The parties could not agree on enforcement and data-handling terms.', { countryId: a.id, actors: [a.id, b.id], major: false });
+    }
+  }
+  if (civ.relations.negotiations.filter(n => n.status === 'open').length < 3 && rng.chance(.14)) {
+    const a = rng.pick(civ.countries);
+    const b = rng.pick(civ.countries.filter(c => c.id !== a.id));
+    civ.relations.negotiations.push({
+      id: nextId(civ, 'neg'), a: a.id, b: b.id,
+      topic: rng.pick(['cross-border data transfer', 'mutual recognition of digital signatures', 'incident notification protocol', 'spectrum coordination', 'semiconductor export licensing']),
+      status: 'open', progress: rng.int(5, 32), startedWorld: civ.worldMinutes,
+      resolveWorld: civ.worldMinutes + rng.int(30, 160) * DAY
+    });
+  }
+
+  // Sanctions lift only after tension falls and domestic politics allow it.
+  for (const sanction of civ.relations.sanctions) {
+    if (sanction.status !== 'active') continue;
+    const a = civ.countries.find(c => c.id === sanction.a);
+    const b = civ.countries.find(c => c.id === sanction.b);
+    if (!a || !b) { sanction.status = 'lifted'; continue; }
+    a.relations[b.id].trade = clamp(a.relations[b.id].trade - .12, 0, 100);
+    b.economy.growth = clamp(b.economy.growth - .02, -5, 9);
+    if (a.relations[b.id].tension < 38 && rng.chance(.12)) {
+      sanction.status = 'lifted';
+      sanction.liftedWorld = civ.worldMinutes;
+      a.relations[b.id].sanctioned = false;
+      b.relations[a.id].sanctioned = false;
+      a.relations[b.id].trade = clamp(a.relations[b.id].trade + 9, 0, 100);
+      b.relations[a.id].trade = clamp(b.relations[a.id].trade + 9, 0, 100);
+      recordTimeline(civ, 'geopolitics', `${a.name} lifts restrictions on ${b.name}`, 'Improved relations and industry pressure led to the suspension of export controls.', { countryId: a.id, actors: [a.id, b.id], major: true });
+      emit(events, 'feed', `${a.name} lifts restrictions on ${b.name}.`, { kind: 'good' });
+    }
+  }
+  for (const treaty of civ.relations.treaties) {
+    if (treaty.status !== 'active') continue;
+    treaty.compliance = clamp((treaty.compliance || 60) + rng.int(-2, 2), 10, 99);
+    if (treaty.compliance < 30 && rng.chance(.04)) {
+      treaty.status = 'suspended';
+      recordTimeline(civ, 'geopolitics', `${treaty.name} suspended`, 'Persistent non-compliance and a deterioration in relations suspended the agreement.', { actors: [treaty.a, treaty.b], major: true });
+    }
+  }
+  for (const bloc of civ.relations.blocs) {
+    bloc.cohesion = clamp((bloc.cohesion || 55) + rng.int(-2, 2), 10, 98);
+  }
 }
 
 function randomLeaderName(game, rng) {
@@ -1996,7 +1895,6 @@ function dailySupply(game, civ, rng, events) {
   const supply = civ.supply;
   const shortage = activeEffects(civ, 'hardwareIndex');
   for (const factory of supply.factories) {
-    if (factory.ownerId === 'player') continue;
     const component = supply.components[factory.output];
     if (!component) continue;
     const materialAvailability = (component.inputs || []).reduce((s, id) => Math.min(s, supply.materials[id]?.availability || 60), 100);
@@ -2010,39 +1908,6 @@ function dailySupply(game, civ, rng, events) {
       factory.status = rng.chance(.7) ? 'maintenance' : 'operating';
       if (factory.status === 'maintenance') emit(events, 'feed', `${factory.companyName} pauses ${factory.output} production for maintenance.`, { kind: 'warn' });
     } else factory.status = 'operating';
-  }
-
-  // Player-owned factories turn the same constrained inputs into inventory.
-  const industrial = civ.player.industrial;
-  for (const factory of supply.factories.filter(f => f.ownerId === 'player')) {
-    const component = supply.components[factory.output];
-    const city = civ.cities.find(c => c.id === factory.cityId);
-    if (!component || !city) continue;
-    if (factory.status === 'maintenance') {
-      if (rng.chance(.35)) factory.status = 'operating';
-      continue;
-    }
-    const materialAvailability = (component.inputs || []).reduce((s, id) => Math.min(s, supply.materials[id]?.availability ?? 60), 100);
-    const power = city.utilities.power;
-    const effective = clamp(materialAvailability * .5 + power * .3 + factory.efficiency * .2, 5, 100);
-    factory.utilization = clamp(factory.utilization + (effective - factory.utilization) * .08, 5, 100);
-    const output = Math.max(0, Math.round(factory.capacity * factory.utilization / 100 * .018));
-    const energyCost = Math.max(0, Math.round(output * (component.price * .12 + city.prices.energy * .6)));
-    if (output && game.player.money >= energyCost) {
-      game.player.money -= energyCost;
-      game.stats.spent += energyCost;
-      industrial.spend = (industrial.spend || 0) + energyCost;
-      industrial.inventory[factory.output] = (industrial.inventory[factory.output] || 0) + output;
-      const inputDrain = Math.max(1, Math.round(output * .5));
-      for (const inputId of component.inputs || []) {
-        const material = supply.materials[inputId];
-        if (material) material.stock = Math.max(0, (material.stock || 0) - inputDrain);
-      }
-      if (rng.chance(.04)) emit(events, 'feed', `${factory.companyName} produced ${output} ${component.name.toLowerCase()} units.`, { kind: 'info' });
-    } else if (output) {
-      factory.status = 'supply-limited';
-      if (rng.chance(.05)) pushMail(game, 'industry', `${factory.companyName} paused production`, `The facility could not cover ${fmtMoney(energyCost)} in energy and input costs. Inventory has not changed.`);
-    }
   }
 
   // Shipments physically move between warehouses.
@@ -2130,6 +1995,19 @@ function mediaCadence(game, civ, rng, events) {
   }
   civ.media.trends.sort((a, b) => b.volume - a.volume);
   bounded(civ.media.trends, 10);
+  const published = civ.media.content.filter(c => c.status === 'published');
+  const lowAccuracy = published.filter(c => (c.accuracy || 90) < 64).length;
+  civ.media.misinformation = clamp(Math.round(lowAccuracy / Math.max(1, published.length) * 100), 0, 100);
+  if (civ.media.misinformation > 34 && rng.chance(.06)) {
+    const target = rng.pick(published.filter(c => (c.accuracy || 90) < 64) || []);
+    if (target) {
+      target.accuracy = clamp((target.accuracy || 60) + rng.int(8, 24), 0, 99);
+      target.corrections = (target.corrections || 0) + 1;
+      const outlet = civ.media.outlets.find(o => o.id === target.outletId);
+      if (outlet) outlet.corrections = (outlet.corrections || 0) + 1;
+      recordTimeline(civ, 'media', `Fact-check panel corrects a widely shared report`, `Independent reviewers found missing context in coverage of ${target.topic}. The outlet added a correction and the item's reach is being re-evaluated.`, { actors: [target.outletId].filter(Boolean), major: false });
+    }
+  }
   bounded(civ.media.content, CAPS.content);
 
   // Communities and creators form independently of the player.
@@ -2304,24 +2182,17 @@ function propertyCadence(game, civ, rng, events) {
     listing.rent = Math.max(20, Math.round(listing.price * (market.rentIndex / 100) * .004 / 12));
   }
 
-  // Households buy homes and move between districts as income and needs change.
-  if (civ.property.owned.length < CAPS.owned && rng.chance(.24)) {
-    const household = rng.pick(civ.households.filter(h => h.id !== 'house-player' && h.savings > 12000));
-    const buyer = household ? (game.npcs || []).find(n => n.id === household.members[0]) : rng.pick(game.npcs || []);
-    const city = household ? civ.cities.find(c => c.id === household.cityId) : pickWeighted(rng, civ.cities, c => Math.max(1, c.population / 100000));
+  // NPCs move when they can afford local housing and employment is stable.
+  if (civ.property.owned.length < CAPS.owned && rng.chance(.22)) {
+    const city = pickWeighted(rng, civ.cities, c => Math.max(1, c.population / 100000));
+    const buyer = rng.pick(game.npcs || []);
     if (buyer && city) {
-      const listing = civ.property.listings.find(l => l.cityId === city.id && l.status === 'available' && ['apartment', 'house'].includes(l.type) && l.price <= Math.max(300000, (household?.savings || buyer.funds || 0) * 2.2));
+      const listing = civ.property.listings.find(l => l.cityId === city.id && l.status === 'available' && l.type === 'apartment');
       if (listing) {
         listing.status = 'owned';
         listing.ownerId = buyer.id;
         listing.ownerName = buyer.handle;
         civ.property.owned.push({ ...listing, purchasedWorld: civ.worldMinutes, occupancy: 'owner', rentPaid: 0 });
-        if (household) {
-          household.housing = { tenure: 'owned', propertyId: listing.id, label: listing.label, rent: 0, quality: listing.quality, sinceWorld: civ.worldMinutes };
-          household.savings = Math.max(0, household.savings - Math.round(listing.price * .18));
-          household.history.push({ world: civ.worldMinutes, text: `Purchased ${listing.label} in ${city.name}.` });
-          bounded(household.history, 12);
-        }
       }
     }
   }
@@ -2406,388 +2277,6 @@ function educationCadence(game, civ, rng, events) {
     const inst = rng.pick(civ.education.institutions);
     civ.education.courses.push(makeCourse(civ, field, inst, civ.countries.find(c => c.id === inst.countryId), rng));
   }
-}
-
-/* -------- city fabric, services and household life -------- */
-function cityCadence(game, civ, rng, events) {
-  for (const city of civ.cities) {
-    const country = civ.countries.find(c => c.id === city.countryId);
-    if (!country) continue;
-    const growth = clamp(country.economy.growth / 100, -.05, .09);
-    city.population = Math.max(40000, Math.round(city.population * (1 + growth / 365 + (rng.next() - .5) * .0008)));
-    city.utilities.power = clamp(city.utilities.power + (rng.next() - .5) * .7 - activeEffects(civ, 'energy') * .03, 8, 99);
-    city.utilities.water = clamp(city.utilities.water + (rng.next() - .49) * .5, 12, 99);
-    city.utilities.telecom = clamp(city.utilities.telecom + (rng.next() - .48) * .6, 10, 99);
-    city.utilities.transport = clamp(city.utilities.transport + (rng.next() - .5) * .6, 10, 99);
-    city.conditions.congestion = clamp(city.conditions.congestion + (city.population / 10000000) * .5 + (rng.next() - .5) * 1.2 - city.transport.condition * .006, 1, 100);
-    city.conditions.pollution = clamp(city.conditions.pollution + (city.buildings.industrial / 320) - (city.buildings.parks / 4200) + (rng.next() - .5) * .7, 0, 100);
-    city.conditions.resilience = clamp(city.conditions.resilience + (city.utilities.power + city.utilities.water + city.utilities.telecom + city.utilities.transport - 280) * .002, 5, 99);
-    city.transport.condition = clamp(city.transport.condition + (rng.next() - .52) * .7 + (city.budget > city.population * 22 ? .06 : -.04), 5, 100);
-    city.services.hospitals = city.buildings.hospitals;
-    city.services.schools = city.buildings.schools;
-    city.services.emergencyLoad = clamp(city.services.emergencyLoad + (city.utilities.power < 45 ? 1.2 : -.15) + (rng.next() - .5) * .9, 5, 100);
-    city.services.maintenanceBacklog = clamp(city.services.maintenanceBacklog + (city.transport.condition < 45 ? .55 : -.08) + (rng.next() - .5) * .35, 0, 100);
-    const taxBase = city.population * (country.tax.income / 100) * .00024;
-    city.budget = Math.max(0, city.budget + taxBase - city.services.maintenanceBacklog * .6 - city.buildings.parks * .03);
-    city.prices.housing = Math.max(90, Math.round(city.prices.housing * (1 + (country.economy.growth - country.economy.inflation) / 100 / 365 + (rng.next() - .49) * .0008)));
-    city.households = civ.households.filter(h => h.cityId === city.id).length;
-
-    // Population growth slowly becomes physical construction.
-    if (rng.chance(.18)) {
-      const key = rng.pick(['residential', 'offices', 'shops', 'industrial', 'schools', 'hospitals', 'warehouses', 'parks']);
-      city.buildings[key] += Math.max(1, Math.round((city.population / 900000) * rng.float(.4, 2.2)));
-    }
-
-    // Water and transport failures are rarer than power faults but propagate
-    // through the same city service layer.
-    if (rng.chance(.012 * (1 + (100 - city.conditions.resilience) / 190))) {
-      const kind = rng.chance(.5) ? 'water' : 'transport';
-      const duration = rng.int(8, 120) * 60;
-      const outage = {
-        id: nextId(civ, 'outage'), kind, targetId: city.id, cityId: city.id, countryId: city.countryId,
-        startedWorld: civ.worldMinutes, endsWorld: civ.worldMinutes + duration,
-        severity: rng.pick(['minor', 'major']), status: 'active'
-      };
-      civ.infrastructure.outages.push(outage);
-      city.utilities[kind] = clamp(city.utilities[kind] - rng.int(8, 24), 5, 99);
-      city.status = 'degraded';
-      emit(events, 'feed', `${kind === 'water' ? 'Water' : 'Transit'} disruption in ${city.name}; services are operating below capacity.`, { kind: 'warn' });
-      recordTimeline(civ, 'infrastructure', `${city.name} ${kind} network disrupted`, `A ${kind} fault reduced service quality for residents and businesses. Recovery is expected within ${Math.round(duration / 60)} hours.`, { countryId: city.countryId, major: false });
-    }
-  }
-  bounded(civ.infrastructure.outages, CAPS.outages);
-}
-
-function householdIncome(civ, household) {
-  let annual = 0;
-  for (const id of household.members || []) {
-    if (id === 'player') {
-      annual += (civ.player.professional?.salary || 0);
-      continue;
-    }
-    const identity = civ.identities.find(i => i.id === id);
-    const score = identity?.professional?.score || 35;
-    annual += 9000 + score * 620;
-  }
-  return Math.round(annual);
-}
-
-function householdCadence(game, civ, rng, events) {
-  for (const household of civ.households) {
-    if (household.id === 'house-player') continue;
-    const city = civ.cities.find(c => c.id === household.cityId) || civ.cities[0];
-    const country = civ.countries.find(c => c.id === household.countryId) || civ.countries[0];
-    household.income = householdIncome(civ, household);
-    household.monthlyIncome = Math.round(household.income / 12);
-    const rent = household.housing?.tenure === 'renting' ? Math.max(0, household.housing.rent || 0) : 0;
-    household.expenses = Math.round(household.monthlyIncome * rng.float(.52, .76)) + rent;
-    household.needs.housing = clamp((household.housing?.quality || 50) - Math.max(0, rent - (city.prices.housing || 1200)) / Math.max(120, city.prices.housing || 1200) * 40, 3, 100);
-    household.needs.income = clamp(household.monthlyIncome / Math.max(180, city.prices.housing || 1200) * 25, 3, 100);
-    household.needs.connectivity = clamp(city.utilities.telecom, 3, 100);
-    household.needs.security = clamp(country.stability - country.unrest * .35, 3, 100);
-    household.needs.community = clamp(city.buildings.parks * 1.8 + city.buildings.shops * .08, 3, 100);
-    const avgNeed = HOUSEHOLD_NEEDS.reduce((sum, key) => sum + household.needs[key], 0) / HOUSEHOLD_NEEDS.length;
-    household.satisfaction = clamp(household.satisfaction + (avgNeed - household.satisfaction) * .12 + (rng.next() - .5) * 2.2, 3, 99);
-    if (household.satisfaction < 34 && rng.chance(.07)) {
-      const candidates = civ.cities.filter(c => c.id !== household.cityId && c.countryId === household.countryId);
-      const target = rng.pick(candidates.length ? candidates : civ.cities.filter(c => c.countryId === household.countryId));
-      if (target) {
-        household.cityId = target.id;
-        household.housing.label = `${target.name} housing`;
-        household.housing.rent = Math.round(target.prices.housing * rng.float(.7, 1.1));
-        household.history.push({ world: civ.worldMinutes, text: `Moved to ${target.name} after a housing and employment review.` });
-        for (const id of household.members) {
-          const npc = (game.npcs || []).find(n => n.id === id);
-          if (npc) { npc.cityId = target.id; npc.countryId = target.countryId; }
-        }
-      }
-    }
-    if (rng.chance(.025)) {
-      household.history.push({ world: civ.worldMinutes, text: `Household income adjusted to ${fmtMoney(household.monthlyIncome)} per month.` });
-    }
-    bounded(household.history, 12);
-  }
-
-  // The player's household uses the same need model, but its costs are real.
-  const house = civ.households.find(h => h.id === 'house-player');
-  if (house) {
-    const city = civ.cities.find(c => c.id === house.cityId) || civ.cities[0];
-    const country = civ.countries.find(c => c.id === house.countryId) || civ.countries[0];
-    const owned = civ.property.owned.find(p => p.ownerId === 'player' && ['apartment', 'house', 'commercial'].includes(p.type));
-    if (owned) {
-      house.housing = { tenure: 'owned', propertyId: owned.id, label: owned.label, rent: 0, quality: owned.quality || 60, sinceWorld: owned.purchasedWorld || civ.worldMinutes };
-    } else if (house.housing?.tenure !== 'renting') {
-      house.housing = { tenure: 'renting', propertyId: null, label: `${city.name} apartment`, rent: Math.round(city.prices.housing * .82), quality: 52, sinceWorld: civ.worldMinutes };
-    }
-    house.income = (civ.player.professional?.salary || 0);
-    house.monthlyIncome = Math.round(house.income / 12);
-    house.expenses = (house.housing?.rent || 0) + Math.round(city.prices.energy || 20) + Math.round(city.prices.bandwidth || 20);
-    house.needs.housing = clamp((house.housing?.quality || 50) - (house.housing?.rent || 0) / Math.max(100, city.prices.housing) * 30, 3, 100);
-    house.needs.income = clamp(house.monthlyIncome / Math.max(120, house.expenses + 80) * 55, 3, 100);
-    house.needs.connectivity = clamp(city.utilities.telecom, 3, 100);
-    house.needs.security = clamp(country.stability - country.unrest * .35, 3, 100);
-    house.needs.community = clamp((civ.player.social?.communities?.length || 1) * 14 + city.buildings.parks, 3, 100);
-    const avgNeed = HOUSEHOLD_NEEDS.reduce((sum, key) => sum + house.needs[key], 0) / HOUSEHOLD_NEEDS.length;
-    house.satisfaction = clamp(house.satisfaction + (avgNeed - house.satisfaction) * .1, 3, 99);
-    house.savings = Math.max(0, game.player.money);
-    if (civ.worldMinutes - (house.lastChargeWorld || 0) >= 30 * DAY) {
-      house.lastChargeWorld = civ.worldMinutes;
-      const charge = Math.max(0, Math.round(house.expenses * rng.float(.9, 1.1)));
-      if (charge > 0) {
-        if (game.player.money >= charge) {
-          game.player.money -= charge;
-          game.stats.spent += charge;
-          game.player.transactions.unshift({ time: Date.now(), amount: -charge, memo: `household · ${house.housing.label}`, balance: game.player.money });
-          if (game.player.transactions.length > 120) game.player.transactions.length = 120;
-        } else {
-          house.housing.arrears = (house.housing.arrears || 0) + charge;
-          if (rng.chance(.5)) pushMail(game, 'housing', 'Household charge unpaid', `A monthly household charge of ${fmtMoney(charge)} could not be settled.\n\nArrears: ${fmtMoney(house.housing.arrears)}\nA sustained shortfall can affect your housing record.`);
-          civ.player.compliance = clamp((civ.player.compliance || 70) - .4, 0, 100);
-        }
-      }
-    }
-  }
-  for (const city of civ.cities) city.households = civ.households.filter(h => h.cityId === city.id).length;
-}
-
-/* -------- courts, regulators and civil disputes -------- */
-function legalCadence(game, civ, rng, events) {
-  for (const court of civ.courts) {
-    court.cases = Math.max(0, (court.cases || 0) + (rng.chance(.44) ? 1 : 0));
-    court.backlog = Math.max(0, (court.backlog || 0) + (rng.chance(.31) ? 1 : -1));
-    if (rng.chance(.015)) {
-      court.activeCases = Math.max(0, (court.activeCases || 0) - 1);
-    }
-  }
-  for (const regulator of civ.regulators) {
-    if (rng.chance(.08)) regulator.investigations = Math.max(0, (regulator.investigations || 0) + (rng.chance(.55) ? 1 : -1));
-  }
-
-  for (const dispute of civ.disputes) {
-    if (dispute.status === 'filed' && civ.worldMinutes >= dispute.hearingWorld) {
-      dispute.status = 'hearing';
-      dispute.history.push({ world: civ.worldMinutes, text: 'A hearing was scheduled and evidence entered the record.' });
-    }
-    if (dispute.status === 'hearing' && civ.worldMinutes >= dispute.decisionWorld) {
-      resolveCourtCase(game, civ, dispute, rng, events);
-    }
-  }
-
-  // New disputes grow out of regulatory pressure and commercial activity.
-  const strict = civ.metrics?.legalPressure || 60;
-  if (civ.disputes.filter(d => ['filed', 'hearing'].includes(d.status)).length < 18 && rng.chance(.055 + strict / 2600)) {
-    const company = rng.pick((game.companies || []).filter(c => c.id && c.status !== 'failed'));
-    const country = company ? countryForCompany(civ, company) : rng.pick(civ.countries);
-    if (country) {
-      const issue = rng.pick([
-        'undisclosed data transfer', 'software license breach', 'failed service delivery',
-        'worker classification', 'consumer refund refusal', 'intellectual property claim',
-        'automated decision appeal', 'breach notification delay'
-      ]);
-      const dispute = makeCourtCase(civ, game, {
-        country, subject: company?.id || 'npc-company', subjectName: company?.name || 'Independent operator',
-        plaintiff: rng.pick(['customer', 'supplier', 'regulator', 'former employee', 'competitor']),
-        defendant: company ? 'company' : 'individual', issue,
-        claim: rng.int(1200, 220000), evidence: rng.int(22, 82)
-      }, rng);
-      civ.disputes.push(dispute);
-      if (rng.chance(.28)) emit(events, 'feed', `${dispute.courtName} opened a ${dispute.kind} case over ${issue}.`, { kind: 'warn' });
-    }
-  }
-
-  // Company or player conduct can attract a regulator's civil action.
-  const playerCompany = (game.companies || []).find(c => c.ownerType === 'player');
-  if (playerCompany && civ.player.compliance < 62 && rng.chance(.018)) {
-    const country = civ.countries.find(c => c.id === playerCompany.hqCountryId) || playerCountry(game);
-    const dispute = makeCourtCase(civ, game, {
-      country, subject: 'player-company', subjectName: playerCompany.name,
-      plaintiff: 'regulator', defendant: 'company',
-      issue: rng.pick(['data retention evidence', 'consumer renewal terms', 'breach notification timing', 'license disclosure']),
-      claim: rng.int(2500, 160000), evidence: clamp(88 - civ.player.compliance + rng.int(0, 18), 20, 92)
-    }, rng);
-    civ.disputes.push(dispute);
-    pushMail(game, 'courts', `Civil action filed: ${dispute.issue}`, `${dispute.courtName} has accepted a regulatory claim against ${playerCompany.name}.\n\nCase: ${dispute.id}\nClaim: ${fmtMoney(dispute.claim)}\nHearing in ${Math.max(1, Math.ceil((dispute.hearingWorld - civ.worldMinutes) / DAY))} days.\n\nUse "civ legal defend ${dispute.id}" to respond.`);
-    emit(events, 'feed', `A civil action was filed against ${playerCompany.name}.`, { kind: 'bad' });
-  }
-  bounded(civ.disputes, CAPS.courtCases);
-  bounded(civ.compliance, CAPS.disputes);
-}
-
-/* -------- technology development and version competition -------- */
-function releaseTechProject(game, civ, project, rng, events) {
-  const tech = {
-    id: nextId(civ, 'tech'), name: project.name, category: project.category,
-    vendorName: project.ownerName, license: project.license, version: project.version || '1.0',
-    adoption: project.ownerType === 'player' ? rng.int(2, 7) : rng.int(3, 12),
-    compatibility: rng.pick([['x86', 'arm'], ['linux'], ['cloud'], ['portable'], ['web']]),
-    releasedWorld: civ.worldMinutes, documentation: clamp(project.expertise * .8 + rng.int(5, 30), 12, 96),
-    security: clamp(project.equipment * .55 + rng.int(10, 35), 10, 96),
-    ecosystem: clamp(project.funding / Math.max(1, project.fundingNeeded) * 55 + rng.int(0, 16), 4, 92),
-    priceIndex: rng.int(38, 155), status: 'active', standard: false,
-    originDiscoveryId: null, originProjectId: project.id, competitors: []
-  };
-  project.status = 'completed';
-  project.progress = 100;
-  project.techId = tech.id;
-  project.completedWorld = civ.worldMinutes;
-  civ.tech.technologies.push(tech);
-  civilRecordTech(civ, tech, events);
-  if (project.ownerType === 'player') {
-    civ.player.professional.score = clamp(civ.player.professional.score + 3, 0, 100);
-    civ.player.social.followers += rng.int(20, 180);
-    game.player.reputation = clamp((game.player.reputation || 0) + 1, 0, 100);
-    pushMail(game, 'technology', `${project.name} released`, `Your project has reached a usable release.\n\nVersion: ${tech.version}\nLicense: ${tech.license}\nAdoption begins at ${tech.adoption}%.\n\nUse "civ tech" to watch adoption and standards.`);
-  }
-  recordTimeline(civ, 'technology', `${project.name} reaches version ${tech.version}`, `${project.ownerName} released ${tech.license} ${project.category} software into a competitive market.`, { actors: [project.ownerId].filter(Boolean), major: project.ownerType === 'player' || project.ambition >= 3 });
-  return tech;
-}
-
-function techCadence(game, civ, rng, events) {
-  for (const project of civ.tech.projects) {
-    if (project.status !== 'active') continue;
-    const funding = clamp(project.funding / Math.max(1, project.fundingNeeded) * 1.7, .12, 1.35);
-    const rate = clamp((project.expertise + project.equipment) / 2 - project.difficulty * .5, 1, 65);
-    project.progress = clamp(project.progress + rate * funding * .45, 0, 100);
-    if (project.progress >= 100 && civ.worldMinutes >= project.etaWorld * .45) {
-      releaseTechProject(game, civ, project, rng, events);
-    } else if (project.progress < 20 && civ.worldMinutes > project.etaWorld) {
-      project.status = rng.chance(.65) ? 'stalled' : 'active';
-      project.notes.push('The project missed its original schedule.');
-      if (project.ownerType === 'player') pushMail(game, 'technology', `${project.name} stalled`, 'The project missed its original schedule. Additional funding or a narrower scope may be required.');
-    }
-  }
-  for (const project of civ.tech.projects) {
-    if (project.status === 'stalled' && project.funding >= project.fundingNeeded * .55 && rng.chance(.1)) {
-      project.status = 'active';
-      project.notes.push('Funding was renewed and work resumed.');
-    }
-  }
-
-  for (const tech of civ.tech.technologies) {
-    if (tech.status !== 'active') continue;
-    const pull = (tech.documentation + tech.security + tech.ecosystem) / 3;
-    tech.adoption = clamp(tech.adoption + (pull - tech.adoption) * .0018, 0, 100);
-    if (rng.chance(.012)) {
-      const parts = String(tech.version || '1.0').split('.');
-      const major = Number(parts[0]) || 1;
-      const minor = (Number(parts[1]) || 0) + 1;
-      tech.version = `${major}.${minor}`;
-      tech.releasedWorld = civ.worldMinutes;
-      tech.security = clamp(tech.security + rng.int(0, 2), 0, 100);
-      tech.documentation = clamp(tech.documentation + rng.int(0, 2), 0, 100);
-      tech.adoption = clamp(tech.adoption + rng.float(.4, 1.8), 0, 100);
-    }
-    if (!tech.standard && tech.adoption > 52 && tech.license.includes('open') && rng.chance(.08)) {
-      tech.standard = true;
-      civ.tech.standards.push({ id: nextId(civ, 'standard'), name: tech.name, version: tech.version, world: civ.worldMinutes });
-      bounded(civ.tech.standards, 40);
-      recordTimeline(civ, 'technology', `${tech.name} becomes a compatibility standard`, `${tech.name} ${tech.version} passes the adoption threshold and is treated as a de facto standard.`, { actors: [tech.vendorName], major: true });
-      emit(events, 'news', `${tech.name} becomes a de facto standard`, { body: 'Procurement teams and framework maintainers begin treating the interface as a compatibility baseline.', source: 'The Standards Desk' });
-    }
-  }
-
-  const active = civ.tech.projects.filter(p => p.status === 'active').length;
-  if (active < 9 && rng.chance(.16)) {
-    const company = rng.pick((game.companies || []).filter(c => c.id && c.status === 'operating'));
-    if (company) {
-      const category = rng.pick(['os', 'devtools', 'ai', 'security', 'database', 'networking', 'framework']);
-      civ.tech.projects.push(makeTechProject(civ, game, {
-        name: `${company.name.split(' ')[0]} ${rng.pick(['Runtime', 'Protocol', 'Studio', 'Fabric', 'Engine', 'Ledger'])} ${rng.int(2, 12)}`,
-        category, ownerType: 'company', ownerId: company.id, ownerName: company.name,
-        companyId: company.id, funding: Math.round((company.funds || 200000) * rng.float(.01, .05)),
-        fundingNeeded: rng.int(80000, 420000), progress: rng.int(0, 20), ambition: rng.int(1, 2)
-      }, rng));
-    }
-  }
-  bounded(civ.tech.projects, CAPS.techProjects);
-}
-
-/* -------- entertainment, communities and digital culture -------- */
-function cultureCadence(game, civ, rng, events) {
-  for (const org of civ.culture.organizations) {
-    org.audience = Math.max(100, Math.round(org.audience * (1 + (rng.next() - .493) * .01)));
-    org.revenue = Math.max(0, Math.round(org.revenue * (1 + (rng.next() - .5) * .004)));
-    org.reputation = clamp((org.reputation || 50) + (rng.next() - .5) * .1, 1, 99);
-  }
-  for (const gameItem of civ.culture.games) {
-    gameItem.players = Math.max(0, Math.round(gameItem.players * (1 + (rng.next() - .495) * .012)));
-    gameItem.rating = clamp(gameItem.rating + (rng.next() - .5) * .004, 1, 5);
-    gameItem.revenue = Math.round(gameItem.players * Math.max(0, gameItem.price) * .0018);
-    const owner = civ.culture.organizations.find(o => o.id === gameItem.studioId);
-    if (owner) owner.revenue += gameItem.revenue;
-  }
-  for (const track of civ.culture.music) {
-    track.streams = Math.max(0, Math.round(track.streams * (1 + (rng.next() - .49) * .012)));
-    track.revenue = Math.max(0, Math.round(track.revenue + track.streams * .000004));
-  }
-  for (const community of civ.culture.communities) {
-    community.members = Math.max(20, Math.round(community.members * (1 + (rng.next() - .498) * .006)));
-    community.trust = clamp(community.trust + (rng.next() - .5) * .06, 5, 98);
-  }
-  for (const league of civ.culture.esports) {
-    league.audience = Math.max(500, Math.round(league.audience * (1 + (rng.next() - .49) * .019)));
-    league.status = league.audience > 240000 ? 'premier' : 'active';
-  }
-  for (const event of civ.culture.events) {
-    if (event.status === 'scheduled' && civ.worldMinutes >= event.world) {
-      event.status = 'completed';
-      event.attendance = Math.max(100, Math.round((event.attendance || 1000) * rng.float(.8, 1.35)));
-      recordTimeline(civ, 'culture', `${event.name} concluded`, `${fmtNum(event.attendance)} people attended the ${event.type} in ${civ.cities.find(c => c.id === event.cityId)?.name || 'the host city'}.`, { major: event.attendance > 20000 });
-    }
-  }
-
-  // Player-owned works pay their operator directly.
-  const ownedGames = civ.culture.games.filter(g => g.ownerId === 'player');
-  const ownedMusic = civ.culture.music.filter(m => m.ownerId === 'player');
-  const ownedEvents = civ.culture.events.filter(e => e.ownerId === 'player' && e.status === 'completed' && !e.settled);
-  let earned = 0;
-  for (const item of ownedGames) {
-    item.revenue = Math.round(item.players * Math.max(1, item.price) * .0022);
-    earned += item.revenue;
-  }
-  for (const track of ownedMusic) earned += Math.round(track.streams * .000005);
-  for (const event of ownedEvents) {
-    event.settled = true;
-    const ticket = Math.round((event.attendance || 0) * (event.ticketPrice || 12) * .62);
-    const costs = Math.round((event.attendance || 0) * 3 + (event.fixedCost || 0));
-    const net = ticket - costs;
-    earned += Math.max(0, net);
-    if (net > 0) {
-      game.player.money += net;
-      game.stats.earned += net;
-      game.player.transactions.unshift({ time: Date.now(), amount: net, memo: `event · ${event.name}`, balance: game.player.money });
-      pushMail(game, 'culture', `${event.name} settled`, `Attendance ${fmtNum(event.attendance)}.\n\nTicket revenue ${fmtMoney(ticket)}\nCosts ${fmtMoney(costs)}\nNet ${fmtMoney(net)}`);
-    }
-  }
-  if (earned > 0) {
-    civ.player.industrial.revenue = (civ.player.industrial.revenue || 0) + earned;
-    game.stats.earned += earned;
-    game.player.money += earned;
-    civ.player.financial.assets = Math.max(0, civ.player.financial.assets + earned);
-  }
-  if (ownedGames.length || ownedMusic.length) {
-    civ.player.social.followers += rng.int(1, 12);
-    civ.player.social.score = clamp(civ.player.social.score + .03, 0, 100);
-  }
-
-  if (civ.culture.organizations.length < 40 && rng.chance(.014)) {
-    const country = rng.pick(civ.countries);
-    const org = makeCulture(civ, [
-      `${rng.pick(['Quiet', 'Signal', 'Harbor', 'Static', 'Open', 'Cinder', 'Atlas', 'Low'])} ${rng.pick(['Studio', 'Audio', 'Games', 'Media', 'Collective', 'Works'])}`,
-      rng.pick(['independent', 'studio', 'influencer', 'label']), country.id,
-      rng.pick(civ.cities.filter(c => c.countryId === country.id) || civ.cities).name,
-      'An independent creator organization building an audience from the network outward.'
-    ], rng);
-    civ.culture.organizations.push(org);
-  }
-  if (civ.culture.events.length < CAPS.cultureEvents && rng.chance(.02)) {
-    civ.culture.events.push({
-      id: nextId(civ, 'cevent'), name: rng.pick(['Open Bench Summit', 'Harborview Games Week', 'Greyhaven Digital Stage', 'Nordhavn Privacy Forum', 'Sundar Systems Fair']),
-      type: rng.pick(['conference', 'festival', 'tournament', 'exhibition']), cityId: rng.pick(civ.cities).id,
-      attendance: rng.int(500, 40000), world: civ.worldMinutes + rng.int(2, 90) * DAY, status: 'scheduled'
-    });
-  }
-  bounded(civ.culture.events, CAPS.cultureEvents);
 }
 
 /* -------- employment market and careers -------- */
@@ -2932,13 +2421,6 @@ function infrastructureCadence(game, civ, rng, events) {
     if (grid) grid.status = 'nominal';
     const fiber = civ.infrastructure.fiber.find(f => f.id === outage.targetId);
     if (fiber) { fiber.status = 'nominal'; fiber.latency = Math.max(2, fiber.latency - 18); }
-    if (outage.kind === 'water' || outage.kind === 'transport') {
-      const city = civ.cities.find(c => c.id === outage.cityId);
-      if (city) {
-        city.utilities[outage.kind] = clamp(city.utilities[outage.kind] + 14, 5, 99);
-        city.status = 'nominal';
-      }
-    }
     restoreServersAfterOutage(game, civ, outage, events);
     emit(events, 'feed', `Infrastructure incident resolved (${outage.kind}).`, { kind: 'good' });
   }
@@ -2974,6 +2456,314 @@ function restoreServersAfterOutage(game, civ, outage, events) {
     if (server.status === 'degraded' && !server.civHold) server.status = 'online';
     if (server.owned) emit(events, 'feed', `${server.host} recovered after the ${outage.kind} incident.`, { kind: 'good' });
   }
+}
+
+/* -------- courts, disputes and compliance -------- */
+function legalCadence(game, civ, rng, events) {
+  const playerCompany = (game.companies || []).find(c => c.ownerType === 'player');
+  for (const dispute of civ.disputes) {
+    if (dispute.status === 'closed' || dispute.status === 'settled') continue;
+    if (typeof dispute.hearingWorld !== 'number') dispute.hearingWorld = (dispute.filedWorld || civ.worldMinutes) + 7 * DAY;
+    if (typeof dispute.judgmentWorld !== 'number') dispute.judgmentWorld = dispute.hearingWorld + 21 * DAY;
+    if (dispute.status === 'open' && civ.worldMinutes >= dispute.hearingWorld) {
+      dispute.status = 'hearing';
+      if (rng.chance(.22)) emit(events, 'feed', `${dispute.id} reaches a hearing in ${civ.countries.find(c => c.id === dispute.countryId)?.name || dispute.countryId}.`, { kind: 'legal' });
+    }
+    if (civ.worldMinutes < dispute.judgmentWorld) continue;
+
+    const country = civ.countries.find(c => c.id === dispute.countryId) || civ.countries[0];
+    const firm = civ.lawFirms.find(f => f.id === dispute.lawFirmId) || null;
+    const defendantIsPlayer = !!playerCompany && (dispute.defendant === playerCompany.id || dispute.subject === playerCompany.id);
+    const company = (game.companies || []).find(c => c.id === dispute.defendant || c.id === dispute.subject) || null;
+    const defense = clamp((firm?.winRate || 48) * .5 + (defendantIsPlayer ? civ.player.compliance * .34 : 42) + rng.int(-16, 16), 5, 95);
+    const settled = dispute.kind !== 'regulatory' && rng.chance(.18 + (firm?.compliancePractice ? .12 : 0));
+    const outcome = settled ? 'settled' : defense > 56 ? 'dismissed' : 'liable';
+
+    dispute.status = 'closed';
+    dispute.outcome = outcome;
+    dispute.settled = settled;
+    dispute.resolvedWorld = civ.worldMinutes;
+    dispute.lawFirmName = firm?.name || null;
+
+    if (outcome !== 'dismissed') {
+      const share = settled ? rng.float(.22, .48) : rng.float(.5, .95);
+      const fine = Math.max(120, Math.round((dispute.exposure || 2400) * share));
+      dispute.fine = fine;
+      dispute.compensation = Math.round(fine * (settled ? .18 : .34));
+      const payer = defendantIsPlayer ? playerCompany : company;
+      if (payer) {
+        if (payer === playerCompany) {
+          const fromCompany = Math.min(payer.funds || 0, Math.round(fine * .6));
+          payer.funds = Math.max(0, (payer.funds || 0) - fromCompany);
+          const fromPlayer = Math.max(0, fine - fromCompany);
+          game.player.money = Math.max(0, game.player.money - fromPlayer);
+          if (fromPlayer > 0) {
+            game.stats.spent += fromPlayer;
+            game.player.transactions.unshift({ time: Date.now(), amount: -fromPlayer, memo: `legal judgment · ${dispute.id}`, balance: game.player.money });
+            if (game.player.transactions.length > 120) game.player.transactions.length = 120;
+          }
+        } else {
+          payer.funds = Math.max(0, (payer.funds || 0) - fine);
+          payer.rep = clamp((payer.rep || 50) - rng.int(1, 4), 0, 100);
+        }
+      }
+      if (defendantIsPlayer) {
+        civ.player.compliance = clamp(civ.player.compliance - (settled ? 4 : 9), 0, 100);
+        civ.compliance.push({
+          id: nextId(civ, 'comp'), countryId: country.id, subject: 'player-company',
+          issue: dispute.issue, status: 'fined', world: civ.worldMinutes, fine, caseId: dispute.id
+        });
+        bounded(civ.compliance, CAPS.disputes);
+        pushMail(game, 'notice', `Judgment in ${dispute.id}`, `${country.name} ${dispute.domain} authority resolved the matter of ${dispute.issue}.\n\nOutcome: ${outcome}\nPenalty: ${fmtMoney(fine)}\nCase: ${dispute.id}\n\nCompliance history has been updated. A clean record and documented corrective action reduce future exposure.`);
+        emit(events, 'feed', `Judgment against your company in ${dispute.id}: ${fmtMoney(fine)}.`, { kind: 'bad' });
+      } else {
+        emit(events, 'feed', `${dispute.defendantName || 'A firm'} is held liable in ${dispute.id} (${fmtMoney(fine)}).`, { kind: 'legal' });
+      }
+      recordTimeline(civ, 'law', `${dispute.defendantName || 'Operator'} ${outcome === 'settled' ? 'settles' : 'loses'} ${dispute.id}`, `The ${country.name} ${dispute.domain} matter concerned ${dispute.issue}. Penalty: ${fmtMoney(fine)}.`, { countryId: country.id, actors: [dispute.defendant].filter(Boolean), major: false });
+      if (rng.chance(.24)) emit(events, 'news', `${country.name} court rules in ${dispute.id}`, { body: `A ${dispute.domain} dispute over ${dispute.issue} ended with a ${outcome} outcome. The decision sets an enforceable precedent for similar operators.`, source: 'Public Record' });
+    } else {
+      dispute.fine = 0;
+      dispute.compensation = 0;
+      recordTimeline(civ, 'law', `${dispute.id} dismissed in ${country.name}`, `The ${dispute.domain} complaint over ${dispute.issue} did not meet the evidentiary threshold.`, { countryId: country.id, major: false });
+      emit(events, 'feed', `${dispute.id} was dismissed.`, { kind: 'good' });
+    }
+  }
+
+  const open = civ.disputes.filter(d => d.status !== 'closed').length;
+  if (open < 14 && rng.chance(.4)) {
+    const country = rng.pick(civ.countries);
+    const domain = rng.pick(LAW_DOMAINS);
+    const pool = (game.companies || []).filter(c => c.status !== 'failed' && c.status !== 'bankrupt');
+    let company = null;
+    if (playerCompany && civ.player.compliance < 62 && rng.chance(.28)) company = playerCompany;
+    else company = rng.pick(pool) || null;
+    const firm = rng.pick(civ.lawFirms.filter(f => f.countryId === country.id)) || rng.pick(civ.lawFirms);
+    const filed = civ.worldMinutes;
+    const hearing = filed + rng.int(4, 20) * DAY;
+    const judgment = hearing + rng.int(12, 60) * DAY;
+    const issue = rng.pick(['data retention evidence', 'license disclosure', 'consumer renewal terms', 'breach notification timing', 'worker classification', 'copyright takedown procedure', 'cross-border transfer safeguards']);
+    civ.disputes.push({
+      id: nextId(civ, 'case'), countryId: country.id, domain: domain.id,
+      kind: rng.pick(['regulatory', 'contract', 'ip', 'labor', 'consumer']),
+      issue, subject: company?.id || 'market', subjectName: company?.name || 'Unnamed operator',
+      plaintiff: `${country.name} ${domain.regulator}`, plaintiffName: `${country.name} ${domain.regulator}`,
+      defendant: company?.id || null, defendantName: company?.name || 'Unknown operator',
+      lawFirmId: firm?.id || null, status: 'open',
+      filedWorld: filed, hearingWorld: hearing, judgmentWorld: judgment,
+      exposure: Math.max(800, Math.round((company?.revenue || 0) * .035 + rng.int(300, 4800))),
+      settled: false, defense: null, outcome: null, fine: 0, compensation: 0, resolvedWorld: null
+    });
+    if (company === playerCompany) {
+      pushMail(game, 'legal', 'Regulatory investigation opened', `${country.name} ${domain.regulator} opened ${civ.disputes[civ.disputes.length - 1].id} concerning ${issue}.\n\nHearing: ${Math.ceil((hearing - civ.worldMinutes) / DAY)} days.\nJudgment expected: ${Math.ceil((judgment - civ.worldMinutes) / DAY)} days.\n\nReview civ legal for the record.`);
+      emit(events, 'feed', `A ${country.name} regulator opened a case concerning ${issue}.`, { kind: 'warn' });
+    }
+    bounded(civ.disputes, CAPS.disputes);
+  }
+
+  for (const court of civ.courts) {
+    court.cases = Math.max(0, Math.round((court.cases || 0) + rng.int(-6, 8)));
+  }
+  for (const regulator of civ.regulators) {
+    regulator.investigations = clamp((regulator.investigations || 0) + rng.int(-2, 3), 0, 999);
+  }
+}
+
+/* -------- households, housing and shared finances -------- */
+function householdCadence(game, civ, rng, events) {
+  const playerProf = civ.player.professional || {};
+  const assigned = new Set();
+  for (const household of civ.households) {
+    for (const member of household.members) assigned.add(member.id);
+  }
+  const unassigned = (game.npcs || []).filter(n => !assigned.has(n.id));
+  if (unassigned.length && civ.households.length < CAPS.households - 1 && rng.chance(.6)) {
+    const created = buildHouseholds(game, civ, rng, unassigned.slice(0, 18));
+    if (created.length) {
+      civ.households.push(...created);
+      emit(events, 'feed', `${created.length} new household${created.length === 1 ? '' : 's'} formed as residents arrived.`, { kind: 'info' });
+    }
+  }
+  for (const household of civ.households) {
+    if (household.player) continue;
+    const country = civ.countries.find(c => c.id === household.countryId) || civ.countries[0];
+    const city = civ.cities.find(c => c.id === household.cityId) || civ.cities[0];
+    let income = 0;
+    for (const member of household.members) {
+      const npc = (game.npcs || []).find(n => n.id === member.id);
+      if (npc) {
+        member.employed = !!npc.companyId;
+        member.employerId = npc.companyId || null;
+        member.role = npc.role || member.role;
+      }
+      if (member.employed) {
+        member.income = Math.max(900, Math.round((member.income || 4200) * (1 + (country.economy.growth - country.economy.inflation) / 1400)));
+      } else {
+        member.income = Math.max(560, Math.round((member.income || 2200) * .62));
+      }
+      income += member.income;
+    }
+    household.income = income;
+    household.expenses = Math.round(household.housing.rent + city.prices.energy * 2 + income * .22);
+    household.savings = Math.max(0, Math.round((household.savings || 0) + income - household.expenses));
+    const surplus = income - household.expenses;
+    household.satisfaction = clamp(
+      household.satisfaction + surplus / Math.max(1, income) * 5 +
+      (city.utilities.power - 70) * .05 - country.economy.unemployment * .15 + rng.int(-3, 3),
+      3, 98
+    );
+    household.needs.housing = clamp(100 - household.housing.rent / Math.max(1, income) * 260, 4, 100);
+    household.needs.income = clamp(income / 900, 4, 100);
+    household.needs.community = clamp(household.needs.community + rng.int(-3, 3), 5, 100);
+    for (const rel of household.relationships) rel.strength = clamp(rel.strength + rng.int(-4, 3), 5, 99);
+
+    const movedRecently = civ.worldMinutes - (household.lastMoveWorld || 0) < 90 * DAY;
+    if (!movedRecently && (household.satisfaction < 42 || household.needs.housing < 30) && rng.chance(.24)) {
+      const options = civ.cities.filter(c => c.countryId === country.id);
+      const cheaper = (options.length ? options : civ.cities).slice().sort((a, b) => a.prices.housing - b.prices.housing)[0];
+      if (cheaper && cheaper.id !== city.id) {
+        household.cityId = cheaper.id;
+        household.housing.rent = Math.max(120, Math.round(cheaper.prices.housing * rng.float(.55, .95)));
+        household.housing.type = rng.pick(['apartment', 'house', 'shared flat', 'rented room']);
+        household.lastMoveWorld = civ.worldMinutes;
+        household.satisfaction = clamp(household.satisfaction + rng.int(4, 12), 3, 98);
+        emit(events, 'feed', `@${household.headId} household moved to ${cheaper.name} for lower housing costs.`, { kind: 'info' });
+        recordTimeline(civ, 'society', `A household relocates to ${cheaper.name}`, 'Rent pressure and commuting costs pushed the move. Local schools and services are adjusting to the population shift.', { countryId: country.id, major: false });
+      }
+    }
+    bounded(household.relationships, 8);
+  }
+
+  const player = civ.households.find(h => h.player) || civ.households.find(h => h.id === 'household-player');
+  if (player) {
+    player.cityId = civ.player.cityId || player.cityId;
+    player.countryId = civ.player.countryId || player.countryId;
+    player.income = Math.max(0, Math.round((playerProf.salary || 0) / 12));
+    player.savings = Math.max(0, Math.round(game.player.money || 0));
+    const home = civ.property.owned.find(p => p.ownerId === 'player' && p.type !== 'warehouse');
+    player.housing = home
+      ? { type: home.type, rent: 0, ownedId: home.id }
+      : { type: player.housing?.type || 'operator residence', rent: player.housing?.rent || 0, ownedId: null };
+    player.expenses = Math.round(player.housing.rent + (game.civ?.metrics?.inflation || 2) * 6);
+    player.needs.income = clamp((playerProf.salary || 0) / 2600, 5, 100);
+    player.needs.housing = home ? 92 : clamp(70 + (game.player.money || 0) / 4000, 20, 96);
+    player.satisfaction = clamp(45 + (game.player.reputation || 0) * .2 + (playerProf.salary ? 8 : 0) + (home ? 10 : 0), 8, 98);
+  }
+}
+
+/* -------- technology releases and competition -------- */
+function techCadence(game, civ, rng, events) {
+  const active = civ.tech.technologies.filter(t => t.status === 'active');
+  const live = active.length ? active : civ.tech.technologies;
+  if (live.length && rng.chance(.55)) {
+    const tech = pickWeighted(rng, live, t => (t.adoption || 0) + 8);
+    const [major, minor] = String(tech.version || '1.0').split('.').map(n => Number(n) || 0);
+    const majorBump = rng.chance(.12);
+    tech.version = `${major + (majorBump ? 1 : 0)}.${(minor || 0) + rng.int(1, 5)}`;
+    tech.releasedWorld = civ.worldMinutes;
+    tech.documentation = clamp((tech.documentation || 50) + rng.int(1, 7), 0, 100);
+    tech.security = clamp((tech.security || 50) + rng.int(0, 5), 0, 100);
+    tech.ecosystem = clamp((tech.ecosystem || 30) + rng.int(1, 6), 0, 100);
+    tech.adoption = clamp((tech.adoption || 0) + rng.int(1, 5), 0, 100);
+    if (majorBump || (tech.adoption > 45 && rng.chance(.3))) {
+      recordTimeline(civ, 'technology', `${tech.name} ${tech.version} released`, `${tech.vendorName} shipped a ${majorBump ? 'major' : 'maintenance'} release with improved documentation and compatibility.`, { actors: [tech.vendorName], major: !!majorBump });
+      emit(events, 'feed', `${tech.vendorName} releases ${tech.name} ${tech.version}.`, { kind: 'good' });
+    }
+  }
+
+  const companies = (game.companies || []).filter(c => c.status === 'operating');
+  if (civ.tech.technologies.length < CAPS.tech && companies.length && rng.chance(.4)) {
+    const company = pickWeighted(rng, companies, c => Math.max(500, c.funds || 0) * (String(c.sector).match(/software|cloud|ai|security|semiconductor|electronics|gaming/) ? 2 : 1));
+    const country = civ.countries.find(c => c.id === company.hqCountryId) || civ.countries[0];
+    const capable = (country.sectors || []).some(s => /software|cloud|semiconductor|electronics|robotics|research|telecoms|gaming/.test(String(s))) ||
+      (country.regulation.business || 50) > 52;
+    if (capable) {
+      const sector = String(company.sector || 'software').toLowerCase();
+      const category = /semiconductor|electronics|hardware|manufacturing/.test(sector) ? rng.pick(['cpu', 'gpu', 'networking'])
+        : /ai|research/.test(sector) ? rng.pick(['ai', 'framework'])
+        : /security/.test(sector) ? 'security'
+        : /gaming|media/.test(sector) ? rng.pick(['framework', 'devtools'])
+        : rng.pick(['devtools', 'database', 'cloud', 'framework']);
+      const suffix = rng.pick(['Runtime', 'Platform', 'Works', 'Engine', 'Network', 'Cloud', 'Stack', 'Fabric']);
+      const name = `${company.name} ${category === 'ai' ? 'Model' : suffix}`;
+      if (!civ.tech.technologies.some(t => t.name === name)) {
+        const tech = {
+          id: nextId(civ, 'tech'), name, category,
+          vendorName: company.name, license: rng.chance(.28) ? 'open-source' : 'proprietary',
+          version: '1.0', adoption: rng.int(1, 8),
+          compatibility: rng.pick([['x86', 'arm'], ['linux'], ['cloud'], ['portable']]),
+          releasedWorld: civ.worldMinutes, documentation: rng.int(24, 66),
+          security: rng.int(30, 74), ecosystem: rng.int(6, 36),
+          priceIndex: rng.int(40, 150), status: 'active', standard: false,
+          originDiscoveryId: null, competitors: []
+        };
+        civ.tech.technologies.push(tech);
+        civilRecordTech(civ, tech, events);
+        recordTimeline(civ, 'technology', `${company.name} releases ${name}`, `${country.name}-based ${company.name} enters the ${category} market. The release is versioned and requires ongoing maintenance.`, { countryId: country.id, actors: [company.id], major: false });
+      }
+    }
+  }
+
+  // Adoption follows ecosystem quality within a category; no vendor is permanent.
+  const byCategory = {};
+  for (const tech of civ.tech.technologies) {
+    (byCategory[tech.category] || (byCategory[tech.category] = [])).push(tech);
+  }
+  for (const group of Object.values(byCategory)) {
+    if (group.length < 2) continue;
+    const best = group.reduce((a, b) => ((b.ecosystem + b.documentation) > (a.ecosystem + a.documentation) ? b : a));
+    for (const tech of group) {
+      if (tech === best) continue;
+      const gap = (best.ecosystem + best.documentation) - (tech.ecosystem + tech.documentation);
+      if (gap > 10) tech.adoption = clamp(tech.adoption - Math.min(3, gap / 20), 0, 100);
+    }
+  }
+  bounded(civ.tech.technologies, CAPS.tech);
+}
+
+/* -------- culture, events and creative economy -------- */
+function cultureCadence(game, civ, rng, events) {
+  for (const event of civ.culture.events) {
+    if (event.status === 'scheduled' && civ.worldMinutes >= event.world) {
+      event.status = 'live';
+      event.attendance = Math.round((event.attendance || 400) * rng.float(.7, 1.4));
+      if (rng.chance(.5)) emit(events, 'feed', `${event.name} opens in ${civ.cities.find(c => c.id === event.cityId)?.name || 'the region'}.`, { kind: 'info' });
+    } else if (event.status === 'live' && civ.worldMinutes >= event.world + 2 * DAY) {
+      event.status = 'completed';
+      recordTimeline(civ, 'culture', `${event.name} concludes`, `The ${event.type} drew an estimated ${fmtNum(event.attendance)} attendees and generated follow-on work for local studios.`, { countryId: civ.cities.find(c => c.id === event.cityId)?.countryId || null, major: false });
+    }
+  }
+  if (civ.culture.events.filter(e => e.status === 'scheduled').length < 6 && rng.chance(.3)) {
+    const city = rng.pick(civ.cities);
+    civ.culture.events.push({
+      id: nextId(civ, 'cevent'),
+      name: rng.pick(['Open Bench Summit', 'Harborview Games Week', 'Greyhaven Digital Stage', 'Nordhavn Privacy Forum', 'Kiyosu Systems Fair', 'Sundar Creator Market']),
+      type: rng.pick(['conference', 'festival', 'tournament', 'exhibition']),
+      cityId: city.id, attendance: rng.int(400, 90000),
+      world: civ.worldMinutes + rng.int(8, 90) * DAY, status: 'scheduled'
+    });
+  }
+  for (const gameItem of civ.culture.games) {
+    gameItem.players = Math.max(0, Math.round((gameItem.players || 0) * (1 + (rng.next() - .49) * .01)));
+    gameItem.rating = clamp((gameItem.rating || 3.5) + (rng.next() - .5) * .02, .5, 5);
+  }
+  for (const track of civ.culture.music) {
+    track.streams = Math.max(0, Math.round((track.streams || 0) * (1 + (rng.next() - .48) * .008)));
+    track.revenue = Math.max(0, Math.round((track.revenue || 0) * (1 + (rng.next() - .5) * .006)));
+  }
+  if (civ.culture.esports.length < CAPS.esports && rng.chance(.08)) {
+    const org = rng.pick(civ.culture.organizations);
+    if (org) {
+      civ.culture.esports.push({
+        id: nextId(civ, 'esport'), name: `${org.name} ${rng.pick(['League', 'Circuit', 'Cup'])}`,
+        organizationId: org.id, gameId: rng.pick(civ.culture.games)?.id || null,
+        teams: rng.int(4, 32), prizePool: rng.int(2000, 900000),
+        status: 'active', foundedWorld: civ.worldMinutes
+      });
+      recordTimeline(civ, 'culture', `${org.name} launches an esports circuit`, 'The circuit formalizes teams, sponsorship and broadcast rights around an existing player community.', { actors: [org.id], major: false });
+    }
+  }
+  bounded(civ.culture.events, CAPS.cultureEvents);
+  bounded(civ.culture.esports, CAPS.esports);
 }
 
 /* -------- dynamic events -------- */
@@ -3172,29 +2962,26 @@ export function tickCivilization(game, minutes = 1, rng = null) {
   const property = advanceBucket(civ, 'property', DAY, civ.worldMinutes, 20);
   for (let i = 0; i < property; i++) propertyCadence(game, civ, rng, events);
 
-  const city = advanceBucket(civ, 'city', DAY, civ.worldMinutes, 20);
-  for (let i = 0; i < city; i++) cityCadence(game, civ, rng, events);
-
-  const household = advanceBucket(civ, 'household', DAY, civ.worldMinutes, 20);
-  for (let i = 0; i < household; i++) householdCadence(game, civ, rng, events);
-
-  const legal = advanceBucket(civ, 'legal', DAY, civ.worldMinutes, 20);
-  for (let i = 0; i < legal; i++) legalCadence(game, civ, rng, events);
-
   const education = advanceBucket(civ, 'education', 720, civ.worldMinutes, 10);
   for (let i = 0; i < education; i++) educationCadence(game, civ, rng, events);
 
   const jobs = advanceBucket(civ, 'jobs', 360, civ.worldMinutes, 10);
   for (let i = 0; i < jobs; i++) jobsCadence(game, civ, rng, events);
 
-  const tech = advanceBucket(civ, 'tech', 360, civ.worldMinutes, 10);
-  for (let i = 0; i < tech; i++) techCadence(game, civ, rng, events);
-
-  const culture = advanceBucket(civ, 'culture', 360, civ.worldMinutes, 10);
-  for (let i = 0; i < culture; i++) cultureCadence(game, civ, rng, events);
-
   const infra = advanceBucket(civ, 'infrastructure', 180, civ.worldMinutes, 12);
   for (let i = 0; i < infra; i++) infrastructureCadence(game, civ, rng, events);
+
+  const legal = advanceBucket(civ, 'legal', DAY * 3, civ.worldMinutes, 8);
+  for (let i = 0; i < legal; i++) legalCadence(game, civ, rng, events);
+
+  const households = advanceBucket(civ, 'households', DAY * 30, civ.worldMinutes, 6);
+  for (let i = 0; i < households; i++) householdCadence(game, civ, rng, events);
+
+  const tech = advanceBucket(civ, 'tech', DAY * 45, civ.worldMinutes, 6);
+  for (let i = 0; i < tech; i++) techCadence(game, civ, rng, events);
+
+  const culture = advanceBucket(civ, 'culture', DAY * 7, civ.worldMinutes, 8);
+  for (let i = 0; i < culture; i++) cultureCadence(game, civ, rng, events);
 
   const worldEvents = advanceBucket(civ, 'events', DAY * 3, civ.worldMinutes, 8);
   for (let i = 0; i < worldEvents; i++) eventCadence(game, civ, rng, events);
@@ -3381,14 +3168,6 @@ export function playerBuyProperty(game, listingId, opts = {}) {
   const owned = { ...listing, purchasedWorld: civ.worldMinutes, occupancy: opts.rented ? 'rented' : 'owner', rentPaid: 0 };
   civ.property.owned.push(owned);
   civ.player.financial.assets += price;
-  const house = civ.households.find(h => h.id === 'house-player');
-  if (house && (opts.home || ['apartment', 'house'].includes(listing.type)) && (!house.housing?.propertyId || opts.home)) {
-    house.housing = { tenure: 'owned', propertyId: owned.id, label: owned.label, rent: 0, quality: owned.quality || 60, sinceWorld: civ.worldMinutes };
-    house.cityId = owned.cityId;
-    house.countryId = owned.countryId;
-    civ.player.cityId = owned.cityId;
-    civ.player.countryId = owned.countryId;
-  }
   recordTimeline(civ, 'property', `${game.player.handle} acquires ${listing.label} in ${civ.cities.find(c => c.id === listing.cityId)?.name}`, `Purchase price ${fmtMoney(price)}. The property enters the persistent local tax and maintenance system.`, { actors: ['player'], major: false });
   emitPlayerFeed(game, `Acquired ${listing.label} for ${fmtMoney(price)}.`, 'good');
   return { ok: true, property: owned, price };
@@ -3405,11 +3184,6 @@ export function playerSellProperty(game, propertyId) {
   civ.property.owned = civ.property.owned.filter(p => p.id !== propertyId);
   const listing = civ.property.listings.find(p => p.id === propertyId);
   if (listing) { listing.status = 'available'; listing.ownerId = null; listing.ownerName = 'market'; }
-  const house = civ.households.find(h => h.id === 'house-player');
-  if (house?.housing?.propertyId === propertyId) {
-    const city = civ.cities.find(c => c.id === house.cityId) || civ.cities[0];
-    house.housing = { tenure: 'renting', propertyId: null, label: `${city.name} apartment`, rent: Math.round(city.prices.housing * .82), quality: 52, sinceWorld: civ.worldMinutes };
-  }
   civ.player.financial.assets = Math.max(0, civ.player.financial.assets - property.price);
   emitPlayerFeed(game, `Sold ${property.label} for ${fmtMoney(sale)}.`, 'good');
   return { ok: true, sale, property };
@@ -3451,16 +3225,11 @@ export function playerRelocate(game, countryId, cityId) {
   game.player.transactions.unshift({ time: Date.now(), amount: -cost, memo: `relocation · ${city?.name || country.name}`, balance: game.player.money });
   civ.player.countryId = country.id;
   civ.player.cityId = city?.id || null;
-  const house = civ.households.find(h => h.id === 'house-player');
-  if (house) {
-    house.cityId = city?.id || house.cityId;
-    house.countryId = country.id;
-    if (house.housing?.tenure === 'renting' && city) {
-      house.housing.rent = Math.round(city.prices.housing * .82);
-      house.housing.label = `${city.name} apartment`;
-    }
-    house.history = house.history || [];
-    house.history.push({ world: civ.worldMinutes, text: `Relocated to ${city?.name || country.name}, ${country.name}.` });
+  const household = civ.households.find(h => h.player || h.id === 'household-player');
+  if (household) {
+    household.countryId = country.id;
+    household.cityId = city?.id || household.cityId;
+    household.lastMoveWorld = civ.worldMinutes;
   }
   emitPlayerFeed(game, `Relocated to ${city?.name || country.name}, ${country.name}.`, 'info');
   return { ok: true, country, city, cost };
@@ -3480,361 +3249,6 @@ export function playerAdoptTech(game, techId) {
   civ.player.professional.score = clamp(civ.player.professional.score + 1, 0, 100);
   emitPlayerFeed(game, `Adopted ${tech.name} (${tech.vendorName}).`, 'good');
   return { ok: true, tech, cost };
-}
-
-/* -------- courts and civil disputes -------- */
-export function playerFileDispute(game, issue, opts = {}) {
-  const civ = ensureCivilization(game);
-  const text = String(issue || '').trim();
-  if (text.length < 8) return { ok: false, error: 'Describe the dispute in at least 8 characters.' };
-  const country = opts.countryId ? civ.countries.find(c => c.id === opts.countryId || c.name.toLowerCase() === String(opts.countryId).toLowerCase()) : playerCountry(game);
-  if (!country) return { ok: false, error: 'No such jurisdiction.' };
-  const claim = Math.max(0, Math.round(opts.claim || 5000));
-  const fee = Math.max(60, Math.round(80 + claim * .012 + country.costIndex * 60));
-  if (fee > game.player.money) return { ok: false, error: `Filing costs ${fmtMoney(fee)}; you have ${fmtMoney(game.player.money)}.` };
-  game.player.money -= fee;
-  game.stats.spent += fee;
-  game.player.transactions.unshift({ time: Date.now(), amount: -fee, memo: `court filing · ${issue}`, balance: game.player.money });
-  const dispute = makeCourtCase(civ, game, {
-    country, subject: 'player', subjectName: game.player.handle,
-    plaintiff: 'player', defendant: opts.against || 'counterparty',
-    issue: text, claim, kind: opts.kind || 'civil',
-    evidence: opts.evidence ? 74 : 46, public: opts.public !== false
-  }, makeRng((game.seed ^ hash32(text) ^ game.worldMinutes) >>> 0));
-  civ.disputes.push(dispute);
-  bounded(civ.disputes, CAPS.courtCases);
-  pushMail(game, 'courts', `Claim filed: ${text}`, `${dispute.courtName} accepted your claim.\n\nCase: ${dispute.id}\nClaim: ${fmtMoney(claim)}\nFiling fee: ${fmtMoney(fee)}\nHearing in ${Math.max(1, Math.ceil((dispute.hearingWorld - civ.worldMinutes) / DAY))} days.\n\nUse "civ legal ${dispute.id}" to review it.`);
-  recordTimeline(civ, 'law', `${game.player.handle} files a ${dispute.kind} claim`, `${text}. The claim asks for ${fmtMoney(claim)} in ${country.name}.`, { countryId: country.id, actors: ['player'], major: claim > 25000 });
-  emitPlayerFeed(game, `Filed ${dispute.id} in ${dispute.courtName}.`, 'info');
-  return { ok: true, dispute, fee, country };
-}
-
-export function playerHireLawyer(game, caseId) {
-  const civ = ensureCivilization(game);
-  const dispute = civ.disputes.find(d => d.id === caseId && ['player', 'player-company'].includes(d.subject));
-  if (!dispute) return { ok: false, error: 'No such case involving you.' };
-  if (dispute.lawyer) return { ok: false, error: 'Counsel is already retained on this case.' };
-  if (!['filed', 'hearing'].includes(dispute.status)) return { ok: false, error: 'That case has already concluded.' };
-  const fee = Math.max(120, Math.round(dispute.claim * .035 + 180));
-  if (fee > game.player.money) return { ok: false, error: `Counsel costs ${fmtMoney(fee)}; you have ${fmtMoney(game.player.money)}.` };
-  game.player.money -= fee;
-  game.stats.spent += fee;
-  game.player.transactions.unshift({ time: Date.now(), amount: -fee, memo: `legal counsel · ${dispute.id}`, balance: game.player.money });
-  dispute.lawyer = 'retained counsel';
-  dispute.evidence = clamp(dispute.evidence + 8, 0, 100);
-  dispute.history.push({ world: civ.worldMinutes, text: 'Counsel entered an appearance and requested disclosure.' });
-  emitPlayerFeed(game, `Retained counsel in ${dispute.id} for ${fmtMoney(fee)}.`, 'info');
-  return { ok: true, dispute, fee };
-}
-
-export function playerRespondDispute(game, caseId, opts = {}) {
-  const civ = ensureCivilization(game);
-  const dispute = civ.disputes.find(d => d.id === caseId && ['player', 'player-company'].includes(d.subject));
-  if (!dispute) return { ok: false, error: 'No such case involving you.' };
-  if (!['filed', 'hearing'].includes(dispute.status)) return { ok: false, error: `That case is already ${dispute.status}.` };
-  if (opts.lawyer) return playerHireLawyer(game, caseId);
-  if (opts.settle) {
-    const settlement = Math.max(50, Math.round(dispute.claim * 0.42));
-    if (settlement > game.player.money) return { ok: false, error: `Settlement costs ${fmtMoney(settlement)}; you have ${fmtMoney(game.player.money)}.` };
-    game.player.money -= settlement;
-    game.stats.spent += settlement;
-    game.player.transactions.unshift({ time: Date.now(), amount: -settlement, memo: `settlement · ${dispute.id}`, balance: game.player.money });
-    dispute.status = 'settled';
-    dispute.outcome = 'settled';
-    dispute.resolvedWorld = civ.worldMinutes;
-    dispute.damages = settlement;
-    dispute.history.push({ world: civ.worldMinutes, text: `Settled for ${fmtMoney(settlement)} before judgment.` });
-    civ.player.compliance = clamp((civ.player.compliance || 70) + 2, 0, 100);
-    pushMail(game, 'courts', `Settlement recorded: ${dispute.issue}`, `${dispute.id} was settled for ${fmtMoney(settlement)}. The matter is closed and the public docket records a settlement.`);
-    recordTimeline(civ, 'law', `Settlement reached in ${dispute.issue}`, `${game.player.handle} settled a ${dispute.kind} claim for ${fmtMoney(settlement)}.`, { countryId: dispute.countryId, actors: ['player'], major: settlement > 20000 });
-    return { ok: true, dispute, settlement, settled: true };
-  }
-  if (opts.evidence) {
-    const cost = Math.max(40, Math.round(dispute.claim * .012 + 40));
-    if (cost > game.player.money) return { ok: false, error: `Evidence work costs ${fmtMoney(cost)}.` };
-    game.player.money -= cost;
-    game.stats.spent += cost;
-    dispute.evidence = clamp(dispute.evidence + 12, 0, 100);
-    dispute.history.push({ world: civ.worldMinutes, text: 'Additional evidence was filed with the court.' });
-    return { ok: true, dispute, evidence: dispute.evidence, cost };
-  }
-  if (opts.lawyer === false) {
-    dispute.history.push({ world: civ.worldMinutes, text: 'The respondent entered a written defense without counsel.' });
-    dispute.evidence = clamp(dispute.evidence + 2, 0, 100);
-    return { ok: true, dispute, defended: true };
-  }
-  return { ok: false, error: 'Choose --settle, --evidence or --lawyer.' };
-}
-
-/* -------- technology projects -------- */
-export function playerDevelopTech(game, name, opts = {}) {
-  const civ = ensureCivilization(game);
-  const title = String(name || '').trim();
-  if (title.length < 3) return { ok: false, error: 'Give the project a name of at least 3 characters.' };
-  const category = TECH_CATEGORIES.includes(opts.category) ? opts.category : 'devtools';
-  const field = TECH_FIELD_BY_CATEGORY[category] || 'programming';
-  const knowledge = civ.education.player.knowledge[field] || 0;
-  if (knowledge < 10 && (game.player.skill || 1) < 3) {
-    return { ok: false, error: `You need more background in ${field}. Study first: civ study ${field}` };
-  }
-  const seed = Math.max(400, Math.round(opts.funding || Math.min(3000, game.player.money * .35)));
-  if (seed > game.player.money) return { ok: false, error: `Seed funding exceeds your balance (${fmtMoney(game.player.money)}).` };
-  const fundingNeeded = Math.max(3000, Math.round(seed * 8 + 9000 + knowledge * 140));
-  const project = makeTechProject(civ, game, {
-    name: title, category, field, ownerType: 'player', ownerId: 'player',
-    ownerName: game.player.handle, companyId: opts.companyId || null,
-    funding: seed, fundingNeeded, progress: 4,
-    expertise: clamp(14 + knowledge * .82 + (game.player.skill || 1) * 3, 5, 98),
-    equipment: clamp(18 + knowledge * .42, 5, 96), ambition: opts.ambition || 1,
-    license: opts.open ? 'open-source' : 'source-available',
-    etaWorld: civ.worldMinutes + Math.max(12, Math.round(fundingNeeded / 5000)) * DAY
-  }, makeRng((game.seed ^ hash32(title) ^ game.worldMinutes) >>> 0));
-  game.player.money -= seed;
-  game.stats.spent += seed;
-  game.player.transactions.unshift({ time: Date.now(), amount: -seed, memo: `technology project · ${title}`, balance: game.player.money });
-  civ.tech.projects.push(project);
-  bounded(civ.tech.projects, CAPS.techProjects);
-  emitPlayerFeed(game, `Started ${category} project ${title}.`, 'info');
-  return { ok: true, project, seed, fundingNeeded, field };
-}
-
-export function playerFundTech(game, projectId, amount) {
-  const civ = ensureCivilization(game);
-  const project = civ.tech.projects.find(p => p.id === projectId || p.name.toLowerCase().includes(String(projectId || '').toLowerCase()));
-  if (!project) return { ok: false, error: 'No such technology project.' };
-  if (project.status === 'completed') return { ok: false, error: 'That project has already shipped.' };
-  const value = Math.max(50, Math.round(amount || 500));
-  if (value > game.player.money) return { ok: false, error: `You only have ${fmtMoney(game.player.money)}.` };
-  game.player.money -= value;
-  game.stats.spent += value;
-  game.player.transactions.unshift({ time: Date.now(), amount: -value, memo: `technology funding · ${project.name}`, balance: game.player.money });
-  project.funding += value;
-  project.expertise = clamp(project.expertise + value / 1100, 0, 100);
-  if (project.status === 'stalled' && project.funding >= project.fundingNeeded * .45) project.status = 'active';
-  emitPlayerFeed(game, `Committed ${fmtMoney(value)} to ${project.name}.`, 'good');
-  return { ok: true, project, amount: value };
-}
-
-/* -------- industry and supply-chain participation -------- */
-export function playerProcureComponent(game, componentQuery, quantity, opts = {}) {
-  const civ = ensureCivilization(game);
-  const q = String(componentQuery || '').toLowerCase();
-  const component = Object.values(civ.supply.components).find(c => c.id === q || c.name.toLowerCase().includes(q));
-  if (!component) return { ok: false, error: 'No such component.' };
-  const qty = Math.max(1, Math.round(Number(quantity) || 1));
-  const unit = Math.max(1, Math.round(component.price * (opts.spot ? 1.12 : 1.04)));
-  const total = unit * qty;
-  if (total > game.player.money) return { ok: false, error: `${qty} units cost ${fmtMoney(total)}; you have ${fmtMoney(game.player.money)}.` };
-  game.player.money -= total;
-  game.stats.spent += total;
-  game.player.transactions.unshift({ time: Date.now(), amount: -total, memo: `component purchase · ${component.name}`, balance: game.player.money });
-  civ.player.industrial.inventory[component.id] = (civ.player.industrial.inventory[component.id] || 0) + qty;
-  civ.player.industrial.spend = (civ.player.industrial.spend || 0) + total;
-  emitPlayerFeed(game, `Procured ${qty} ${component.name.toLowerCase()} units for ${fmtMoney(total)}.`, 'info');
-  return { ok: true, component, quantity: qty, total, unit };
-}
-
-export function playerSellComponent(game, componentQuery, quantity) {
-  const civ = ensureCivilization(game);
-  const q = String(componentQuery || '').toLowerCase();
-  const component = Object.values(civ.supply.components).find(c => c.id === q || c.name.toLowerCase().includes(q));
-  if (!component) return { ok: false, error: 'No such component.' };
-  const have = civ.player.industrial.inventory[component.id] || 0;
-  const qty = Math.max(1, Math.round(Number(quantity) || have));
-  if (qty > have) return { ok: false, error: `You hold ${have} units.` };
-  const unit = Math.max(1, Math.round(component.price * .92));
-  const total = unit * qty;
-  civ.player.industrial.inventory[component.id] = have - qty;
-  game.player.money += total;
-  game.stats.earned += total;
-  game.player.transactions.unshift({ time: Date.now(), amount: total, memo: `component sale · ${component.name}`, balance: game.player.money });
-  civ.player.industrial.revenue = (civ.player.industrial.revenue || 0) + total;
-  emitPlayerFeed(game, `Sold ${qty} ${component.name.toLowerCase()} units for ${fmtMoney(total)}.`, 'good');
-  return { ok: true, component, quantity: qty, total, unit };
-}
-
-export function playerAcquireFacility(game, facilityId) {
-  const civ = ensureCivilization(game);
-  const factory = civ.supply.factories.find(f => f.id === facilityId);
-  const warehouse = civ.supply.warehouses.find(w => w.id === facilityId);
-  const facility = factory || warehouse;
-  if (!facility) return { ok: false, error: 'No such factory or warehouse.' };
-  if (facility.ownerId === 'player') return { ok: false, error: 'You already own that facility.' };
-  const cost = factory
-    ? Math.round(factory.capacity * 4200 + factory.efficiency * 600)
-    : Math.round(warehouse.capacity * 1200 + warehouse.inventory * 30);
-  if (cost > game.player.money) return { ok: false, error: `${facility.name} costs ${fmtMoney(cost)}; you have ${fmtMoney(game.player.money)}.` };
-  game.player.money -= cost;
-  game.stats.spent += cost;
-  game.player.transactions.unshift({ time: Date.now(), amount: -cost, memo: `facility acquisition · ${facility.name}`, balance: game.player.money });
-  facility.ownerId = 'player';
-  facility.ownerName = game.player.handle;
-  facility.ownerType = 'player';
-  civ.player.industrial.facilityIds.push(facility.id);
-  emitPlayerFeed(game, `Acquired ${facility.name} for ${fmtMoney(cost)}.`, 'good');
-  recordTimeline(civ, 'economy', `${game.player.handle} acquires ${facility.name}`, `A ${factory ? 'production' : 'distribution'} facility enters independent ownership.`, { actors: ['player'], major: cost > 100000 });
-  return { ok: true, facility, cost, kind: factory ? 'factory' : 'warehouse' };
-}
-
-/* -------- entertainment and creator economy -------- */
-export function playerFoundCulture(game, name, kind = 'studio', opts = {}) {
-  const civ = ensureCivilization(game);
-  const title = String(name || '').trim();
-  if (title.length < 3) return { ok: false, error: 'Organization name is too short.' };
-  if (civ.culture.organizations.some(o => o.name.toLowerCase() === title.toLowerCase())) return { ok: false, error: 'An organization with that name already exists.' };
-  const cost = Math.max(100, Math.round(opts.cost || 350));
-  if (cost > game.player.money) return { ok: false, error: `Founding costs ${fmtMoney(cost)}.` };
-  game.player.money -= cost;
-  game.stats.spent += cost;
-  game.player.transactions.unshift({ time: Date.now(), amount: -cost, memo: `creative organization · ${title}`, balance: game.player.money });
-  const country = playerCountry(game);
-  const city = playerCity(game);
-  const org = {
-    id: nextId(civ, 'culture'), name: title, kind: kind || 'studio', countryId: country.id, cityName: city.name,
-    desc: opts.desc || 'An independent creative organization owned by the operator.', audience: 500, reputation: 20,
-    revenue: 0, staff: 1, status: 'active', works: [], ownerId: 'player', ownerType: 'player', foundedWorld: civ.worldMinutes
-  };
-  civ.culture.organizations.push(org);
-  civ.player.culture.organizationIds.push(org.id);
-  emitPlayerFeed(game, `Founded ${title} in ${city.name}.`, 'good');
-  recordTimeline(civ, 'culture', `${game.player.handle} founds ${title}`, 'A new independent creative organization enters the market.', { actors: ['player'], major: false });
-  return { ok: true, org, cost };
-}
-
-function playerCreativeOrg(game, civ) {
-  return civ.culture.organizations.find(o => o.ownerId === 'player') || null;
-}
-
-export function playerPublishGame(game, title, opts = {}) {
-  const civ = ensureCivilization(game);
-  const name = String(title || '').trim();
-  if (name.length < 3) return { ok: false, error: 'Game title is too short.' };
-  const budget = Math.max(80, Math.round(opts.budget || Math.min(1800, game.player.money * .3)));
-  if (budget > game.player.money) return { ok: false, error: `Production costs ${fmtMoney(budget)}.` };
-  game.player.money -= budget;
-  game.stats.spent += budget;
-  game.player.transactions.unshift({ time: Date.now(), amount: -budget, memo: `game production · ${name}`, balance: game.player.money });
-  const org = playerCreativeOrg(game, civ);
-  const quality = clamp((civ.player.professional.score + civ.player.social.score + (game.player.reputation || 0)) / 3 + budget / 120, 5, 95);
-  const gameItem = {
-    id: nextId(civ, 'game'), title: name, studioId: org?.id || null, studioName: org?.name || `${game.player.handle} Works`,
-    genre: opts.genre || 'simulation', price: Math.max(0, Math.round(opts.price ?? Math.min(35, 8 + budget / 80))),
-    players: Math.round(40 + budget / 4 + quality * 6), rating: clamp(2.4 + quality / 32, 1, 5),
-    revenue: 0, status: 'released', releasedWorld: civ.worldMinutes,
-    ownerId: 'player', ownerType: 'player', developmentBudget: budget
-  };
-  civ.culture.games.push(gameItem);
-  if (org) { org.works.push(gameItem.id); org.revenue += 0; }
-  civ.player.culture.gameIds.push(gameItem.id);
-  if (!civ.player.culture.organizationIds.length && org) civ.player.culture.organizationIds.push(org.id);
-  civ.player.social.followers += Math.round(quality * 2.4);
-  emitPlayerFeed(game, `Released ${name} (${gameItem.genre}) on the open market.`, 'good');
-  recordTimeline(civ, 'culture', `${game.player.handle} releases ${name}`, `An independently produced ${gameItem.genre} game enters distribution at ${fmtMoney(gameItem.price)}.`, { actors: ['player'], major: quality > 72 });
-  return { ok: true, game: gameItem, budget, quality };
-}
-
-export function playerReleaseMusic(game, title, opts = {}) {
-  const civ = ensureCivilization(game);
-  const name = String(title || '').trim();
-  if (name.length < 2) return { ok: false, error: 'Track title is too short.' };
-  const cost = Math.max(20, Math.round(opts.budget || 70));
-  if (cost > game.player.money) return { ok: false, error: `Release costs ${fmtMoney(cost)}.` };
-  game.player.money -= cost;
-  game.stats.spent += cost;
-  game.player.transactions.unshift({ time: Date.now(), amount: -cost, memo: `music release · ${name}`, balance: game.player.money });
-  const track = {
-    id: nextId(civ, 'music'), title: name, artist: game.player.handle,
-    countryId: civ.player.countryId, streams: Math.round(80 + (game.player.reputation || 0) * 9 + cost * 2),
-    revenue: 0, releasedWorld: civ.worldMinutes, ownerId: 'player', ownerType: 'player'
-  };
-  civ.culture.music.push(track);
-  civ.player.culture.musicIds.push(track.id);
-  civ.player.social.followers += Math.max(1, Math.round((game.player.reputation || 0) * .3));
-  emitPlayerFeed(game, `Released ${name} on independent music platforms.`, 'good');
-  return { ok: true, track, cost };
-}
-
-export function playerCreateCommunity(game, name, opts = {}) {
-  const civ = ensureCivilization(game);
-  const title = String(name || '').trim();
-  if (title.length < 3) return { ok: false, error: 'Community name is too short.' };
-  const cost = Math.max(20, Math.round(opts.cost || 90));
-  if (cost > game.player.money) return { ok: false, error: `Community setup costs ${fmtMoney(cost)}.` };
-  game.player.money -= cost;
-  game.stats.spent += cost;
-  const community = {
-    id: nextId(civ, 'comm'), name: title, topic: opts.topic || 'independent technology',
-    members: Math.max(12, Math.round((civ.player.social.followers || 0) * .08 + 18)),
-    trust: 55, countryId: civ.player.countryId, status: 'active', foundedWorld: civ.worldMinutes,
-    ownerId: 'player', ownerType: 'player'
-  };
-  civ.culture.communities.push(community);
-  civ.player.culture.communityIds.push(community.id);
-  civ.player.social.communities = civ.player.social.communities || [];
-  if (!civ.player.social.communities.includes(title)) civ.player.social.communities.push(title);
-  emitPlayerFeed(game, `Opened ${title} community.`, 'good');
-  return { ok: true, community, cost };
-}
-
-export function playerHostEvent(game, name, opts = {}) {
-  const civ = ensureCivilization(game);
-  const title = String(name || '').trim();
-  if (title.length < 3) return { ok: false, error: 'Event name is too short.' };
-  const city = opts.cityId ? civ.cities.find(c => c.id === opts.cityId) : playerCity(game);
-  if (!city) return { ok: false, error: 'No such host city.' };
-  const cost = Math.max(80, Math.round(opts.budget || 450));
-  if (cost > game.player.money) return { ok: false, error: `Event setup costs ${fmtMoney(cost)}.` };
-  game.player.money -= cost;
-  game.stats.spent += cost;
-  const event = {
-    id: nextId(civ, 'cevent'), name: title, type: opts.type || 'conference', cityId: city.id,
-    attendance: Math.max(80, Math.round(120 + (civ.player.social.followers || 0) * .12 + cost * .4)),
-    world: civ.worldMinutes + Math.max(1, Math.round(opts.days || 30)) * DAY,
-    status: 'scheduled', ticketPrice: Math.max(0, Math.round(opts.ticketPrice ?? 12)),
-    fixedCost: cost, ownerId: 'player', ownerType: 'player'
-  };
-  civ.culture.events.push(event);
-  civ.player.culture.eventIds.push(event.id);
-  emitPlayerFeed(game, `Scheduled ${title} in ${city.name}.`, 'info');
-  return { ok: true, event, city, cost };
-}
-
-export function playerSetHome(game, propertyId) {
-  const civ = ensureCivilization(game);
-  const property = civ.property.owned.find(p => p.id === propertyId && p.ownerId === 'player');
-  if (!property) return { ok: false, error: 'You do not own that property.' };
-  const city = civ.cities.find(c => c.id === property.cityId);
-  const country = civ.countries.find(c => c.id === property.countryId);
-  if (!city || !country) return { ok: false, error: 'The property is outside the simulated jurisdictions.' };
-  const house = civ.households.find(h => h.id === 'house-player') || makePlayerHousehold(game, civ, makeRng((game.seed ^ 0x71) >>> 0));
-  house.cityId = city.id; house.countryId = country.id;
-  house.housing = { tenure: 'owned', propertyId: property.id, label: property.label, rent: 0, quality: property.quality || 60, sinceWorld: civ.worldMinutes };
-  civ.player.cityId = city.id;
-  civ.player.countryId = country.id;
-  civ.player.household = house;
-  emitPlayerFeed(game, `Primary residence set to ${property.label} in ${city.name}.`, 'good');
-  return { ok: true, property, city, country, household: house };
-}
-
-export function playerTeach(game, fieldId, opts = {}) {
-  const civ = ensureCivilization(game);
-  const field = EDU_FIELDS.find(f => f.id === fieldId || f.name.toLowerCase() === String(fieldId || '').toLowerCase());
-  if (!field) return { ok: false, error: 'Unknown subject.' };
-  const knowledge = civ.education.player.knowledge[field.id] || 0;
-  if (knowledge < 45 && civ.player.academic.score < 40) return { ok: false, error: `You need at least 45 knowledge in ${field.name} to teach it.` };
-  const hours = clamp(Math.round(opts.hours || 2), 1, 8);
-  const institution = civ.education.institutions.filter(i => i.fields.includes(field.id));
-  const host = opts.institutionId ? institution.find(i => i.id === opts.institutionId) : institution[0];
-  const pay = Math.max(18, Math.round(hours * (host?.quality || 55) * (0.28 + knowledge / 240)));
-  game.player.money += pay;
-  game.stats.earned += pay;
-  game.player.transactions.unshift({ time: Date.now(), amount: pay, memo: `teaching · ${field.name}`, balance: game.player.money });
-  civ.player.academic.score = clamp(civ.player.academic.score + .4, 0, 100);
-  civ.player.professional.score = clamp(civ.player.professional.score + .2, 0, 100);
-  const enrollment = civ.education.enrollments.filter(e => e.status === 'studying' && e.courseName.toLowerCase().includes(field.name.toLowerCase())).slice(0, 3);
-  for (const item of enrollment) item.progress = clamp(item.progress + 2, 0, 100);
-  emitPlayerFeed(game, `Taught ${hours}h of ${field.name}${host ? ' at ' + host.name : ''} for ${fmtMoney(pay)}.`, 'good');
-  return { ok: true, field, hours, pay, institution: host || null };
 }
 
 /* ============================================================
@@ -4022,7 +3436,6 @@ export function makeMultiplayer(game, civ) {
       id: 'player', handle: game.player.handle, name: game.player.name, role: 'owner',
       connected: true, lastSeen: Date.now(), permissions: ['trade', 'company', 'research', 'publish', 'property', 'contracts']
     }],
-    accounts: { player: { id: 'player', handle: game.player.handle, balance: game.player.money, reconciledWorld: game.worldMinutes } },
     ledger: [],
     ledgerHead: 'genesis',
     permissions: {
@@ -4093,17 +3506,12 @@ export function joinSharedWorld(game, profile = {}) {
   const id = profile.id || `remote-${hash32(`${profile.handle || ''}:${Date.now()}`).toString(16).slice(0, 8)}`;
   let player = mp.players.find(p => p.id === id || p.handle === profile.handle);
   if (!player) {
-    const balance = Math.max(0, Math.round(Number(profile.balance) || 2500));
-    player = { id, handle: profile.handle || 'remote-operator', name: profile.name || 'Remote Operator', role: profile.role || 'operator', connected: true, lastSeen: Date.now(), balance, permissions: [...(mp.permissions[profile.role || 'operator'] || [])] };
+    player = { id, handle: profile.handle || 'remote-operator', name: profile.name || 'Remote Operator', role: profile.role || 'operator', connected: true, lastSeen: Date.now(), permissions: [...(mp.permissions[profile.role || 'operator'] || [])] };
     mp.players.push(player);
-    mp.accounts[id] = { id, handle: player.handle, balance, reconciledWorld: civ.worldMinutes };
   } else {
     player.connected = true;
     player.lastSeen = Date.now();
-    mp.accounts[player.id] = mp.accounts[player.id] || { id: player.id, handle: player.handle, balance: player.balance || 0, reconciledWorld: civ.worldMinutes };
   }
-  mp.accounts.player.balance = game.player.money;
-  mp.accounts.player.reconciledWorld = civ.worldMinutes;
   mp.lastSync = Date.now();
   return { ok: true, worldId: mp.worldId, player, authority: mp.authority };
 }
@@ -4123,33 +3531,10 @@ export function applyRemoteAction(game, actorId, action, payload = {}) {
   if (!auth.ok) return auth;
   const civ = ensureCivilization(game);
   if (action === 'sync') {
-    const account = civ.multiplayer.accounts?.player;
-    if (account) { account.balance = game.player.money; account.reconciledWorld = civ.worldMinutes; }
     civ.multiplayer.lastSync = Date.now();
     return { ok: true, metrics: civ.metrics, snapshot: sharedSnapshot(game) };
   }
-  if (action === 'trade') {
-    const amount = Math.round(Number(payload.amount) || 0);
-    if (!(amount > 0)) return { ok: false, error: 'trade amount must be positive' };
-    const to = civ.multiplayer.players.find(p => p.id === payload.to || p.handle === payload.to);
-    if (!to) return { ok: false, error: 'unknown recipient' };
-    if (to.id === auth.actor.id) return { ok: false, error: 'cannot trade with yourself' };
-    const fromAccount = civ.multiplayer.accounts[auth.actor.id] || { balance: auth.actor.balance || 0 };
-    const toAccount = civ.multiplayer.accounts[to.id] || { balance: to.balance || 0 };
-    if (fromAccount.balance < amount) return { ok: false, error: 'insufficient funds' };
-    fromAccount.balance -= amount;
-    toAccount.balance += amount;
-    fromAccount.reconciledWorld = civ.worldMinutes;
-    toAccount.reconciledWorld = civ.worldMinutes;
-    auth.actor.balance = fromAccount.balance;
-    to.balance = toAccount.balance;
-    if (auth.actor.id === 'player') game.player.money = Math.max(0, game.player.money - amount);
-    if (to.id === 'player') game.player.money += amount;
-    const row = recordLedger(game, { actor: auth.actor.handle, action: 'trade', amount, memo: payload.memo || `transfer to ${to.handle}` });
-    civ.multiplayer.lastSync = Date.now();
-    return { ok: true, accepted: row, authoritative: true, balances: { [auth.actor.handle]: fromAccount.balance, [to.handle]: toAccount.balance } };
-  }
-  if (action === 'property' || action === 'contracts' || action === 'company' || action === 'research' || action === 'publish') {
+  if (action === 'trade' || action === 'property' || action === 'contracts' || action === 'company' || action === 'research' || action === 'publish') {
     const row = recordLedger(game, { actor: auth.actor.handle, action, amount: payload.amount || 0, memo: payload.memo || action });
     civ.multiplayer.lastSync = Date.now();
     return { ok: true, accepted: row, authoritative: true, note: 'Action recorded. Transport adapters can relay this ledger entry to a shared server.' };
@@ -4200,7 +3585,7 @@ export function legalPenaltyMultiplier(game, countryId = null) {
 }
 export function activeLegalDisputes(game) {
   const civ = ensureCivilization(game);
-  return civ.disputes.filter(d => ['filed', 'hearing'].includes(d.status));
+  return civ.disputes.filter(d => d.status === 'open' || d.status === 'hearing');
 }
 export function civilizationSummary(game) {
   const civ = ensureCivilization(game);
@@ -4260,6 +3645,51 @@ export function playerCredentials(game) {
 export function playerCompliance(game) {
   const civ = ensureCivilization(game);
   return { score: civ.player.compliance, records: civ.compliance.filter(c => c.subject === 'player' || c.subject === 'player-company') };
+}
+export function civCourtSnapshot(game) {
+  const civ = ensureCivilization(game);
+  return {
+    courts: civ.courts,
+    regulators: civ.regulators,
+    firms: civ.lawFirms,
+    disputes: civ.disputes.slice().sort((a, b) => (b.filedWorld || 0) - (a.filedWorld || 0)),
+    open: civ.disputes.filter(d => d.status !== 'closed').length
+  };
+}
+export function civDiplomacySnapshot(game) {
+  const civ = ensureCivilization(game);
+  const countryName = (id) => civ.countries.find(c => c.id === id)?.name || id;
+  return {
+    countries: civ.countries, blocs: civ.relations.blocs,
+    treaties: civ.relations.treaties.map(t => ({ ...t, aName: countryName(t.a), bName: countryName(t.b) })),
+    sanctions: civ.relations.sanctions.map(s => ({ ...s, aName: countryName(s.a), bName: countryName(s.b) })),
+    negotiations: civ.relations.negotiations.map(n => ({ ...n, aName: countryName(n.a), bName: countryName(n.b) }))
+  };
+}
+export function civInfrastructureSnapshot(game) {
+  const civ = ensureCivilization(game);
+  return {
+    ...civ.infrastructure,
+    activeOutages: civ.infrastructure.outages.filter(o => o.status === 'active'),
+    supply: civ.supply,
+    metrics: civ.metrics
+  };
+}
+export function civCultureSnapshot(game) {
+  const civ = ensureCivilization(game);
+  return {
+    ...civ.culture,
+    upcoming: civ.culture.events.filter(e => e.status === 'scheduled').sort((a, b) => a.world - b.world),
+    live: civ.culture.events.filter(e => e.status === 'live')
+  };
+}
+export function civHouseholdSnapshot(game) {
+  const civ = ensureCivilization(game);
+  const player = civ.households.find(h => h.player) || null;
+  const npc = civ.households.filter(h => !h.player);
+  const avgSatisfaction = npc.length ? npc.reduce((s, h) => s + h.satisfaction, 0) / npc.length : 0;
+  const medianIncome = npc.length ? npc.map(h => h.income).sort((a, b) => a - b)[Math.floor(npc.length / 2)] : 0;
+  return { player, households: npc, avgSatisfaction, medianIncome, total: civ.households.length };
 }
 export function outletFor(game, name) {
   const civ = ensureCivilization(game);
