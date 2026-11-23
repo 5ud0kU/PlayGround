@@ -45,6 +45,9 @@ import {
 } from './internet.js';
 import { devOverview, playerPublishTool, playerLabSession, playerInspectSource } from './devworld.js';
 import {
+  societyOverview, citizenProfile, contentDetail, playerPurchaseContent, playerPublishContent
+} from './society.js';
+import {
   interactionOverview, hardwareSummary, upgradeHardware, maintainHardware, HARDWARE_TIERS,
   cancelOperation, contactNpc, relationshipSummary, serverAdmin, issueInvoice, payInvoice,
   collectInvoice, placeOrder, cancelOrder, startOperation
@@ -557,7 +560,7 @@ function tickLoop() {
 function softRefresh() {
   updateClock();
   updateMonitor();
-  for (const kind of ['market', 'servers', 'cloud', 'agents', 'processes', 'profile', 'map', 'dev', 'internet', 'workstation']) {
+  for (const kind of ['market', 'servers', 'cloud', 'agents', 'processes', 'profile', 'map', 'dev', 'internet', 'workstation', 'society']) {
     const win = app.windows.get(kind);
     if (win && !win.minimized && win.render) safe(() => win.render());
   }
@@ -585,6 +588,7 @@ const WINDOW_META = {
   internet: { title: 'Internet', sub: 'architecture + ecosystem', w: 900, h: 600 },
   workstation: { title: 'Workstation', sub: 'hardware + operations + finance', w: 900, h: 600 },
   settings: { title: 'Settings', sub: 'system preferences', w: 620, h: 480 },
+  society: { title: 'Society', sub: 'autonomous inhabitants', w: 920, h: 620 },
   help: { title: 'Manual', sub: 'field guide', w: 810, h: 550 }
 };
 
@@ -3583,6 +3587,75 @@ function handleWorkClick(win, e) {
 }
 
 /* ============================================================
+   AUTONOMOUS SOCIETY
+   ============================================================ */
+const SOCIETY_TABS = [['overview','Overview'],['people','People'],['culture','Culture'],['economy','Economy'],['life','Life feed']];
+
+MOUNTS.society = function mountSociety(win) {
+  win.socTab = win.socTab || 'overview';
+  win.body.addEventListener('click', e => handleSocietyClick(win, e));
+  win.render = () => renderSociety(win);
+  renderSociety(win);
+};
+
+function renderSociety(win) {
+  const s = societyOverview(app.game);
+  const m = s.metrics;
+  if (!SOCIETY_TABS.some(t => t[0] === win.socTab)) win.socTab = 'overview';
+  const tab = win.socTab;
+  const tabs = SOCIETY_TABS.map(([id, label]) => `<button class="civ-tab ${id === tab ? 'on' : ''}" data-soc-tab="${id}">${label}</button>`).join('');
+  let content = '';
+  if (tab === 'overview') {
+    content = `<div class="civ-grid cols-4">
+      ${civStat('Population', m.population, `${m.active} detailed lives`, 'b')}
+      ${civStat('Culture', m.content, `${m.tests} real tests · ${m.reviews} reviews`, 'ok')}
+      ${civStat('Economy', fmtMoney(m.revenue), `${m.transactions} transactions`, 'ok')}
+      ${civStat('Mood', `+${m.averageHappiness}`, `stress ${m.averageStress}`, m.averageStress > 40 ? 'r' : '')}
+    </div>
+    ${civSection('How this world works', `<div class="civ-row"><div><b>Lives continue without you</b><small>Identity, emotions, needs, routines and careers persist in the shared world</small></div></div>
+      <div class="civ-row"><div><b>Content is real</b><small>Artifacts have creators, stored text or generated source, versions and availability</small></div></div>
+      <div class="civ-row"><div><b>Nothing is counted twice</b><small>Downloads, sales and reviews require recorded consumption, transaction and test events</small></div></div>`)}
+    ${civSection('Recent lives', s.events.slice(0, 12).map(e => `<div class="civ-row"><div><b>${esc(e.title)}</b><small>${esc(e.body)}</small></div><div class="civ-row-right"><span class="tag">${esc(e.category)}</span></div></div>`).join(''))}`;
+  } else if (tab === 'people') {
+    content = civSection('Inhabitants', s.citizens.slice(0, 80).map(i => {
+      const top = Object.entries(i.needs).sort((a, b) => b[1] - a[1])[0];
+      return `<div class="civ-row"><div><b>@${esc(i.handle)} · ${esc(i.name)}</b><small>${i.age} · ${esc(i.employment.role)} at ${esc(i.employment.employer)} · ${esc(i.mood)}</small></div><div class="civ-row-right">
+        <span class="tag ${i.level === 'active' ? 'g' : i.level === 'known' ? 'b' : ''}">${esc(i.level)}</span><span class="tag">${fmtMoney(i.funds)}</span><span class="tag">need ${esc(top?.[0] || '—')}</span>
+        <button class="tbtn small" data-soc-profile="${esc(i.handle)}">Profile</button>
+      </div></div>`;
+    }).join(''), `${m.population} identities`);
+  } else if (tab === 'culture') {
+    content = civSection('Created content', s.content.slice(0, 80).map(c => `<div class="civ-row"><div><b>${esc(c.title)}</b><small>${esc(c.type)} · @${esc(c.creatorHandle)} · ${esc(c.reason)} · ${esc(c.tags.join(', '))}</small></div><div class="civ-row-right">
+      <span class="tag">${fmtMoney(c.price)}</span><span class="tag">${c.usage.views} views</span><span class="tag">${c.usage.tests} tests</span>
+      <button class="tbtn small" data-soc-content="${esc(c.id)}">Open</button>
+      ${c.creatorId !== 'player-identity' ? `<button class="tbtn small primary" data-soc-buy="${esc(c.id)}">Acquire</button>` : ''}
+    </div></div>`).join('') || '<div class="empty-state">Nothing published yet.</div>', `${s.content.length} artifacts`);
+  } else if (tab === 'economy') {
+    content = civSection('Transaction ledger', s.transactions.slice(0, 60).map(t => `<div class="civ-row"><div><b>${esc(t.id)} · ${esc(t.buyerHandle)} → ${esc(t.sellerHandle)}</b><small>${esc(t.kind)} · world ${Math.round(t.world)}</small></div><div class="civ-row-right"><span class="tag ${t.amount > 0 ? 'g' : ''}">${fmtMoney(t.amount)}</span></div></div>`).join('') || '<div class="empty-state">No transactions yet.</div>', `${m.transactions} recorded`) +
+      civSection('Reviews derived from tests', s.reviews.slice(0, 40).map(r => `<div class="civ-row"><div><b>${r.rating}/5 · ${esc(r.text)}</b><small>@${esc(r.handle)} · test ${esc(r.testId)}</small></div></div>`).join(''));
+  } else {
+    content = civSection('Life events', s.events.slice(0, 80).map(e => `<div class="civ-row"><div><b>${esc(e.title)}</b><small>${esc(e.body)}</small></div><div class="civ-row-right"><span class="tag ${e.severity === 'critical' ? 'r' : ''}">${esc(e.category)}</span><span class="tag">${e.year || Math.round(e.world / 1440)}</span></div></div>`).join(''));
+  }
+  win.body.innerHTML = `<div class="civ-tabs">${tabs}</div><div class="win-scroll">${content}</div>`;
+  win.status.innerHTML = `<span>${m.population} inhabitants · ${m.active} active</span><span>${m.content} content items · ${m.transactions} transactions</span><span class="st-right"><b>${fmtMoney(m.revenue)} economy</b><span>happiness ${m.averageHappiness}</span></span>`;
+}
+
+function handleSocietyClick(win, e) {
+  const tab = e.target.closest('[data-soc-tab]');
+  if (tab) { win.socTab = tab.dataset.socTab; renderSociety(win); return; }
+  const profile = e.target.closest('[data-soc-profile]');
+  if (profile) { openWindow('terminal'); runCommand(`citizen ${profile.dataset.socProfile}`); return; }
+  const show = e.target.closest('[data-soc-content]');
+  if (show) { openWindow('terminal'); runCommand(`content show ${show.dataset.socContent}`); return; }
+  const buy = e.target.closest('[data-soc-buy]');
+  if (buy) {
+    const r = playerPurchaseContent(app.game, buy.dataset.socBuy);
+    toast(r.ok ? 'Content acquired' : 'Purchase failed', r.ok ? `${r.content.title} · transaction ${r.transaction.id}` : r.error, r.ok ? 'g' : 'r');
+    refreshUI();
+  }
+}
+
+/* ============================================================
    SETTINGS
    ============================================================ */
 function applySettings() {
@@ -3785,6 +3858,12 @@ const CMD_HELP = {
   tar: 'Create and extract virtual filesystem archives.',
   session: 'Open an additional terminal session.',
   settings: 'Read or change persistent system settings.',
+  society: 'Observe autonomous inhabitants and their activity.',
+  citizens: 'List the simulated population.',
+  citizen: 'Inspect one inhabitant’s life and decisions.',
+  culture: 'Browse content created by inhabitants.',
+  content: 'Inspect, buy, test, review or publish content.',
+  meet: 'Meet an inhabitant and form a relationship.',
   save: 'Save the persistent world.',
   reset: 'Erase the world and start over.'
 };

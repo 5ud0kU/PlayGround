@@ -1175,6 +1175,59 @@ export function playerForkProject(game, query) {
   return { ok: true, fork, project: hit.project };
 }
 
+/* ---------------- shared content creation for autonomous inhabitants ---------------- */
+export function npcCreateProject(game, npc, opts = {}) {
+  const dw = ensureDevWorld(game);
+  let dev = dw.developers.find(d => d.npcId === npc?.id);
+  if (!dev) {
+    const pseudo = {
+      id: nextId(dw, 'developer'), npcId: npc?.id || null, handle: npc?.handle || 'anonymous',
+      name: npc?.name || 'Anonymous', role: 'software developer', skill: npc?.skill || 50,
+      reputation: npc?.rep || 30, status: 'active', employment: 'independent', employerId: npc?.companyId || null,
+      languages: Object.fromEntries((npc?.interests || ['python']).slice(0, 3).map(i => [i.toLowerCase(), npc?.skill || 50])),
+      style: { indent: 4, comments: 35, naming: 'snake_case', documentation: 55, errorHandling: 55, security: 55 },
+      specialties: [], objectives: [], collaborators: [], projects: [], memory: [], decisions: 0, bugsFound: 0, bugsFixed: 0
+    };
+    if (!pseudo.languages.python) pseudo.languages.python = npc?.skill || 50;
+    dev = pseudo;
+    dw.developers.push(dev);
+    bounded(dw.developers, DEV_CAPS.developers);
+  }
+  const rng = devRng(game, 0x4e50 ^ hash32(npc?.handle || dev.handle));
+  const project = createProject(game, dw, dev, rng, { detailed: true, kind: opts.kind || 'cli' });
+  if (!project) return null;
+  if (opts.name) {
+    project.name = String(opts.name).slice(0, 60);
+    project.slug = slugify(project.name) || project.slug;
+    project.repoPath = `/srv/git/${dev.handle}/${project.slug}.git`;
+  }
+  if (opts.description) project.description = String(opts.description).slice(0, 200);
+  if (opts.language && LANGS.some(l => l.id === opts.language)) project.language = opts.language;
+  seedFiles(project, dev, rng);
+  if (opts.publish !== false) publishProject(game, dw, project);
+  remember(dev, game.worldMinutes || 0, `Created ${project.name} for ${opts.reason || 'a personal goal'}.`);
+  pushEvent(dw, { world: game.worldMinutes || 0, category: 'development', title: `${dev.handle} created ${project.name}`, body: project.description, actors: [dev.handle], targetId: project.id });
+  return project;
+}
+
+export function npcPatchProject(game, project, npc, reason = 'maintenance update') {
+  const dw = ensureDevWorld(game);
+  const rng = devRng(game, 0x9a7c ^ hash32(npc?.handle || reason));
+  if (!project.files) project.files = {};
+  const first = Object.keys(project.files).find(f => /\.(py|js|ts|c|go|rs|sh|html)$/.test(f));
+  if (first) {
+    const prefix = ['py','sh','sql'].includes(first.split('.').pop()) ? `# ${reason}\n` : `// ${reason}\n`;
+    if (!project.files[first].includes(reason)) project.files[first] = prefix + project.files[first];
+  }
+  const version = bumpVersion(project.releases.length ? project.releases[project.releases.length - 1].version : '0.1.0');
+  project.releases.push({ version, world: game.worldMinutes || 0, notes: reason, signed: false, vulnerabilities: 0 });
+  bounded(project.releases, 40);
+  commit(project, reason, [first].filter(Boolean), rng);
+  project.updatedWorld = game.worldMinutes || 0;
+  publishProject(game, dw, project);
+  return version;
+}
+
 /* ---------------- interactive player project lifecycle ---------------- */
 function playerDev(game) {
   return {
@@ -1350,7 +1403,6 @@ export function tickPlayerProjects(game, dw = ensureDevWorld(game), rng = null) 
   const mine = dw.projects.filter(p => p.ownerId === 'player-dev' && p.published);
   if (!mine.length) return events;
   for (const project of mine) {
-    project.metrics.downloads += rng.int(1, 40);
     for (const viewer of rng.picks(dw.developers, rng.int(1, 3))) {
       if (!rng.chance(.08 + (viewer.interests || []).includes('oss') ? .06 : 0)) continue;
       const roll = rng.next();
