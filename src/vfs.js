@@ -80,11 +80,9 @@ export function writeFile(root, abs, content, opts = {}) {
   return file;
 }
 
-export function readFile(root, abs, depth = 0) {
+export function readFile(root, abs) {
   const n = getNode(root, abs);
-  if (!n || n.type !== 'file') return null;
-  if (n.meta?.symlink && depth < 8) return readFile(root, resolvePath(dirname(abs), n.meta.symlink, '/'), depth + 1);
-  return n.content;
+  return n && n.type === 'file' ? n.content : null;
 }
 
 export function listDir(root, abs) {

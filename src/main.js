@@ -27,32 +27,11 @@ import {
   SHOP_ITEMS, ACHIEVEMENTS, CLOUD_PROVIDERS, CLOUD_PLANS, CONTAINER_IMAGES, AGENT_MODELS,
   AGENT_ROLES, PRODUCT_TEMPLATES
 } from './data.js';
-import {
-  civilizationSummary, civHistory, civEventList, playerCountry, playerCity, activeLegalDisputes,
-  playerProperties, playerBuyProperty, playerSellProperty, playerInsureProperty, playerRelease,
-  playerLegalAction, educationFields, researchFields
-} from './civilization.js';
-import {
-  languageFor, highlight, lint, formatCode, outline, completions, snippetsFor,
-  analyzeProject, findInProject, projectTemplates, scaffoldProject, runCommandFor,
-  testCommandFor, codingSummary, recordCoding, recordEdit
-} from './coding.js';
-import {
-  internetSummary, networkOverview, devEcosystem, aiEcosystem, securityOverview, socialOverview,
-  internetHistory, resolveDomain, webRecord, playerHardenWebsite, playerRenewCertificate, playerAttachApi,
-  playerPublishPackage, playerTrainModel, playerDeployEndpoint, playerSecurityScan,
-  playerMitigateIncident
-} from './internet.js';
-import { devOverview, playerPublishTool, playerLabSession, playerInspectSource } from './devworld.js';
-import {
-  societyOverview, citizenProfile, contentDetail, playerPurchaseContent, playerPublishContent
-} from './society.js';
-import {
-  interactionOverview, hardwareSummary, upgradeHardware, maintainHardware, HARDWARE_TIERS,
-  cancelOperation, contactNpc, relationshipSummary, serverAdmin, issueInvoice, payInvoice,
-  collectInvoice, placeOrder, cancelOrder, startOperation
-} from './interaction.js';
 import { execute, commandNames } from './shell.js';
+import {
+  civilizationSummary, validateLedger, careerSnapshot, playerProperties, civKnowledge,
+  civEventList, civHistory
+} from './civilization.js';
 
 const $ = (sel, root = document) => root.querySelector(sel);
 const $$ = (sel, root = document) => Array.from(root.querySelectorAll(sel));
@@ -560,7 +539,7 @@ function tickLoop() {
 function softRefresh() {
   updateClock();
   updateMonitor();
-  for (const kind of ['market', 'servers', 'cloud', 'agents', 'processes', 'profile', 'map', 'dev', 'internet', 'workstation', 'society']) {
+  for (const kind of ['market', 'servers', 'cloud', 'agents', 'processes', 'profile', 'map']) {
     const win = app.windows.get(kind);
     if (win && !win.minimized && win.render) safe(() => win.render());
   }
@@ -569,9 +548,6 @@ function softRefresh() {
 /* ---------------- window manager ---------------- */
 const WINDOW_META = {
   terminal: { title: 'Terminal', sub: 'operator@voidbox', w: 760, h: 450 },
-  terminal2: { title: 'Terminal 2', sub: 'operator@voidbox', w: 760, h: 450 },
-  terminal3: { title: 'Terminal 3', sub: 'operator@voidbox', w: 760, h: 450 },
-  terminal4: { title: 'Terminal 4', sub: 'operator@voidbox', w: 760, h: 450 },
   files: { title: 'Files', sub: '~/', w: 730, h: 480 },
   editor: { title: 'Editor', sub: 'untitled', w: 750, h: 510 },
   map: { title: 'Network', sub: 'live topology', w: 840, h: 530 },
@@ -582,13 +558,8 @@ const WINDOW_META = {
   cloud: { title: 'Cloud', sub: 'instances + orchestration', w: 880, h: 570 },
   agents: { title: 'Agents', sub: 'AI operations', w: 860, h: 570 },
   processes: { title: 'System', sub: 'processes', w: 770, h: 490 },
+  civilization: { title: 'World', sub: 'digital civilization', w: 900, h: 600 },
   profile: { title: 'Profile', sub: 'operator', w: 750, h: 570 },
-  civ: { title: 'Civilization', sub: 'persistent world', w: 900, h: 600 },
-  dev: { title: 'Developers', sub: 'autonomous software economy', w: 900, h: 600 },
-  internet: { title: 'Internet', sub: 'architecture + ecosystem', w: 900, h: 600 },
-  workstation: { title: 'Workstation', sub: 'hardware + operations + finance', w: 900, h: 600 },
-  settings: { title: 'Settings', sub: 'system preferences', w: 620, h: 480 },
-  society: { title: 'Society', sub: 'autonomous inhabitants', w: 920, h: 620 },
   help: { title: 'Manual', sub: 'field guide', w: 810, h: 550 }
 };
 
@@ -770,10 +741,54 @@ function updateDock() {
   for (const b of $$('.dock-item')) b.classList.toggle('active', active.has(b.dataset.open));
 }
 
+function scrollSnapshot(root) {
+  const out = [];
+  if (!root) return out;
+  for (const el of root.querySelectorAll('*')) {
+    if (el.classList?.contains('tline')) continue;
+    const scrollableY = el.scrollHeight > el.clientHeight + 1;
+    const scrollableX = el.scrollWidth > el.clientWidth + 1;
+    if (!scrollableY && !scrollableX) continue;
+    const style = getComputedStyle(el);
+    const autoY = /(auto|scroll)/.test(style.overflowY);
+    const autoX = /(auto|scroll)/.test(style.overflowX);
+    if (!autoY && !autoX) continue;
+    const path = [];
+    let cur = el;
+    while (cur && cur !== root) {
+      const parent = cur.parentElement;
+      const index = parent ? Array.prototype.indexOf.call(parent.children, cur) + 1 : 1;
+      path.unshift(`${cur.tagName.toLowerCase()}:nth-child(${index})`);
+      cur = parent;
+    }
+    if (!path.length) continue;
+    out.push({ selector: path.join('>'), top: el.scrollTop, left: el.scrollLeft });
+  }
+  return out;
+}
+
+function restoreScroll(root, snapshot) {
+  if (!root) return;
+  for (const item of snapshot) {
+    try {
+      const el = root.querySelector(item.selector);
+      if (!el) continue;
+      if (el.scrollTop !== item.top) el.scrollTop = item.top;
+      if (el.scrollLeft !== item.left) el.scrollLeft = item.left;
+    } catch (e) {
+      // A structural render may invalidate a saved path; skip that container.
+    }
+  }
+}
+
 function refreshUI() {
   updateAll();
   for (const win of app.windows.values()) {
-    if (win.render && !win.minimized) safe(() => win.render());
+    if (win.render && !win.minimized) {
+      const scroll = scrollSnapshot(win.body);
+      safe(() => win.render());
+      restoreScroll(win.body, scroll);
+    }
   }
   scheduleSave();
 }
@@ -806,6 +821,7 @@ MOUNTS.terminal = function mountTerminal(win) {
       <button class="tbtn" data-term-cmd="mail">mail</button>
       <button class="tbtn" data-term-cmd="map">map</button>
       <button class="tbtn" data-term-cmd="clear">clear</button>
+      <button class="tbtn" data-term-bottom title="Jump to latest output">↓ bottom</button>
       <div class="right"><span class="conn" data-term-conn>local</span><span data-term-cwd>~</span><span>bash</span><span data-term-hist>0 cmd</span></div>
     </div>
     <div class="term-body">
@@ -889,6 +905,12 @@ MOUNTS.terminal = function mountTerminal(win) {
 
   scroll.addEventListener('click', () => input.focus());
   win.el.addEventListener('click', e => {
+    const bottom = e.target.closest('[data-term-bottom]');
+    if (bottom) {
+      scroll.scrollTop = scroll.scrollHeight;
+      input.focus();
+      return;
+    }
     const b = e.target.closest('[data-term-cmd]');
     if (b) submitLine(term, b.dataset.termCmd);
   });
@@ -897,12 +919,8 @@ MOUNTS.terminal = function mountTerminal(win) {
   updateTerminalChrome(win);
   setTimeout(() => input.focus(), 80);
 };
-MOUNTS.terminal2 = MOUNTS.terminal;
-MOUNTS.terminal3 = MOUNTS.terminal;
-MOUNTS.terminal4 = MOUNTS.terminal;
 
 function appendTermLine(scroll, text, cls = '') {
-  const nearBottom = scroll.scrollHeight - scroll.scrollTop - scroll.clientHeight < 48;
   const lines = String(text ?? '').split('\n');
   for (const line of lines) {
     const div = document.createElement('div');
@@ -911,7 +929,6 @@ function appendTermLine(scroll, text, cls = '') {
     scroll.appendChild(div);
   }
   while (scroll.children.length > 2200) scroll.firstElementChild.remove();
-  if (nearBottom) scroll.scrollTop = scroll.scrollHeight;
 }
 
 function promptHTML(term) {
@@ -927,7 +944,6 @@ function appendEcho(term, line, mask = false) {
   div.className = 'tline';
   div.innerHTML = promptHTML(term) + esc(mask ? '•'.repeat(Math.max(1, line.length)) : line);
   term.scroll.appendChild(div);
-  term.scroll.scrollTop = term.scroll.scrollHeight;
 }
 
 function updateTerminalChrome(win) {
@@ -974,7 +990,6 @@ async function submitLine(term, line) {
   if (term.input) {
     term.input.disabled = false;
     term.input.focus();
-    term.scroll.scrollTop = term.scroll.scrollHeight;
   }
 }
 
@@ -1002,7 +1017,6 @@ function completeInput(term) {
     return;
   }
   appendTermLine(term.scroll, matches.join('   '), 'dim');
-  term.scroll.scrollTop = term.scroll.scrollHeight;
 }
 
 function printBanner(term) {
@@ -1210,7 +1224,7 @@ function filesAction(win, action) {
    EDITOR
    ============================================================ */
 MOUNTS.editor = function mountEditor(win) {
-  win.state = { files: [], active: null, sideTab: 'outline', outline: [], problems: [] };
+  win.state = { files: [], active: null };
   win.render = () => renderEditor(win);
   win.onParams = params => { if (params.path) openEditorPath(win, params.path); else renderEditor(win); };
   win.onClose = () => {
@@ -1253,31 +1267,21 @@ function renderEditor(win) {
   if (!win.ed) {
     win.body.innerHTML = `<div class="editor-layout">
       <div class="editor-tabs" data-ed-tabs></div>
-      <div class="app-toolbar ed-toolbar">
+      <div class="app-toolbar">
         <button class="tbtn small" data-ed-action="new">${ic('plus')} New</button>
         <button class="tbtn small primary" data-ed-action="save">${ic('save')} Save</button>
         <button class="tbtn small" data-ed-action="saveas">Save As</button>
-        <button class="tbtn small" data-ed-action="format">Format</button>
-        <button class="tbtn small" data-ed-action="lint">Lint</button>
         <button class="tbtn small" data-ed-action="run">Run</button>
-        <button class="tbtn small" data-ed-action="test">Test</button>
         <span class="spacer"></span>
-        <button class="tbtn small" data-ed-action="project">Project</button>
         <button class="tbtn small" data-ed-action="terminal">Terminal</button>
         <button class="tbtn small danger" data-ed-action="close">Close buffer</button>
       </div>
-      <div class="editor-main">
-        <div class="line-nums" data-ed-lines></div>
-        <div class="editor-area"><pre class="editor-highlight" data-ed-highlight aria-hidden="true"></pre><textarea data-ed-area spellcheck="false" wrap="off"></textarea></div>
-        <aside class="editor-side" data-ed-side></aside>
-      </div>
+      <div class="editor-main"><div class="line-nums" data-ed-lines></div><div class="editor-area"><textarea data-ed-area spellcheck="false" wrap="off"></textarea></div></div>
     </div>`;
     const ed = {
       tabs: win.body.querySelector('[data-ed-tabs]'),
       area: win.body.querySelector('[data-ed-area]'),
-      lines: win.body.querySelector('[data-ed-lines]'),
-      highlight: win.body.querySelector('[data-ed-highlight]'),
-      side: win.body.querySelector('[data-ed-side]')
+      lines: win.body.querySelector('[data-ed-lines]')
     };
     win.ed = ed;
     ed.area.addEventListener('input', () => {
@@ -1286,35 +1290,8 @@ function renderEditor(win) {
       f.content = ed.area.value;
       f.dirty = true;
       syncEditorLines(win);
-      syncEditorOverlay(win);
-      refreshEditorAnalysis(win);
       renderEditorTabs(win);
       updateEditorStatus(win);
-    });
-    ed.area.addEventListener('scroll', () => {
-      ed.highlight.scrollTop = ed.area.scrollTop;
-      ed.highlight.scrollLeft = ed.area.scrollLeft;
-      ed.lines.scrollTop = ed.area.scrollTop;
-    });
-    ed.side.addEventListener('click', e => {
-      const tab = e.target.closest('[data-ed-side-tab]');
-      if (tab) { st.sideTab = tab.dataset.edSideTab; renderEditorSide(win); return; }
-      const jump = e.target.closest('[data-ed-jump]');
-      if (jump) {
-        const line = Number(jump.dataset.edJump) || 1;
-        const lines = ed.area.value.split('\n');
-        const pos = lines.slice(0, line - 1).reduce((s, l) => s + l.length + 1, 0);
-        ed.area.focus();
-        ed.area.setSelectionRange(pos, pos);
-        const lineHeight = parseFloat(getComputedStyle(ed.area).lineHeight) || 18;
-        ed.area.scrollTop = Math.max(0, (line - 6) * lineHeight);
-        ed.highlight.scrollTop = ed.area.scrollTop;
-        ed.lines.scrollTop = ed.area.scrollTop;
-        updateEditorStatus(win);
-        return;
-      }
-      const snip = e.target.closest('[data-ed-snippet]');
-      if (snip) { applyEditorSnippet(win, snip.dataset.edSnippet); }
     });
     ed.area.addEventListener('keydown', e => {
       if (e.key === 'Tab') {
@@ -1339,91 +1316,8 @@ function renderEditor(win) {
   }
   renderEditorTabs(win);
   syncEditorLines(win);
-  syncEditorOverlay(win);
-  refreshEditorAnalysis(win);
   updateEditorStatus(win);
   setWindowMeta(win, 'Editor', basename(active.path));
-}
-
-function activeEditorFile(win) {
-  return (win.state.files || []).find(f => f.path === win.state.active) || null;
-}
-function editorLanguage(file) {
-  return file ? languageFor(file.path, file.content) : languageFor('text');
-}
-
-function syncEditorOverlay(win) {
-  const f = activeEditorFile(win);
-  if (!f || !win.ed?.highlight) return;
-  const lang = editorLanguage(f);
-  win.ed.highlight.innerHTML = highlight(f.content, lang.id) + '\n';
-  win.ed.highlight.scrollTop = win.ed.area.scrollTop;
-  win.ed.highlight.scrollLeft = win.ed.area.scrollLeft;
-}
-
-function refreshEditorAnalysis(win) {
-  const f = activeEditorFile(win);
-  if (!f) return;
-  const lang = editorLanguage(f);
-  win.state.outline = outline(f.content, lang.id);
-  win.state.problems = f.content.length > 180000 ? [] : lint(f.content, lang.id, f.path);
-  renderEditorSide(win);
-}
-
-function renderEditorSide(win) {
-  if (!win.ed?.side) return;
-  const st = win.state;
-  const f = activeEditorFile(win);
-  const lang = f ? editorLanguage(f) : null;
-  const tabs = [['outline','Outline'],['problems','Problems'],['snippets','Snippets'],['project','Project']];
-  let body = '';
-  if (!f) body = '<div class="ed-side-empty">Open a file to see its structure.</div>';
-  else if (st.sideTab === 'outline') {
-    body = st.outline.length
-      ? st.outline.slice(0, 160).map(s => `<button class="ed-symbol" data-ed-jump="${s.line}" title="${esc(s.kind)} · line ${s.line}"><span class="ed-kind">${esc(s.kind)}</span><span>${esc(s.name)}</span><small>${s.line}</small></button>`).join('')
-      : '<div class="ed-side-empty">No symbols detected in this file.</div>';
-  } else if (st.sideTab === 'problems') {
-    const errors = st.problems.filter(p => p.severity === 'error').length;
-    const warnings = st.problems.filter(p => p.severity === 'warning').length;
-    body = `<div class="ed-problem-summary">${errors} errors · ${warnings} warnings · ${st.problems.length} total</div>` +
-      (st.problems.length ? st.problems.slice(0, 120).map(p => `<button class="ed-problem ${esc(p.severity)}" data-ed-jump="${p.line}" title="${esc(p.rule)}"><span>${esc(p.severity === 'error' ? '✕' : p.severity === 'warning' ? '!' : 'i')}</span><b>${esc(p.message)}</b><small>${p.line}:${p.col}</small></button>`).join('') : '<div class="ed-side-empty">No static findings. The source parses cleanly.</div>');
-  } else if (st.sideTab === 'snippets') {
-    body = snippetsFor(lang?.id || 'text').map(s => `<button class="ed-snippet" data-ed-snippet="${esc(s.body)}" title="Insert ${esc(s.label)}"><b>${esc(s.label)}</b><span>${esc(s.detail)}</span></button>`).join('') || '<div class="ed-side-empty">No snippets for this language.</div>';
-  } else {
-    const root = editorProjectRoot(f.path);
-    const report = analyzeProject(app.game.fs, root);
-    const level = codingSummary(app.game);
-    body = `<div class="ed-project-head"><b>${esc(basename(root))}</b><span>${report.files} files · ${fmtNum(report.lines)} lines</span></div>
-      <div class="ed-project-health"><span>Project health</span><b>${report.health}/100</b><div class="bar ${report.health < 45 ? 'red' : report.health < 70 ? 'amber' : ''}"><i style="width:${report.health}%"></i></div></div>
-      <div class="ed-project-meta"><span>Languages</span>${report.languages.slice(0, 4).map(l => `<span>${esc(l.name)} ${l.files}</span>`).join('') || '<span>none</span>'}</div>
-      <div class="ed-project-meta"><span>Tests</span><b>${report.hasTests ? 'yes' : 'no'}</b><span>Git</span><b>${report.hasGit ? 'yes' : 'no'}</b><span>TODO</span><b>${report.todos}</b></div>
-      <div class="ed-project-checks">${report.checks.slice(0, 5).map(c => `<div>· ${esc(c)}</div>`).join('') || '<div>No immediate recommendations.</div>'}</div>
-      <div class="ed-project-level">Coding level ${level.level} · ${level.xp} XP · streak ${level.streak}</div>`;
-  }
-  win.ed.side.innerHTML = `<div class="ed-side-tabs">${tabs.map(([id, label]) => `<button data-ed-side-tab="${id}" class="${st.sideTab === id ? 'on' : ''}">${label}</button>`).join('')}</div><div class="ed-side-body">${body}</div>`;
-}
-
-function editorProjectRoot(path) {
-  let dir = dirname(path);
-  for (let i = 0; i < 5 && dir && dir !== '/'; i++) {
-    if (getNode(app.game.fs, joinPath(dir, '.git/repo.json')) || getNode(app.game.fs, joinPath(dir, 'package.json')) || getNode(app.game.fs, joinPath(dir, 'Makefile')) || getNode(app.game.fs, joinPath(dir, 'requirements.txt'))) return dir;
-    dir = dirname(dir);
-  }
-  return dirname(path) || HOME;
-}
-
-function applyEditorSnippet(win, body) {
-  const ed = win.ed;
-  if (!ed) return;
-  const text = String(body || '');
-  const pos = ed.area.selectionStart;
-  const end = ed.area.selectionEnd;
-  const caret = text.indexOf('|');
-  const insert = caret >= 0 ? text.slice(0, caret) + text.slice(caret + 1) : text;
-  ed.area.setRangeText(insert, pos, end, 'end');
-  ed.area.dispatchEvent(new Event('input'));
-  if (caret >= 0) ed.area.setSelectionRange(pos + caret, pos + caret);
-  ed.area.focus();
 }
 
 function renderEditorTabs(win) {
@@ -1457,11 +1351,8 @@ function updateEditorStatus(win) {
     col = lines[lines.length - 1].length + 1;
   }
   const lines = f.content.split('\n').length;
-  const lang = editorLanguage(f);
-  const problems = win.state.problems || [];
-  const errors = problems.filter(p => p.severity === 'error').length;
-  win.status.innerHTML = `<span>${esc(f.path)}</span><span>${esc(lang.name)} · ${lines} lines · ${f.content.length} chars</span>
-    <span class="st-right"><span class="${errors ? 'status-err' : ''}">${errors ? errors + ' errors' : problems.length + ' findings'}</span><b>Ln ${ln}, Col ${col}</b><span>${f.dirty ? 'unsaved' : 'saved'}</span><span>UTF-8</span></span>`;
+  win.status.innerHTML = `<span>${esc(f.path)}</span><span>${lines} lines · ${f.content.length} chars</span>
+    <span class="st-right"><b>Ln ${ln}, Col ${col}</b><span>${f.dirty ? 'unsaved' : 'saved'}</span><span>UTF-8</span></span>`;
 }
 
 function editorAction(win, action) {
@@ -1477,7 +1368,6 @@ function editorAction(win, action) {
         const abs = vals.path.startsWith('/') ? vals.path : resolvePath(HOME, vals.path);
         const old = readFile(app.game.fs, abs);
         writeFile(app.game.fs, abs, f.content, { owner: 'operator' });
-        recordEdit(app.game, abs, old || '', f.content);
         const delta = Math.max(0, f.content.split('\n').length - (old == null ? 0 : old.split('\n').length));
         app.game.stats.codeLines += delta;
         f.path = abs; f.dirty = false; st.active = abs;
@@ -1489,36 +1379,11 @@ function editorAction(win, action) {
   }
   if (action === 'close') { closeEditorBuffer(win, st.active); return; }
   if (action === 'terminal') { runCommand(`cd "${dirname(st.active || HOME)}"`); return; }
-  if (action === 'format') {
-    if (!f) return;
-    const formatted = formatCode(f.content, editorLanguage(f).id);
-    if (formatted === f.content) { toast('Formatted', 'Already in canonical form.', 'b'); return; }
-    recordEdit(app.game, f.path, f.content, formatted);
-    f.content = formatted; f.dirty = true;
-    if (win.ed.area.dataset.path === f.path) win.ed.area.value = formatted;
-    syncEditorLines(win); syncEditorOverlay(win); refreshEditorAnalysis(win); updateEditorStatus(win);
-    toast('Formatted', basename(f.path), 'g');
-    return;
-  }
-  if (action === 'lint') { st.sideTab = 'problems'; refreshEditorAnalysis(win); return; }
-  if (action === 'outline') { st.sideTab = 'outline'; renderEditorSide(win); return; }
-  if (action === 'snippets') { st.sideTab = 'snippets'; renderEditorSide(win); return; }
-  if (action === 'project') { st.sideTab = 'project'; renderEditorSide(win); return; }
-  if (action === 'test') {
-    if (!f) return;
-    const cmd = testCommandFor(f.path, editorLanguage(f).id);
-    if (!cmd) { toast('No test runner', 'This language has no simulated test command.', 'a'); return; }
-    recordCoding(app.game, 'test', 1, f.path);
-    runCommand(cmd);
-    return;
-  }
   if (action === 'run') {
     if (!f) return;
-    const spec = runCommandFor(f.path, editorLanguage(f).id);
-    recordCoding(app.game, spec.kind === 'build' ? 'compile' : 'run', 1, f.path);
-    if (spec.kind === 'preview') openWindow('browser', { url: 'home' });
-    else if (spec.command) runCommand(spec.command);
-    else toast('No runtime', 'This file type has no simulated runtime.', 'a');
+    const ext = f.path.split('.').pop().toLowerCase();
+    const cmd = ext === 'py' ? `python3 "${f.path}"` : ext === 'sh' ? `bash "${f.path}"` : ext === 'c' ? `gcc "${f.path}" -o /tmp/a.out && /tmp/a.out` : ext === 'html' ? null : `cat "${f.path}"`;
+    if (cmd) runCommand(cmd); else openWindow('browser', { url: 'home' });
   }
 }
 
@@ -1538,7 +1403,6 @@ function saveActiveBuffer(win) {
   if (!f) return;
   const old = readFile(app.game.fs, f.path);
   writeFile(app.game.fs, f.path, f.content, { owner: 'operator' });
-  recordEdit(app.game, f.path, old || '', f.content);
   const delta = Math.max(0, f.content.split('\n').length - (old == null ? 0 : old.split('\n').length));
   app.game.stats.codeLines += delta;
   f.dirty = false;
@@ -1813,61 +1677,32 @@ function renderMapSide(win) {
    BROWSER
    ============================================================ */
 MOUNTS.browser = function mountBrowser(win) {
-  if (!app.game.browser) app.game.browser = { bookmarks: [], history: [], cookies: {} };
-  const start = win.params.url || 'portal.nullnet';
-  win.state = { url: start, history: [], index: -1, query: '', tabs: [{ url: start }], activeTab: 0, showSource: false, devtools: false };
+  win.state = { url: win.params.url || 'portal.nullnet', history: [], index: -1, query: '' };
   win.body.innerHTML = `<div class="browser-layout">
     <div class="browser-bar">
       <button class="tbtn small" data-browser="back" title="Back">←</button>
       <button class="tbtn small" data-browser="forward" title="Forward">→</button>
       <button class="tbtn small" data-browser="reload" title="Reload">⟳</button>
-      <button class="tbtn small" data-browser="newtab" title="New tab">+</button>
       <div class="browser-url">${ic('globe')}<input data-browser-url autocomplete="off" spellcheck="false" aria-label="Address"></div>
       <button class="tbtn small" data-browser="go">Go</button>
-      <button class="tbtn small" data-browser="bookmark" title="Bookmark this page">★</button>
-      <button class="tbtn small" data-browser="source" title="View page source">&lt;/&gt;</button>
-      <button class="tbtn small" data-browser="devtools" title="Developer tools">{ }</button>
       <button class="tbtn small" data-browser="home">Home</button>
     </div>
-    <div class="browser-tabs" data-browser-tabs></div>
     <div class="browser-view" data-browser-view></div>
   </div>`;
   const input = win.body.querySelector('[data-browser-url]');
   const view = win.body.querySelector('[data-browser-view]');
-  win.browser = { input, view, tabs: win.body.querySelector('[data-browser-tabs]') };
-  win.render = () => { if (win.browser) { win.browser.input.value = win.state.url === 'home' ? '' : win.state.url; renderBrowser(win); } };
+  win.browser = { input, view };
+  win.render = () => { if (win.browser) { win.browser.input.value = win.state.url === 'home' ? '' : win.state.url; updateBrowserStatus(win); } };
   win.onParams = params => { if (params.url) navigateBrowser(win, params.url, true); };
   win.body.querySelector('.browser-bar').addEventListener('click', e => {
     const b = e.target.closest('[data-browser]');
     if (!b) return;
     const a = b.dataset.browser;
-    if (a === 'back') { if (win.state.index > 0) { win.state.index--; win.state.url = win.state.history[win.state.index]; switchTabUrl(win, win.state.url); renderBrowser(win); } }
-    else if (a === 'forward') { if (win.state.index < win.state.history.length - 1) { win.state.index++; win.state.url = win.state.history[win.state.index]; switchTabUrl(win, win.state.url); renderBrowser(win); } }
+    if (a === 'back') { if (win.state.index > 0) { win.state.index--; win.state.url = win.state.history[win.state.index]; renderBrowser(win); } }
+    else if (a === 'forward') { if (win.state.index < win.state.history.length - 1) { win.state.index++; win.state.url = win.state.history[win.state.index]; renderBrowser(win); } }
     else if (a === 'reload') renderBrowser(win);
-    else if (a === 'newtab') { win.state.tabs.push({ url: 'home' }); win.state.activeTab = win.state.tabs.length - 1; win.state.url = 'home'; win.state.showSource = false; renderBrowser(win); }
-    else if (a === 'bookmark') {
-      const bookmarks = app.game.browser.bookmarks;
-      if (!bookmarks.includes(win.state.url)) { bookmarks.push(win.state.url); toast('Bookmark added', win.state.url, 'g'); }
-      else { app.game.browser.bookmarks = bookmarks.filter(bm => bm !== win.state.url); toast('Bookmark removed', win.state.url, 'a'); }
-      renderBrowser(win);
-    } else if (a === 'source') { win.state.showSource = !win.state.showSource; renderBrowser(win); }
-    else if (a === 'devtools') { win.state.devtools = !win.state.devtools; renderBrowser(win); }
     else if (a === 'home') navigateBrowser(win, 'home', true);
     else if (a === 'go') navigateBrowser(win, input.value, true);
-  });
-  win.browser.tabs.addEventListener('click', e => {
-    const tab = e.target.closest('[data-browser-tab]');
-    if (!tab) return;
-    const idx = Number(tab.dataset.browserTab);
-    const close = e.target.closest('[data-browser-close]');
-    if (close) {
-      if (win.state.tabs.length <= 1) return;
-      win.state.tabs.splice(idx, 1);
-      if (win.state.activeTab >= win.state.tabs.length) win.state.activeTab = win.state.tabs.length - 1;
-    } else win.state.activeTab = idx;
-    win.state.url = win.state.tabs[win.state.activeTab]?.url || 'home';
-    win.state.showSource = false;
-    renderBrowser(win);
   });
   input.addEventListener('keydown', e => {
     if (e.key === 'Enter') { e.preventDefault(); navigateBrowser(win, input.value, true); }
@@ -1908,27 +1743,15 @@ MOUNTS.browser = function mountBrowser(win) {
   navigateBrowser(win, win.state.url, true);
 };
 
-function switchTabUrl(win, url) {
-  if (win.state.tabs[win.state.activeTab]) win.state.tabs[win.state.activeTab].url = url;
-}
 function navigateBrowser(win, url, push = true) {
   let u = String(url || '').trim().toLowerCase();
   u = u.replace(/^https?:\/\//, '').replace(/\/+$/, '');
   if (!u || u === 'about:home' || u === 'start') u = 'home';
   win.state.url = u;
-  switchTabUrl(win, u);
-  win.state.showSource = false;
   if (push) {
     win.state.history = win.state.history.slice(0, win.state.index + 1);
     if (win.state.history[win.state.history.length - 1] !== u) win.state.history.push(u);
     win.state.index = win.state.history.length - 1;
-  }
-  if (u !== 'home' && app.game.browser) {
-    if (!app.game.browser.history.includes(u)) app.game.browser.history.push(u);
-    if (app.game.browser.history.length > 120) app.game.browser.history.shift();
-    app.game.browser.cookies[u] = { visits: (app.game.browser.cookies[u]?.visits || 0) + 1, lastWorld: app.game.worldMinutes };
-    const site = getSite(app.game, u);
-    if (site) site.visits = (site.visits || 0) + 1;
   }
   if (win.browser) win.browser.input.value = u === 'home' ? '' : u;
   renderBrowser(win);
@@ -1936,11 +1759,8 @@ function navigateBrowser(win, url, push = true) {
 
 function renderBrowser(win) {
   if (!win.browser) return;
-  if (win.browser.tabs) {
-    win.browser.tabs.innerHTML = win.state.tabs.map((tab, i) => `<button class="browser-tab ${i === win.state.activeTab ? 'on' : ''}" data-browser-tab="${i}"><span>${esc(tab.url === 'home' ? 'home' : tab.url)}</span><b data-browser-close="1">×</b></button>`).join('');
-  }
   const view = win.browser.view;
-  view.innerHTML = renderBrowserPage(win) + (win.state.devtools ? browserDevtools(win) : '');
+  view.innerHTML = renderBrowserPage(win);
   updateBrowserStatus(win);
 }
 
@@ -1958,12 +1778,6 @@ function renderBrowserPage(win) {
   const u = win.state.url;
   if (u === 'home') return browserHome();
   const site = getSite(g, u);
-  if (win.state.showSource) {
-    const source = site
-      ? `<!doctype html>\n<html lang="en">\n<head>\n  <meta charset="utf-8">\n  <title>${esc(site.title)}</title>\n  <link rel="stylesheet" href="/styles.css">\n</head>\n<body>\n  <main data-site="${esc(site.domain)}">\n    <h1>${esc(site.title)}</h1>\n    <p>${esc(site.desc)}</p>\n${(site.sections || []).map(s => `    <section><h2>${esc(s.h)}</h2><p>${esc(s.p)}</p></section>`).join('\n')}\n  </main>\n  <script src="/app.js"></script>\n</body>\n</html>`
-      : `<!doctype html>\n<html><head><title>404</title></head><body><h1>No such site</h1></body></html>`;
-    return `<div class="browser-source"><div class="devtools-head">PAGE SOURCE <span>${esc(u)}</span></div><pre>${esc(source)}</pre></div>`;
-  }
   const forum = g.forums.find(f => f.domain === u);
   if (!site && forum) return browserForum(win, forum, null);
   if (!site) return browserError(u, 'The domain does not resolve to an indexed site. The network is not the web; not everything is public.');
@@ -1981,28 +1795,6 @@ function renderBrowserPage(win) {
   body.push(`<div class="site-list">${links}</div>`);
   body.push(`<div class="site-footer"><span>${esc(site.domain)}</span><span>served from ${server ? esc(server.ip) : 'unknown'} · ${fmtNum(site.visits)} visits</span></div>`);
   return `<div class="site-page">${body.join('')}</div>`;
-}
-
-function browserDevtools(win) {
-  const g = app.game;
-  const u = win.state.url;
-  const site = getSite(g, u);
-  const server = site ? serverOfSite(site) : null;
-  const record = site ? webRecord(g, u)?.record : null;
-  const cert = site ? (g.internet?.certs || []).find(c => c.siteId === site.id) : null;
-  return `<div class="browser-devtools">
-    <div class="devtools-head">DEVELOPER TOOLS <span>${esc(u)}</span></div>
-    <div class="devtools-grid">
-      <div><b>DNS</b><span>${record?.dns?.a?.join(', ') || (server ? server.ip : 'unresolved')}</span></div>
-      <div><b>TLS</b><span>${record?.tls?.enabled ? `${esc(record.tls.version)} · ${esc(record.tls.issuer)}` : 'none'}</span></div>
-      <div><b>Server</b><span>${server ? `${esc(server.host)} (${esc(server.ip)})` : '—'}</span></div>
-      <div><b>Stack</b><span>${record?.stack?.join(', ') || esc(site?.tech || '—')}</span></div>
-      <div><b>Status</b><span>${record?.status || (site ? site.status : '—')} · ${Math.round(record?.availability || 100)}% uptime</span></div>
-      <div><b>Certificate</b><span>${cert ? `${esc(cert.status)} · ${esc(cert.tlsVersion)}` : '—'}</span></div>
-      <div><b>Cookies</b><span>${g.browser?.cookies?.[u]?.visits || 0} visits recorded</span></div>
-      <div><b>Bookmarked</b><span>${g.browser?.bookmarks?.includes(u) ? 'yes' : 'no'}</span></div>
-    </div>
-  </div>`;
 }
 
 function browserHome() {
@@ -2023,8 +1815,6 @@ function browserHome() {
     <div class="site-hero"><div class="site-kicker">PUBLIC NETWORK</div><h1>The network is a population.</h1>
       <p>Not a search engine. A directory of places that still answer. Type a domain above, or start with one of these.</p></div>
     <div class="site-grid">${links.map(([u, t, d]) => `<div class="site-card"><div class="mini">${esc(u)}</div><h3><a href="#" data-nav="${esc(u)}">${esc(t)}</a></h3><p>${esc(d)}</p></div>`).join('')}</div>
-    ${(g.browser?.bookmarks || []).length ? `<div class="site-card" style="margin-bottom:10px"><div class="mini">BOOKMARKS</div><div class="site-list">${g.browser.bookmarks.map(bm => `<div class="site-list-item"><span class="n">★</span><div><b><a href="#" data-nav="${esc(bm)}">${esc(bm)}</a></b></div></div>`).join('')}</div></div>` : ''}
-    ${(g.browser?.history || []).length ? `<div class="site-card" style="margin-bottom:10px"><div class="mini">RECENT HISTORY</div><div class="site-list">${g.browser.history.slice(-8).reverse().map(h => `<div class="site-list-item"><span class="n">→</span><div><b><a href="#" data-nav="${esc(h)}">${esc(h)}</a></b></div></div>`).join('')}</div></div>` : ''}
     <div class="site-list">
       <div class="site-list-item"><span class="n">01</span><div><b>Tip</b><small>Use the terminal for nmap, whois, curl, and ssh. The browser is for what the network chooses to publish.</small></div></div>
       <div class="site-list-item"><span class="n">02</span><div><b>Warning</b><small>Everything here is fictional and simulated. No real network is reachable.</small></div></div>
@@ -2911,788 +2701,144 @@ function profileAction(win, action) {
 }
 
 /* ============================================================
-   CIVILIZATION DASHBOARD
+   WORLD / DIGITAL CIVILIZATION
    ============================================================ */
-const CIV_TABS = [
-  ['overview', 'Overview'], ['world', 'World'], ['society', 'Society'],
-  ['research', 'Research'], ['technology', 'Technology'], ['media', 'Media'],
-  ['culture', 'Culture'], ['law', 'Law'], ['property', 'Property'], ['history', 'History']
-];
+MOUNTS.civilization = function mountCivilization(win) {
+  win.render = () => renderCivilization(win);
+  renderCivilization(win);
+};
 
-function civStat(label, value, note = '', cls = '') {
-  return `<div class="civ-stat ${cls}"><span>${esc(label)}</span><b>${esc(String(value))}</b>${note ? `<small>${esc(note)}</small>` : ''}</div>`;
+function civRow(label, value, color = '') {
+  return `<div style="display:flex;justify-content:space-between;gap:8px;padding:3px 0;border-bottom:1px solid #161e24;font-family:var(--mono);font-size:8.5px"><span style="color:var(--dim)">${esc(label)}</span><b style="color:${color || 'var(--text2)'};text-align:right">${value}</b></div>`;
 }
-function civMeter(label, value, note = '') {
-  const v = clamp(Number(value) || 0, 0, 100);
-  return `<div class="civ-meter"><span>${esc(label)}</span><div class="bar ${v < 34 ? 'red' : v < 55 ? 'amber' : ''}"><i style="width:${v}%"></i></div><b>${Math.round(v)}</b>${note ? `<small>${esc(note)}</small>` : ''}</div>`;
+function civNeed(label, value) {
+  const v = Math.round(clamp(Number(value) || 0, 0, 100));
+  return `<div style="display:flex;align-items:center;gap:6px;padding:2px 0;font-family:var(--mono);font-size:8px"><span style="width:78px;color:var(--dim)">${esc(label)}</span><div class="bar ${v < 35 ? 'red' : v < 55 ? 'amber' : ''}" style="flex:1"><i style="width:${v}%"></i></div><b style="width:24px;text-align:right">${v}</b></div>`;
 }
-function civSection(title, body, note = '') {
-  if (!body) return '';
-  return `<section class="civ-section"><div class="civ-section-head"><h3>${esc(title)}</h3>${note ? `<span>${esc(note)}</span>` : ''}</div>${body}</section>`;
-}
-function civRow(left, right, cls = '') {
-  return `<div class="civ-row ${cls}"><div>${left}</div><div class="civ-row-right">${right}</div></div>`;
-}
-
-function renderCiv(win) {
+function renderCivilization(win) {
   const g = app.game;
   const s = civilizationSummary(g);
-  const m = s.metrics;
   const civ = s.civ;
-  if (!CIV_TABS.some(t => t[0] === win.civTab)) win.civTab = 'overview';
-  const tab = win.civTab;
-  const tabs = CIV_TABS.map(([id, label]) => `<button class="civ-tab ${id === tab ? 'on' : ''}" data-civ-tab="${id}">${label}</button>`).join('');
-  let content = '';
-  if (tab === 'overview') content = civOverview(g, s, m, civ);
-  else if (tab === 'world') content = civWorld(civ);
-  else if (tab === 'society') content = civSocietyView(g, civ);
-  else if (tab === 'research') content = civResearchView(g, civ);
-  else if (tab === 'technology') content = civTechView(civ);
-  else if (tab === 'media') content = civMediaView(civ);
-  else if (tab === 'culture') content = civCultureView(civ);
-  else if (tab === 'law') content = civLawView(g, civ);
-  else if (tab === 'property') content = civPropertyView(g, civ);
-  else content = civHistoryView(g);
-  win.body.innerHTML = `<div class="civ-app"><div class="civ-tabs">${tabs}</div><div class="civ-content">${content}</div></div>`;
-  win.status.innerHTML = `<span>${esc(s.country?.name || 'world')} · ${esc(s.city?.name || '')}</span><span>year ${m.year}</span><span class="st-right"><b>${m.civilizationIndex}/100</b><span>${fmtNum(civ.countries.length)} countries · ${fmtNum(civ.society.households.length)} households</span></span>`;
-}
-
-function civOverview(g, s, m, civ) {
-  const events = civ.events.filter(e => e.status === 'active').slice(0, 5);
-  const eventRows = events.map(e => civRow(
-    `<b>${esc(e.title)}</b><small>${esc(e.category)} · ${esc(e.severity)} · ${esc(civ.countries.find(c => c.id === e.countryId)?.name || 'global')}</small>`,
-    `<span class="tag ${e.severity === 'severe' ? 'r' : 'a'}">${Math.max(0, Math.ceil((e.startedWorld + e.durationWorld - civ.worldMinutes) / 1440))}d</span>`
-  )).join('');
-  const identity = civ.player;
-  const place = `${s.city?.name || 'unknown'}, ${s.country?.name || 'unknown'}`;
-  return `
-    <div class="civ-grid cols-3">
-      ${civStat('Civilization index', `${m.civilizationIndex}/100`, 'stability, freedom, technology', m.civilizationIndex >= 60 ? 'ok' : '')}
-      ${civStat('Population', fmtNum(m.population), `${fmtNum(civ.cities.length)} cities`)}
-      ${civStat('Global GDP', `$${(m.gdp / 1e12).toFixed(1)}T`, `growth ${m.growth.toFixed(1)}%`)}
-      ${civStat('Stability', `${m.stability.toFixed(0)}/100`, `unrest ${(100 - m.stability).toFixed(0)}`)}
-      ${civStat('Internet freedom', `${m.internetFreedom.toFixed(0)}/100`, 'cross-country average')}
-      ${civStat('Research level', m.researchLevel.toFixed(1), `${civ.research.discoveries.length} discoveries`)}
-    </div>
-    <div class="civ-grid cols-4">
-      ${civStat('Inflation', `${m.inflation.toFixed(1)}%`)}
-      ${civStat('Unemployment', `${m.unemployment.toFixed(1)}%`)}
-      ${civStat('Technology adoption', `${m.technologyAdoption.toFixed(0)}/100`)}
-      ${civStat('Supply pressure', `${Math.round(m.supplyPressure * 100)}%`, 'hardware index vs baseline')}
-      ${civStat('Media trust', `${m.mediaTrust.toFixed(0)}/100`)}
-      ${civStat('Legal pressure', `${m.legalPressure.toFixed(0)}/100`)}
-      ${civStat('Inequality', `${m.inequality.toFixed(0)}/100`)}
-      ${civStat('Active events', String(m.activeEvents), 'persisting consequences')}
-    </div>
-    ${civSection('ACTIVE WORLD EVENTS', eventRows || '<div class="civ-empty">The world is quiet for now.</div>', `${civ.events.filter(e => e.status === 'active').length} active`)}
-    <div class="civ-grid cols-2">
-      ${civSection('YOUR CONTEXT', `
-        ${civRow(`<b>@${esc(identity.handle)}</b><small>${esc(place)}</small>`, `<span class="tag g">${esc(identity.professional.title || 'independent')}</span>`)}
-        ${civMeter('Professional', identity.professional.score)}
-        ${civMeter('Social', identity.social.score, `${fmtNum(identity.social.followers)} followers`)}
-        ${civMeter('Financial credit', (identity.financial.credit - 300) / 5.5, `credit ${identity.financial.credit}`)}
-        ${civMeter('Academic', identity.academic.score, `${identity.academic.publications} papers`)}
-      `, 'contextual reputation')}
-      ${civSection('WHAT TO DO NEXT', `
-        ${civRow('<b>Study a field</b><small>Raise practical knowledge and credentials</small>', '<span class="tag b">civ study</span>')}
-        ${civRow('<b>Find work</b><small>Apply, interview and negotiate</small>', '<span class="tag b">civ jobs</span>')}
-        ${civRow('<b>Start research</b><small>Fund a project and wait for results</small>', '<span class="tag b">civ research</span>')}
-        ${civRow('<b>Publish or release</b><small>Media, games, music and events</small>', '<span class="tag b">civ release</span>')}
-        ${civRow('<b>Own infrastructure</b><small>Property, data centers and offices</small>', '<span class="tag b">civ property</span>')}
-      `, 'the world does not require you to succeed')}
-    </div>`;
-}
-
-function civWorld(civ) {
-  const rows = civ.countries.slice().sort((a, b) => b.population - a.population).map(c => civRow(
-    `<b>${esc(c.name)}</b> <small>${esc(c.government)} · ${esc(c.currency)} · ${esc(c.region)}</small>`,
-    `<span class="tag ${c.stability < 45 ? 'r' : c.stability < 60 ? 'a' : 'g'}">stability ${Math.round(c.stability)}</span>
-     <span class="tag b">growth ${c.economy.growth.toFixed(1)}%</span>
-     <span class="tag">net ${Math.round(c.internet.penetration)}%</span>`
-  )).join('');
-  const cities = civ.cities.slice(0, 10).map(c => civRow(
-    `<b>${esc(c.name)}</b><small>${esc(c.countryId)} · ${fmtNum(c.population)} residents</small>`,
-    `<span class="tag b">power ${c.utilities.power}</span><span class="tag">water ${c.utilities.water}</span><span class="tag">telecom ${c.utilities.telecom}</span>`
-  )).join('');
-  return `
-    ${civSection('COUNTRIES AND REGIONS', rows, `${civ.countries.length} sovereign simulations`)}
-    ${civSection('CITIES AND INFRASTRUCTURE', cities, 'prices, utilities and congestion are interconnected')}`;
-}
-
-function civSocietyView(g, civ) {
-  const society = civ.society;
-  const households = society.households;
-  const avg = key => households.length ? households.reduce((sum, h) => sum + (h[key] || 0), 0) / households.length : 0;
-  const owned = households.filter(h => h.tenure === 'own').length;
-  const arrears = households.filter(h => h.savings < 0).length;
-  const local = households.filter(h => h.cityId === playerCity(g)?.id).slice(0, 8);
-  const localRows = local.map(h => {
-    const members = h.memberIds.map(id => civ.identities.find(i => i.id === id)).filter(Boolean);
-    return civRow(
-      `<b>${esc(members.map(m => '@' + m.handle).join(' ') || h.id)}</b><small>${esc(h.tenure)} · income ${fmtMoney(h.income)}/mo · housing ${fmtMoney(h.housingCost)}</small>`,
-      `<span class="tag ${h.morale < 40 ? 'r' : h.morale < 55 ? 'a' : 'g'}">morale ${Math.round(h.morale)}</span><span class="tag">savings ${fmtMoney(h.savings)}</span>`
-    );
-  }).join('');
-  const decisions = society.decisions.slice(-12).reverse().map(d => {
-    const identity = civ.identities.find(i => i.id === d.agentId);
-    return civRow(`<b>@${esc(identity?.handle || d.agentId)}</b> <small>${esc(d.detail)}</small>`, `<span class="tag b">${esc(d.action)}</span>`);
-  }).join('');
-  return `
-    <div class="civ-grid cols-4">
-      ${civStat('Households', fmtNum(households.length), `${society.moves || 0} relocations`)}
-      ${civStat('Average morale', `${Math.round(avg('morale'))}/100`, 'household wellbeing')}
-      ${civStat('Home ownership', `${Math.round(owned / Math.max(1, households.length) * 100)}%`, 'renters and owners')}
-      ${civStat('In arrears', String(arrears), 'negative household savings')}
-    </div>
-    ${civSection('HOUSEHOLDS IN YOUR CITY', localRows || '<div class="civ-empty">No households recorded in this city.</div>', `${local.length} shown`)}
-    ${civSection('RECENT INDIVIDUAL DECISIONS', decisions || '<div class="civ-empty">No decisions recorded yet.</div>', 'bounded, contextual, not continuous AI inference')}`;
-}
-
-function civResearchView(g, civ) {
-  const knowledge = civ.education.player.knowledge || {};
-  const fields = civ.research.fields.map(f => {
-    const max = 3;
-    const pct = clamp((f.progress || 0), 0, 100);
-    return `<div class="civ-field">
-      <div class="civ-field-head"><b>${esc(f.name)}</b><span class="tag b">level ${f.level}</span><span class="tag">funding ${fmtMoney(f.funding)}</span></div>
-      <div class="bar"><i style="width:${pct}%"></i></div>
-      <small>${f.discoveries.length} discoveries · next project progress ${Math.round(pct)}%</small>
-    </div>`;
-  }).join('');
-  const learner = educationFields().map(f => civMeter(f.name, knowledge[f.id] || 0)).join('');
-  const projects = civ.research.projects.filter(p => p.status === 'active').slice(0, 8).map(p => civRow(
-    `<b>${esc(p.title || p.fieldName || p.field)}</b><small>${esc(p.institutionName || 'independent')} · funding ${fmtMoney(p.funding || 0)}</small>`,
-    `<span class="tag b">${Math.round(p.progress || 0)}%</span>`
-  )).join('');
-  const discoveries = civ.research.discoveries.slice(-10).reverse().map(d => civRow(
-    `<b>${esc(d.name)}</b><small>${esc(d.summary || d.fieldName || '')}</small>`,
-    `<span class="tag g">${esc(d.fieldName || d.field || 'research')}</span>`
-  )).join('');
-  return `
-    ${civSection('RESEARCH ECOSYSTEM', fields, 'time, funding, equipment and expertise')}
-    ${civSection('ACTIVE PROJECTS', projects || '<div class="civ-empty">No active projects. Start one with civ research start.</div>')}
-    ${civSection('RECENT DISCOVERIES', discoveries || '<div class="civ-empty">No discoveries yet.</div>')}
-    ${civSection('YOUR KNOWLEDGE', learner, 'study through courses, documentation and practice')}`;
-}
-
-function civTechView(civ) {
-  const techs = civ.tech.technologies.slice().sort((a, b) => b.adoption - a.adoption).slice(0, 24).map(t => civRow(
-    `<b>${esc(t.name)} ${esc(t.version || '')}</b><small>${esc(t.vendorName)} · ${esc(t.category)} · ${esc(t.license)}</small>`,
-    `<span class="tag ${t.standard ? 'g' : 'b'}">adoption ${Math.round(t.adoption)}</span><span class="tag">security ${Math.round(t.security)}</span><span class="tag">docs ${Math.round(t.documentation)}</span>`
-  )).join('');
-  return civSection('TECHNOLOGY MARKET', techs || '<div class="civ-empty">No technology releases yet.</div>', `${civ.tech.technologies.length} products · versions, licenses and adoption`);
-}
-
-function civMediaView(civ) {
-  const outlets = civ.media.outlets.slice().sort((a, b) => b.audience - a.audience).slice(0, 20).map(o => civRow(
-    `<b>${esc(o.name)}</b><small>${esc(o.type)} · ${esc(o.focus || 'general')} · ${esc(o.countryId)}</small>`,
-    `<span class="tag ${o.trust < 45 ? 'r' : o.trust < 60 ? 'a' : 'g'}">trust ${Math.round(o.trust)}</span><span class="tag b">${fmtNum(o.audience)}</span>`
-  )).join('');
-  const content = civ.media.content.slice(-10).reverse().map(item => civRow(
-    `<b>${esc(item.headline)}</b><small>${esc(item.outletName)} · ${esc(item.topic)} · ${fmtNum(item.reach)} reach</small>`,
-    `${item.misinformation ? '<span class="tag r">unverified</span>' : item.corrected ? '<span class="tag a">corrected</span>' : '<span class="tag g">reported</span>'}<span class="tag">${fmtNum(item.shares || 0)} shares</span>`
-  )).join('');
-  const trends = civ.media.trends.slice(0, 10).map(t => civRow(`<b>${esc(t.topic)}</b><small>volume ${Math.round(t.volume)} · sentiment ${t.sentiment}</small>`, '')).join('');
-  return `
-    ${civSection('MEDIA ORGANIZATIONS', outlets || '<div class="civ-empty">No outlets yet.</div>')}
-    ${civSection('INFORMATION SPREAD', content || '<div class="civ-empty">No reporting yet.</div>', 'audience, trust, relevance and sharing')}
-    ${civSection('PUBLIC AGENDA', trends || '<div class="civ-empty">No trends yet.</div>')}`;
-}
-
-function civCultureView(civ) {
-  const studios = civ.culture.organizations.slice(0, 12).map(o => civRow(
-    `<b>${esc(o.name)}</b><small>${esc(o.kind)} · ${esc(o.cityName || o.countryId)} · ${esc(o.desc || '')}</small>`,
-    `<span class="tag b">${fmtNum(o.audience || 0)} audience</span><span class="tag">rep ${Math.round(o.reputation || 0)}</span>`
-  )).join('');
-  const games = civ.culture.games.slice(-10).reverse().map(game => civRow(
-    `<b>${esc(game.title)}</b><small>${esc(game.genre)} · quality ${Math.round(game.quality)}</small>`,
-    `<span class="tag b">${fmtNum(game.players || 0)} players</span><span class="tag">${fmtMoney(game.revenue || 0)}</span>`
-  )).join('');
-  const music = civ.culture.music.slice(-8).reverse().map(track => civRow(
-    `<b>${esc(track.title)}</b><small>${esc(track.artist)} · ${esc(track.countryId)}</small>`,
-    `<span class="tag b">${fmtNum(track.streams || 0)} streams</span>`
-  )).join('');
-  const events = civ.culture.events.slice(-8).reverse().map(event => civRow(
-    `<b>${esc(event.name)}</b><small>${esc(event.type)} · ${esc(event.status)} · ${esc(civ.cities.find(c => c.id === event.cityId)?.name || event.cityId)}</small>`,
-    `<span class="tag ${event.status === 'live' ? 'g' : 'b'}">${fmtNum(event.attendance || 0)} attended</span>`
-  )).join('');
-  return `
-    <div class="civ-actions"><button class="tbtn small" data-civ-action="release:game">Release a game</button><button class="tbtn small" data-civ-action="release:music">Release music</button><button class="tbtn small" data-civ-action="release:event">Schedule an event</button></div>
-    ${civSection('STUDIOS AND COMMUNITIES', studios || '<div class="civ-empty">No cultural organizations yet.</div>')}
-    ${civSection('GAMES', games || '<div class="civ-empty">No games released.</div>')}
-    ${civSection('MUSIC', music || '<div class="civ-empty">No music released.</div>')}
-    ${civSection('EVENTS', events || '<div class="civ-empty">No events scheduled.</div>')}`;
-}
-
-function civLawView(g, civ) {
-  const disputes = activeLegalDisputes(g).filter(d => d.subject === 'player' || d.subject === 'player-company');
-  const caseRows = disputes.map(d => civRow(
-    `<b>${esc(d.id)} · ${esc(d.domainName)}</b><small>${esc(d.issue)} · evidence ${d.evidence}/100 · claimed ${fmtMoney(d.claimedFine)}</small>`,
-    `<span class="tag ${d.contested ? 'g' : 'a'}">${esc(d.status)}${d.contested ? ' · represented' : ''}</span>
-     <button class="tbtn small" data-civ-action="legal:settle:${esc(d.id)}">Settle</button>
-     <button class="tbtn small" data-civ-action="legal:contest:${esc(d.id)}">Contest</button>`
-  )).join('');
-  const docket = activeLegalDisputes(g).filter(d => d.subject !== 'player' && d.subject !== 'player-company').slice(0, 10).map(d => civRow(
-    `<b>${esc(d.subjectName || d.subject)}</b><small>${esc(d.domainName)} · ${esc(d.issue)}</small>`,
-    `<span class="tag a">${esc(d.status)}</span>`
-  )).join('');
-  const country = playerCountry(g);
-  return `
-    <div class="civ-grid cols-4">
-      ${civStat('Jurisdiction', country?.name || 'unknown', country?.cyberPolicy || '')}
-      ${civStat('Compliance', `${Math.round(civ.player.compliance || 0)}/100`)}
-      ${civStat('Courts', String(civ.courts.length), 'simulated dockets')}
-      ${civStat('Regulators', String(civ.regulators.length), 'sector authorities')}
-    </div>
-    ${civSection('CASES AGAINST YOU', caseRows || '<div class="civ-empty">No open cases. Compliance is quiet.</div>')}
-    ${civSection('COURT DOCKET', docket || '<div class="civ-empty">No other disputes active.</div>')}
-    ${g.legal.length ? civSection('ENFORCEMENT HISTORY', g.legal.slice(-6).reverse().map(l => civRow(`<b>${esc(l.authority)}</b><small>${esc(l.reason)}</small>`, `<span class="tag r">${fmtMoney(l.fine)}</span>`)).join('')) : ''}`;
-}
-
-function civPropertyView(g, civ) {
-  const owned = playerProperties(g);
-  const ownedRows = owned.map(p => civRow(
-    `<b>${esc(p.label)}</b><small>${esc(civ.cities.find(c => c.id === p.cityId)?.name || p.cityId)} · ${esc(p.occupancy)} · ${fmtMoney(p.rent)}/mo rent</small>`,
-    `${p.mortgage ? `<span class="tag a">mortgage ${fmtMoney(p.mortgage.payment)}/mo</span>` : ''}${p.insurance ? `<span class="tag g">insured</span>` : ''}
-     <button class="tbtn small" data-civ-action="insure:${esc(p.id)}">Insure</button>
-     <button class="tbtn small danger" data-civ-action="sell:${esc(p.id)}">Sell</button>`
-  )).join('');
-  const available = civ.property.listings.filter(p => p.status === 'available').slice(0, 10).map(p => civRow(
-    `<b>${esc(p.label)}</b><small>${esc(civ.cities.find(c => c.id === p.cityId)?.name || p.cityId)} · quality ${p.quality} · rent ${fmtMoney(p.rent)}/mo</small>`,
-    `<span class="tag b">${fmtMoney(p.price)}</span>
-     <button class="tbtn small" data-civ-action="buy:${esc(p.id)}">Buy</button>
-     <button class="tbtn small" data-civ-action="buy-mortgage:${esc(p.id)}">Mortgage</button>`
-  )).join('');
-  return `
-    <div class="civ-grid cols-4">
-      ${civStat('Market index', civ.property.market.index.toFixed(1))}
-      ${civStat('Rent index', civ.property.market.rentIndex.toFixed(1))}
-      ${civStat('Vacancy', `${civ.property.market.vacancy.toFixed(1)}%`)}
-      ${civStat('Construction', String(civ.property.construction.length), 'projects in progress')}
-    </div>
-    ${civSection('YOUR PROPERTY', ownedRows || '<div class="civ-empty">You own no property.</div>')}
-    ${civSection('AVAILABLE PROPERTY', available || '<div class="civ-empty">No listings available.</div>')}`;
-}
-
-function civHistoryView(g) {
-  const rows = civHistory(g, { limit: 30 }).map(t => civRow(
-    `<b>${esc(t.title)}</b><small>${esc(t.body)}</small>`,
-    `<span class="tag ${t.major ? 'g' : ''}">${t.year} · ${esc(t.category)}</span>`
-  )).join('');
-  return civSection('WORLD HISTORY', rows || '<div class="civ-empty">History is still being written.</div>', 'the world exists before you and continues after you');
-}
-
-function civReleaseFlow(win, kind) {
-  const label = kind === 'game' ? 'Game' : kind === 'music' ? 'Music release' : 'Event';
-  formModal({
-    title: `Release ${label.toLowerCase()}`,
-    eyebrow: 'INDEPENDENT WORK',
-    body: '<p class="dim">Production costs are paid immediately. Quality depends on your knowledge, professional standing and reputation.</p>',
-    fields: [
-      { name: 'title', label: 'Title', placeholder: kind === 'event' ? 'Open Bench Meetup' : 'Signal Run' },
-      { name: 'price', label: kind === 'event' ? 'Ticket price' : 'Price', value: kind === 'music' ? '0' : '12', type: 'number' }
-    ],
-    submit: 'Release',
-    onSubmit: vals => {
-      const title = String(vals.title || '').trim();
-      if (!title) { toast('Title required', 'Give the work a name.', 'r'); return false; }
-      const price = Number(vals.price) || 0;
-      const result = playerRelease(app.game, kind, title, { price });
-      if (!result.ok) { toast('Release failed', result.error, 'r'); return false; }
-      toast('Released', `${title} · quality ${Math.round(result.quality)}/100`, 'g');
-      win.civTab = 'culture';
-      refreshUI();
-    }
-  });
-}
-
-function handleCivClick(win, e) {
-  const tab = e.target.closest('[data-civ-tab]');
-  if (tab) { win.civTab = tab.dataset.civTab; renderCiv(win); return; }
-  const actionEl = e.target.closest('[data-civ-action]');
-  if (!actionEl) return;
-  const [action, ...rest] = actionEl.dataset.civAction.split(':');
-  const id = rest.join(':');
-  const g = app.game;
-  if (action === 'release') { civReleaseFlow(win, id); return; }
-  if (action === 'legal') {
-    const [verb, caseId] = id.split(':');
-    const r = playerLegalAction(g, caseId, verb);
-    if (!r.ok) toast('Legal action failed', r.error, 'r');
-    else toast(verb === 'settle' ? 'Case settled' : 'Case contested', `${caseId}`, verb === 'settle' ? 'a' : 'g');
-    refreshUI();
-    return;
-  }
-  if (action === 'buy' || action === 'buy-mortgage') {
-    const r = playerBuyProperty(g, id, { mortgage: action === 'buy-mortgage' });
-    if (!r.ok) toast('Purchase failed', r.error, 'r');
-    else toast('Property acquired', `${r.property.label} · ${fmtMoney(r.downPayment)} down`, 'g');
-    refreshUI();
-    return;
-  }
-  if (action === 'sell') {
-    const r = playerSellProperty(g, id);
-    if (!r.ok) toast('Sale failed', r.error, 'r');
-    else toast('Property sold', `${r.property.label} · ${fmtMoney(r.sale)}`, 'g');
-    refreshUI();
-    return;
-  }
-  if (action === 'insure') {
-    const r = playerInsureProperty(g, id);
-    if (!r.ok) toast('Insurance failed', r.error, 'r');
-    else toast(r.already ? 'Already insured' : 'Property insured', `${r.property.label}`, 'g');
-    refreshUI();
-  }
-}
-
-MOUNTS.civ = function mountCiv(win) {
-  win.civTab = win.civTab || 'overview';
-  win.body.addEventListener('click', e => handleCivClick(win, e));
-  win.render = () => renderCiv(win);
-  renderCiv(win);
-};
-
-/* ============================================================
-   AUTONOMOUS DEVELOPERS + INTERNET ARCHITECTURE
-   ============================================================ */
-const DEV_TABS = [['overview','Overview'],['developers','Developers'],['projects','Projects'],['advisories','Advisories'],['labs','Labs']];
-const NET_TABS = [['overview','Overview'],['network','Network'],['protocols','Protocols'],['web','Web'],['developers','Developers'],['ai','AI'],['security','Security'],['history','History']];
-
-MOUNTS.dev = function mountDev(win) {
-  win.devTab = win.devTab || 'overview';
-  win.body.addEventListener('click', e => handleDevClick(win, e));
-  win.render = () => renderDev(win);
-  renderDev(win);
-};
-
-function renderDev(win) {
-  const g = app.game;
-  const s = devOverview(g);
   const m = s.metrics;
-  if (!DEV_TABS.some(t => t[0] === win.devTab)) win.devTab = 'overview';
-  const tab = win.devTab;
-  const tabs = DEV_TABS.map(([id, label]) => `<button class="civ-tab ${id === tab ? 'on' : ''}" data-dev-tab="${id}">${label}</button>`).join('');
-  let content = '';
-  if (tab === 'overview') {
-    content = `<div class="civ-grid cols-4">
-      ${civStat('Active developers', m.activeDevelopers, `${m.securityProfessionals} security professionals`, 'ok')}
-      ${civStat('Published projects', m.publishedProjects, `${m.detailedProjects} detailed`, 'ok')}
-      ${civStat('Generated source', fmtNum(m.lines), `${m.files} files`, 'b')}
-      ${civStat('Open advisories', m.openVulns, `${m.patchedVulns} patched`, m.openVulns > 8 ? 'r' : '')}
+  const house = civ.households.find(h => h.id === 'house-player');
+  const career = careerSnapshot(g);
+  const properties = playerProperties(g);
+  const ledger = validateLedger(g);
+  const countries = civ.countries.slice().sort((a, b) => (b.economy.gdp || 0) - (a.economy.gdp || 0)).slice(0, 6);
+  const cities = civ.cities.slice(0, 6);
+  const tech = civ.tech.technologies.slice(0, 5);
+  const projects = civ.tech.projects.filter(p => p.status === 'active' || p.ownerType === 'player').slice(0, 4);
+  const events = civEventList(g, true).slice(0, 5);
+  const timeline = civHistory(g, { limit: 6 });
+  const knowledge = Object.entries(civKnowledge(g)).sort((a, b) => b[1] - a[1]).slice(0, 4);
+  const cultures = civ.culture.organizations.slice(0, 4);
+  const games = civ.culture.games.slice(-3).reverse();
+  const stats = [
+    ['POPULATION', fmtNum(m.population)],
+    ['GDP', fmtMoney(m.gdp)],
+    ['GROWTH', `${m.growth.toFixed(1)}%`],
+    ['INFLATION', `${m.inflation.toFixed(1)}%`],
+    ['UNEMPLOYMENT', `${m.unemployment.toFixed(1)}%`],
+    ['STABILITY', m.stability.toFixed(1)],
+    ['INTERNET FREEDOM', m.internetFreedom.toFixed(1)],
+    ['MEDIA TRUST', m.mediaTrust.toFixed(1)],
+    ['RESEARCH', m.researchLevel.toFixed(2)],
+    ['ADOPTION', `${m.technologyAdoption.toFixed(1)}%`],
+    ['SUPPLY', `${Math.round(m.supplyPressure * 100)}%`],
+    ['INEQUALITY', m.inequality.toFixed(1)]
+  ];
+  const countryRows = countries.map(c => `<div style="display:flex;gap:6px;padding:3px 0;border-bottom:1px solid #161e24;font-family:var(--mono);font-size:8px">
+      <b style="flex:1;color:var(--text)">${esc(c.name)}</b>
+      <span style="width:58px;text-align:right;color:${c.economy.growth >= 0 ? 'var(--green)' : 'var(--red)'}">${c.economy.growth.toFixed(1)}%</span>
+      <span style="width:44px;text-align:right;color:var(--dim)">${Math.round(c.stability)}</span>
+      <span style="width:48px;text-align:right;color:var(--dim)">${c.internet.penetration}%</span>
+    </div>`).join('');
+  const cityRows = cities.map(c => `<div style="display:flex;gap:6px;padding:3px 0;border-bottom:1px solid #161e24;font-family:var(--mono);font-size:8px">
+      <b style="flex:1;color:var(--text)">${esc(c.name)}</b>
+      <span style="width:46px;text-align:right;color:var(--dim)">pwr ${Math.round(c.utilities.power)}</span>
+      <span style="width:46px;text-align:right;color:var(--dim)">tel ${Math.round(c.utilities.telecom)}</span>
+      <span style="width:54px;text-align:right;color:var(--dim)">${fmtMoney(c.prices.housing)}</span>
+    </div>`).join('');
+  const techRows = tech.map(t => `<div style="display:flex;gap:6px;padding:3px 0;border-bottom:1px solid #161e24;font-family:var(--mono);font-size:8px">
+      <b style="flex:1;color:var(--text)">${esc(t.name)} ${esc(t.version)}</b>
+      <span style="color:var(--dim)">${esc(t.license)}</span>
+      <span style="width:48px;text-align:right;color:var(--accent)">${t.adoption.toFixed(1)}%</span>
+    </div>`).join('');
+  const projectRows = projects.map(p => `<div style="padding:3px 0;border-bottom:1px solid #161e24;font-family:var(--mono);font-size:8px">
+      <div style="display:flex;gap:6px"><b style="flex:1;color:var(--text)">${esc(p.name)}</b><span style="color:${p.ownerType === 'player' ? 'var(--green)' : 'var(--dim)'}">${Math.round(p.progress)}%</span></div>
+      <div class="bar" style="margin-top:3px"><i style="width:${clamp(p.progress, 0, 100)}%"></i></div>
+    </div>`).join('');
+  const eventRows = events.map(e => `<div style="padding:4px 0;border-bottom:1px solid #161e24;font-family:var(--mono);font-size:8px">
+      <div style="color:var(--amber)">${esc(e.title)}</div>
+      <div style="color:var(--dim)">${esc(e.category)} · ${esc(e.severity || '')} · ${esc(e.body || '').slice(0, 90)}</div>
+    </div>`).join('') || '<div class="dim" style="font-size:8px">No active world events.</div>';
+  const timelineRows = timeline.map(t => `<div style="display:flex;gap:6px;padding:3px 0;border-bottom:1px solid #161e24;font-family:var(--mono);font-size:8px">
+      <span style="width:34px;color:var(--dim)">${t.year}</span><b style="flex:1;color:var(--text2)">${esc(t.title)}</b><span style="color:var(--faint)">${esc(t.category)}</span>
+    </div>`).join('');
+  win.body.innerHTML = `<div class="profile-layout">
+    <div class="profile-head">
+      <div class="profile-avatar">◈</div>
+      <div style="flex:1">
+        <h2>${esc(s.country.name)} · ${esc(s.city.name)}</h2>
+        <p>Year ${s.year} · ${fmtNum(m.population)} people · ${fmtMoney(m.gdp)} GDP · index ${m.civilizationIndex}/100</p>
+        <div class="badges">${tag(`${s.activeLaws} laws`, 'b')}${tag(`${s.countries || civ.countries.length} countries`, 'b')}${tag(`${civ.households.length} households`, 'g')}${tag(ledger.ok ? 'shared ledger valid' : 'ledger broken', ledger.ok ? 'g' : 'r')}</div>
+      </div>
+      <div style="display:flex;gap:4px;flex-wrap:wrap;justify-content:flex-end">
+        <button class="tbtn small" data-civ-cmd="civ">Overview</button>
+        <button class="tbtn small" data-civ-cmd="civ legal">Legal</button>
+        <button class="tbtn small" data-civ-cmd="civ tech projects">Technology</button>
+        <button class="tbtn small" data-civ-cmd="civ culture">Culture</button>
+        <button class="tbtn small" data-civ-cmd="civ history">History</button>
+      </div>
     </div>
-    ${civSection('Developer economy', `<div class="civ-row"><div><b>Software is created by inhabitants</b><small>Developers plan, write, test, release and maintain real source files</small></div><div class="civ-row-right"><button class="tbtn small" data-dev-cmd="dev developers">Developers</button><button class="tbtn small" data-dev-cmd="dev projects">Repositories</button></div></div>
-      <div class="civ-row"><div><b>Supply chain security</b><small>Advisories originate in code, configuration and dependency decisions</small></div><div class="civ-row-right"><button class="tbtn small" data-dev-cmd="vuln">Advisories</button></div></div>
-      <div class="civ-row"><div><b>Authorized practice</b><small>Isolated ranges for legitimate security research</small></div><div class="civ-row-right"><button class="tbtn small" data-dev-cmd="lab">Laboratories</button></div></div>
-      <div class="civ-row"><div><b>Publish a tool</b><small>Release your own security utility into the shared registry</small></div><div class="civ-row-right"><button class="tbtn small primary" data-dev-action="publish">Publish</button></div></div>`, 'live state')}
-    ${civSection('Development chronicle', s.events.slice(0, 12).map(e => `<div class="civ-row"><div><b>${esc(e.title)}</b><small>${esc(e.body)}</small></div><div class="civ-row-right"><span class="tag">${esc(e.category)}</span><span class="dim">${e.year}</span></div></div>`).join(''))}`;
-  } else if (tab === 'developers') {
-    content = civSection('Independent developers', s.developers.slice(0, 60).map(d => {
-      const langs = Object.keys(d.languages || {}).sort((a, b) => (d.languages[b] || 0) - (d.languages[a] || 0)).slice(0, 5);
-      return `<div class="civ-row"><div><b>@${esc(d.handle)} · ${esc(d.name)}</b><small>${esc(d.role)} · ${esc(d.employment)} · ${esc(d.objectives[0] || '')}</small></div><div class="civ-row-right">
-        ${langs.map(l => `<span class="tag">${esc(l)} ${Math.round(d.languages[l] || 0)}</span>`).join('')}
-        <span class="tag ${d.status === 'active' ? 'g' : 'a'}">${esc(d.status)}</span>
-        <button class="tbtn small" data-dev-cmd="repo projects">${d.projects.length} repos</button>
-      </div></div>`;
-    }).join(''), `${s.developers.length} developers`);
-  } else if (tab === 'projects') {
-    content = civSection('Repositories and generated source', s.projects.slice(0, 60).map(p => `<div class="civ-row"><div><b>${esc(p.name)}</b><small>${esc(p.kind)} · ${esc(p.ownerHandle)} · ${esc(p.architecture.target || '')}</small></div><div class="civ-row-right">
-      <span class="tag">${esc(p.language)}</span><span class="tag">${fmtNum(p.metrics.lines)} lines</span><span class="tag">${fmtNum(p.metrics.downloads)} dl</span>
-      <span class="tag ${p.status === 'abandoned' ? 'r' : p.published ? 'g' : 'a'}">${esc(p.status)}</span>
-      <button class="tbtn small" data-dev-cmd="repo show ${esc(p.slug)}">Inspect</button>
-      <button class="tbtn small" data-dev-cmd="repo source ${esc(p.slug)}">Source</button>
-    </div></div>`).join(''), `${s.projects.length} projects`);
-  } else if (tab === 'advisories') {
-    content = civSection('Security advisories', s.advisories.slice(0, 50).map(a => `<div class="civ-row"><div><b>${esc(a.cve)} · ${esc(a.title)}</b><small>${esc(a.summary)} · reported by ${esc(a.publishedBy)}</small></div><div class="civ-row-right">
-      <span class="tag ${a.severity === 'critical' ? 'r' : a.severity === 'high' ? 'a' : ''}">${esc(a.severity)}</span>
-      <span class="tag ${a.status === 'patched' ? 'g' : 'r'}">${esc(a.status)}</span>
-      <button class="tbtn small" data-dev-cmd="vuln info ${esc(a.cve)}">Detail</button>
-    </div></div>`).join('') || '<div class="empty-state">No advisories published yet.</div>', `${s.advisories.length} advisories`);
-  } else {
-    content = civSection('Authorized laboratories', s.labs.map(l => {
-      const authorized = l.authorizedHandles.includes(g.player.handle);
-      return `<div class="civ-row"><div><b>${esc(l.name)}</b><small>${esc(l.desc)} · scope ${esc(l.targets.join(', '))}</small></div><div class="civ-row-right">
-        <span class="tag ${l.status === 'online' ? 'g' : 'r'}">${esc(l.status)}</span><span class="tag">${l.sessions} sessions</span>
-        <button class="tbtn small ${authorized ? 'danger' : 'primary'}" data-dev-lab="${esc(l.id)}" data-dev-lab-action="${authorized ? 'leave' : 'enter'}">${authorized ? 'Leave' : 'Enter'}</button>
-      </div></div>`;
-    }).join(''), 'isolated fictional environments');
-  }
-  win.body.innerHTML = `<div class="civ-tabs">${tabs}</div><div class="win-scroll">${content}</div>`;
-  win.status.innerHTML = `<span>${m.activeDevelopers} active developers</span><span>${m.publishedProjects} repositories</span><span class="st-right"><b>${m.openVulns} open advisories</b><span>year ${m.year}</span></span>`;
-}
+    <div class="profile-grid">${stats.map(([k, v]) => `<div class="pstat"><span>${k}</span><b>${v}</b></div>`).join('')}</div>
 
-function handleDevClick(win, e) {
-  const tab = e.target.closest('[data-dev-tab]');
-  if (tab) { win.devTab = tab.dataset.devTab; renderDev(win); return; }
-  const cmd = e.target.closest('[data-dev-cmd]');
-  if (cmd) { openWindow('terminal'); runCommand(cmd.dataset.devCmd); return; }
-  const action = e.target.closest('[data-dev-action]');
-  if (action && action.dataset.devAction === 'publish') {
-    formModal({
-      title: 'Publish a security tool', eyebrow: 'DEVELOPER ECONOMY',
-      fields: [
-        { name: 'name', label: 'TOOL NAME', value: '' },
-        { name: 'language', label: 'LANGUAGE', type: 'select', value: 'python', options: ['python','javascript','go','rust','c','bash'].map(v => ({ value: v, label: v })) }
-      ],
-      submit: 'Publish for $80',
-      onSubmit: vals => {
-        const r = playerPublishTool(app.game, vals.name, vals.language);
-        if (!r.ok) { toast('Publish failed', r.error, 'r'); return false; }
-        toast('Tool published', `${r.project.name} · ${Object.keys(r.project.files).length} source files`, 'g');
-        refreshUI();
-      }
-    });
-    return;
-  }
-  const lab = e.target.closest('[data-dev-lab]');
-  if (lab) {
-    const r = playerLabSession(app.game, lab.dataset.devLab, lab.dataset.devLabAction);
-    toast(lab.dataset.devLabAction === 'enter' ? 'Range session' : 'Range closed', r.ok ? r.message : r.error, r.ok ? 'g' : 'r');
-    refreshUI();
-  }
-}
+    <div class="section-label" style="margin-top:14px">COUNTRIES <span class="dim">GDP · growth · stability · internet</span></div>
+    ${countryRows}
 
-MOUNTS.internet = function mountInternet(win) {
-  win.netTab = win.netTab || 'overview';
-  win.body.addEventListener('click', e => handleInternetClick(win, e));
-  win.render = () => renderInternet(win);
-  renderInternet(win);
-};
+    <div class="section-label" style="margin-top:14px">CITIES <span class="dim">power · telecom · housing</span></div>
+    ${cityRows}
 
-function renderInternet(win) {
-  const g = app.game;
-  const s = internetSummary(g);
-  const m = s.metrics;
-  if (!NET_TABS.some(t => t[0] === win.netTab)) win.netTab = 'overview';
-  const tab = win.netTab;
-  const tabs = NET_TABS.map(([id, label]) => `<button class="civ-tab ${id === tab ? 'on' : ''}" data-net-tab="${id}">${label}</button>`).join('');
-  let content = '';
-  if (tab === 'overview') {
-    content = `<div class="civ-grid cols-4">
-      ${civStat('Internet health', `${m.health}/100`, `${m.year} · ${m.trafficTbps} Tbps`, m.health > 70 ? 'ok' : '')}
-      ${civStat('Autonomous systems', m.asnCount, `${m.ixpCount} exchanges · ${m.cableCount} cables`, 'b')}
-      ${civStat('Web + APIs', m.siteCount, `${m.apiCount} APIs · ${m.certCount} certs`, 'ok')}
-      ${civStat('Open incidents', m.openIncidents, `${m.advisoryCount} advisories`, m.openIncidents > 8 ? 'r' : '')}
+    <div class="section-label" style="margin-top:14px">HOUSEHOLD AND CAREER</div>
+    ${house ? `
+      ${civRow('Housing', `${esc(house.housing.label)} · ${esc(house.housing.tenure)} · ${fmtMoney(house.housing.rent)}/mo`)}
+      ${civRow('Income', `${fmtMoney(house.monthlyIncome)}/mo · costs ${fmtMoney(house.expenses)}/mo`)}
+      ${civRow('Satisfaction', String(Math.round(house.satisfaction)), house.satisfaction < 35 ? 'var(--red)' : 'var(--green)')}
+      ${civNeed('housing', house.needs.housing)}
+      ${civNeed('income', house.needs.income)}
+      ${civNeed('connectivity', house.needs.connectivity)}
+      ${civNeed('security', house.needs.security)}
+      ${civNeed('community', house.needs.community)}
+    ` : '<div class="dim" style="font-size:8px">No household record.</div>'}
+    <div style="margin-top:8px">
+      ${civRow('Career', career.employed ? `${esc(career.professional.role)} · ${fmtMoney(career.professional.salary)}/yr` : 'independent')}
+      ${civRow('Professional', String(Math.round(career.professional.score)))}
+      ${civRow('Compliance', String(Math.round(civ.player.compliance)))}
+      ${civRow('Properties', String(properties.length))}
+      ${civRow('Open cases', String(s.playerDisputes))}
     </div>
-    ${civSection('Protocol adoption', s.protocols.slice(0, 12).map(p => `<div class="civ-row"><div><b>${esc(p.name)}</b><small>${esc(p.layer)} · ${esc(p.spec)} · ${esc(p.status)}</small></div><div class="civ-row-right"><div class="bar" style="width:120px"><i style="width:${Math.round(p.adoption)}%"></i></div><span class="tag">${Math.round(p.adoption)}%</span></div></div>`).join(''))}
-    ${civSection('Live events', g.internet.events.slice(-8).reverse().map(e => `<div class="civ-row"><div><b>${esc(e.title)}</b><small>${esc(e.body || '')}</small></div><div class="civ-row-right"><span class="tag ${e.severity === 'critical' ? 'r' : 'a'}">${esc(e.category)}</span></div></div>`).join(''))}`;
-  } else if (tab === 'network') {
-    content = civSection('Autonomous systems', s.asns.slice(0, 40).map(a => `<div class="civ-row"><div><b>${esc(a.name)}</b><small>AS${a.asn} · ${esc(a.type)} · ${a.peers.length} peers · ${a.upstreams.length} upstreams</small></div><div class="civ-row-right"><span class="tag">${fmtNum(a.trafficGbps)} Gbps</span><span class="tag ${a.status === 'operational' ? 'g' : 'a'}">${esc(a.status)}</span></div></div>`).join('')) +
-      civSection('Exchange points', s.ixps.slice(0, 20).map(x => `<div class="civ-row"><div><b>${esc(x.name)}</b><small>${x.members.length} members · route server ${x.routeServer ? 'yes' : 'no'}</small></div><div class="civ-row-right"><span class="tag">${fmtNum(x.trafficGbps)} Gbps</span></div></div>`).join('')) +
-      civSection('Long-haul links', s.cables.slice(0, 20).map(c => `<div class="civ-row"><div><b>${esc(c.name)}</b><small>${esc(c.kind)} · ${c.latencyMs} ms · ${esc(c.owner)}</small></div><div class="civ-row-right"><span class="tag">${fmtNum(c.capacityTbps)} Tbps</span><span class="tag ${c.status === 'up' ? 'g' : 'a'}">${esc(c.status)}</span></div></div>`).join(''));
-  } else if (tab === 'protocols') {
-    content = civSection('Protocol registry', s.protocols.map(p => `<div class="civ-row"><div><b>${esc(p.name)}</b><small>${esc(p.notes)}</small></div><div class="civ-row-right"><span class="tag">sec ${Math.round(p.security)}</span><span class="tag">perf ${Math.round(p.performance)}</span><span class="tag ${p.status === 'standard' ? 'g' : 'a'}">${esc(p.status)}</span></div></div>`).join(''));
-  } else if (tab === 'web') {
-    const mine = s.web.filter(r => r.ownerType === 'player');
-    content = civSection('Your web properties', mine.map(r => `<div class="civ-row"><div><b>${esc(r.domain)}</b><small>${esc(r.title)} · TLS ${r.tls?.version || 'none'} · ${Math.round(r.availability)}% availability</small></div><div class="civ-row-right">
-      <button class="tbtn small" data-net-cmd="web secure ${esc(r.domain)}">Harden</button>
-      <button class="tbtn small" data-net-cmd="web cert ${esc(r.domain)}">Renew cert</button>
-      <button class="tbtn small" data-net-cmd="web scan ${esc(r.domain)}">Scan</button>
-    </div></div>`).join('') || '<div class="empty-state">Deploy a site to manage its TLS, APIs and security posture.</div>', `${mine.length} owned`) +
-      civSection('Internet index', s.web.slice(0, 40).map(r => `<div class="civ-row"><div><b>${esc(r.domain)}</b><small>${esc(r.stack.join(', '))} · ${esc(r.backend)} · ${esc(r.status)}</small></div><div class="civ-row-right"><span class="tag">${fmtNum(r.requestsPerMin)}/min</span><button class="tbtn small" data-net-cmd="web ${esc(r.domain)}">Inspect</button></div></div>`).join(''));
-  } else if (tab === 'developers') {
-    const d = devEcosystem(g);
-    content = civSection('Languages', d.languages.map(l => `<div class="civ-row"><div><b>${esc(l.name)}</b><small>${esc(l.runtime)} · ${esc(l.status)}</small></div><div class="civ-row-right"><span class="tag">${Math.round(l.adoption)}% adoption</span></div></div>`).join('')) +
-      civSection('Popular packages', d.packages.slice(0, 30).map(p => `<div class="civ-row"><div><b>${esc(p.name)}@${esc(p.version)}</b><small>${esc(p.desc)} · ${esc(p.registry)} · ${esc(p.license)}</small></div><div class="civ-row-right"><span class="tag">${fmtNum(p.weeklyDownloads)}/wk</span>${p.vulnerabilityCount ? `<span class="tag r">${p.vulnerabilityCount} vuln</span>` : ''}</div></div>`).join(''));
-  } else if (tab === 'ai') {
-    const ai = aiEcosystem(g);
-    content = civSection('Models', ai.models.slice(0, 30).map(m => `<div class="civ-row"><div><b>${esc(m.name)}</b><small>${esc(m.vendor)} · ${esc(m.params)} · ${esc(m.modality)} · ${fmtNum(m.context)} ctx</small></div><div class="civ-row-right"><span class="tag">q${Math.round(m.quality)}</span><span class="tag">${m.costPerM ? '$' + m.costPerM + '/M' : 'open'}</span></div></div>`).join('')) +
-      civSection('Inference endpoints', ai.endpoints.slice(0, 20).map(e => `<div class="civ-row"><div><b>${esc(e.modelId)}</b><small>${esc(e.ownerName)} · ${esc(e.region)} · ${e.latencyMs} ms</small></div><div class="civ-row-right"><span class="tag">${fmtNum(e.requests)} req</span><span class="tag g">${e.uptime.toFixed(2)}%</span></div></div>`).join('')) +
-      civSection('Training', ai.training.slice(0, 12).map(t => `<div class="civ-row"><div><b>${esc(t.modelName)}</b><small>${fmtNum(t.computeHours)} compute hours</small></div><div class="civ-row-right"><div class="bar" style="width:110px"><i style="width:${Math.round(t.progress)}%"></i></div><span class="tag">${esc(t.status)}</span></div></div>`).join(''));
-  } else if (tab === 'security') {
-    const sec = securityOverview(g);
-    const z = sec.zeroTrust;
-    content = `<div class="civ-grid cols-3">${civMeter('Identity', z.identity)}${civMeter('Devices', z.device)}${civMeter('Network', z.network)}${civMeter('Workloads', z.workload)}${civMeter('Data', z.data)}</div>` +
-      civSection('Advisories', sec.advisories.slice(0, 30).map(a => `<div class="civ-row"><div><b>${esc(a.cve)} · ${esc(a.title)}</b><small>${esc(a.product)} · ${esc(a.affected)}</small></div><div class="civ-row-right"><span class="tag ${a.severity === 'critical' ? 'r' : 'a'}">${esc(a.severity)}</span><span class="tag ${a.status === 'patched' ? 'g' : 'r'}">${esc(a.status)}</span></div></div>`).join('')) +
-      civSection('Incidents', sec.incidents.slice(0, 24).map(i => `<div class="civ-row"><div><b>${esc(i.id)} · ${esc(i.kind)}</b><small>${esc(i.targetName || '')} · ${esc(i.impact)}</small></div><div class="civ-row-right"><span class="tag ${i.status === 'resolved' ? 'g' : 'r'}">${esc(i.status)}</span>${i.status !== 'resolved' ? `<button class="tbtn small" data-net-cmd="sec respond ${esc(i.id)}">Respond</button>` : ''}</div></div>`).join(''));
-  } else {
-    content = civSection('Internet history', internetHistory(g, { limit: 60 }).map(h => `<div class="civ-row"><div><b>${esc(h.title)}</b><small>${esc(h.body)}</small></div><div class="civ-row-right"><span class="tag ${h.major ? 'g' : ''}">${h.year}</span><span class="tag">${esc(h.category)}</span></div></div>`).join(''));
-  }
-  win.body.innerHTML = `<div class="civ-tabs">${tabs}</div><div class="win-scroll">${content}</div>`;
-  win.status.innerHTML = `<span>health ${m.health}/100</span><span>${m.asnCount} ASNs · ${m.siteCount} sites · ${m.aiModelCount} models</span><span class="st-right"><b>${m.openIncidents} open incidents</b><span>${m.year}</span></span>`;
-}
+    <div style="margin-top:8px">${knowledge.map(([field, value]) => civNeed(field, value)).join('') || '<div class="dim" style="font-size:8px">No studied fields yet.</div>'}</div>
 
-function handleInternetClick(win, e) {
-  const tab = e.target.closest('[data-net-tab]');
-  if (tab) { win.netTab = tab.dataset.netTab; renderInternet(win); return; }
-  const cmd = e.target.closest('[data-net-cmd]');
-  if (cmd) { openWindow('terminal'); runCommand(cmd.dataset.netCmd); }
-}
+    <div class="section-label" style="margin-top:14px">TECHNOLOGY</div>
+    ${techRows || '<div class="dim" style="font-size:8px">No released technologies.</div>'}
+    ${projectRows}
 
-/* ============================================================
-   WORKSTATION / DEEP INTERACTION
-   ============================================================ */
-const WORK_TABS = [['hardware','Hardware'],['operations','Operations'],['people','People'],['finance','Finance'],['servers','Servers']];
+    <div class="section-label" style="margin-top:14px">CULTURE</div>
+    ${cultures.map(o => `<div style="display:flex;gap:6px;padding:3px 0;border-bottom:1px solid #161e24;font-family:var(--mono);font-size:8px"><b style="flex:1;color:var(--text)">${esc(o.name)}</b><span style="color:var(--dim)">${esc(o.kind)}</span><span style="width:58px;text-align:right;color:var(--accent)">${fmtNum(o.audience)}</span></div>`).join('')}
+    ${games.map(x => `<div style="padding:3px 0;font-family:var(--mono);font-size:8px;color:var(--dim)">${esc(x.title)} · ${fmtNum(x.players)} players · ${x.rating.toFixed(1)}★</div>`).join('')}
 
-MOUNTS.workstation = function mountWork(win) {
-  win.workTab = win.workTab || 'hardware';
-  win.body.addEventListener('click', e => handleWorkClick(win, e));
-  win.render = () => renderWork(win);
-  renderWork(win);
-};
+    <div class="section-label" style="margin-top:14px">ACTIVE WORLD EVENTS</div>
+    ${eventRows}
 
-function renderWork(win) {
-  const g = app.game;
-  const s = interactionOverview(g);
-  const m = s.metrics;
-  if (!WORK_TABS.some(t => t[0] === win.workTab)) win.workTab = 'hardware';
-  const tab = win.workTab;
-  const tabs = WORK_TABS.map(([id, label]) => `<button class="civ-tab ${id === tab ? 'on' : ''}" data-work-tab="${id}">${label}</button>`).join('');
-  let content = '';
-  if (tab === 'hardware') {
-    const h = s.hardware;
-    content = `<div class="civ-grid cols-4">
-      ${civStat('Performance', h.performance, `${h.cpu.cores} cores · ${h.cpu.ghz} GHz`, 'b')}
-      ${civStat('Memory / storage', `${h.memoryGb} GB`, `${Math.round(h.storageUsedGb)}/${h.storageGb} GB used`)}
-      ${civStat('VM / inference', `${h.vmCapacity} / ${h.inferenceCapacity}`, `${h.gpu.vramGb} GB VRAM`)}
-      ${civStat('Temperature', `${Math.round(h.temperature)}°C`, `health ${Math.round(h.health)}/100`, h.temperature > 80 ? 'r' : 'ok')}
+    <div class="section-label" style="margin-top:14px">RECENT HISTORY</div>
+    ${timelineRows}
+
+    <div style="margin-top:14px;font-family:var(--mono);font-size:8px;color:var(--faint);line-height:1.6">
+      ${civ.multiplayer.players.length} shared operator(s) · ${civ.multiplayer.players.filter(p => p.connected).length} connected · anti-cheat rejected ${civ.multiplayer.antiCheat.rejected} · world ${esc(civ.multiplayer.worldId)}
     </div>
-    ${civSection('Installed hardware', `<div class="civ-row"><div><b>${esc(h.cpu.model)}</b><small>processor</small></div><div class="civ-row-right"><button class="tbtn small primary" data-work-upgrade="cpu">Upgrade</button></div></div>
-      <div class="civ-row"><div><b>${esc(h.gpu.model)}</b><small>${h.gpu.vramGb} GB VRAM · accelerator</small></div><div class="civ-row-right"><button class="tbtn small primary" data-work-upgrade="gpu">Upgrade</button></div></div>
-      <div class="civ-row"><div><b>${h.memoryGb} GB memory</b><small>${h.nic} network adapter</small></div><div class="civ-row-right"><button class="tbtn small primary" data-work-upgrade="memory">Upgrade</button></div></div>
-      <div class="civ-row"><div><b>${h.storageGb} GB storage</b><small>${h.motherboard} motherboard · ${h.powerW} W</small></div><div class="civ-row-right"><button class="tbtn small primary" data-work-upgrade="storage">Upgrade</button></div></div>
-      <div class="civ-row"><div><b>Maintenance</b><small>Failures ${h.failures} · status ${esc(h.status)}</small></div><div class="civ-row-right"><button class="tbtn small" data-work-action="maintain">Service · $45</button></div></div>`, 'physical machine')}`;
-  } else if (tab === 'operations') {
-    content = civSection('Background operations', s.operations.map(o => `<div class="civ-row"><div><b>${esc(o.label)}</b><small>${esc(o.id)} · ${esc(o.kind)} · ${o.elapsed} world min · ${o.logs.length ? esc(o.logs[o.logs.length - 1].text) : ''}</small></div><div class="civ-row-right"><div class="bar" style="width:110px"><i style="width:${o.progress}%"></i></div><span class="tag">${o.progress}%</span><span class="tag ${o.status === 'done' ? 'g' : o.status === 'failed' ? 'r' : 'a'}">${esc(o.status)}</span>${o.status === 'running' ? `<button class="tbtn small danger" data-work-cancel="${esc(o.id)}">Cancel</button>` : ''}</div></div>`).join('') || '<div class="empty-state">No operations running. Use the terminal: bg install curl</div>', `${m.runningOperations} running · ${m.completedOperations} completed`) +
-      civSection('Activity', s.events.slice(0, 20).map(e => `<div class="civ-row"><div><b>${esc(e.title)}</b><small>${esc(e.body)}</small></div><div class="civ-row-right"><span class="tag">${esc(e.category)}</span></div></div>`).join(''));
-  } else if (tab === 'people') {
-    content = civSection('Relationships', s.relationships.map(r => {
-      const last = r.interactions[r.interactions.length - 1];
-      return `<div class="civ-row"><div><b>@${esc(r.handle)} · ${esc(r.name)}</b><small>${esc(r.role)} · ${esc(r.personality)} · ${r.interactions.length} interactions${last ? ` · last: ${esc(last.kind)} ${esc(last.response || last.status)}` : ''}</small></div><div class="civ-row-right"><span class="tag ${r.status === 'collaborator' ? 'g' : ''}">${esc(r.status)}</span><span class="tag">trust ${Math.round(r.trust)}</span><button class="tbtn small" data-work-contact="${esc(r.handle)}">Message</button></div></div>`;
-    }).join('') || '<div class="empty-state">Use: contact &lt;handle&gt; help</div>', `${s.relationships.length} people · ${m.pendingReplies} pending`) +
-      civSection('New conversation', `<div class="civ-row"><div><b>Contact an indexed operator</b><small>Requests are answered by real NPC state, not scripted replies</small></div><div class="civ-row-right"><button class="tbtn small primary" data-work-action="contact">Open</button></div></div>`);
-  } else if (tab === 'finance') {
-    const f = s.finance;
-    content = `<div class="civ-grid cols-3">${civStat('Receivable', fmtMoney(f.receivable), `${f.invoices.length} invoices`, 'ok')}${civStat('Portfolio', fmtMoney(f.portfolioValue), `${f.holdings.length} holdings`, 'b')}${civStat('Open orders', m.openOrders, `index ${fmtNum(app.game.market.index)}`)}</div>` +
-      civSection('Invoices', f.invoices.slice(0, 24).map(i => `<div class="civ-row"><div><b>${esc(i.id)} · ${esc(i.client)}</b><small>${fmtMoney(i.amount)} · due ${fmtDateTime(i.dueWorld * 60000 + app.game.createdAt)}</small></div><div class="civ-row-right"><span class="tag ${i.status === 'overdue' ? 'r' : i.status === 'paid' ? 'g' : 'a'}">${esc(i.status)}</span>${i.status === 'sent' || i.status === 'overdue' ? `<button class="tbtn small" data-work-invoice="pay" data-work-id="${esc(i.id)}">Pay</button><button class="tbtn small primary" data-work-invoice="collect" data-work-id="${esc(i.id)}">Collect</button>` : ''}</div></div>`).join('') || '<div class="empty-state">No invoices yet.</div>') +
-      civSection('Orders and holdings', f.orders.slice(0, 20).map(o => `<div class="civ-row"><div><b>${esc(o.id)} · ${esc(o.side)} ${o.qty} ${esc(o.asset)}</b><small>limit ${fmtNum(o.limit)} · ${o.status}</small></div><div class="civ-row-right"><span class="tag">${Math.round(o.filled / o.qty * 100)}%</span>${o.status === 'open' ? `<button class="tbtn small danger" data-work-order-cancel="${esc(o.id)}">Cancel</button>` : ''}</div></div>`).join('')) +
-      `<div class="civ-row"><div><b>New activity</b><small>Issue an invoice or place a limit order</small></div><div class="civ-row-right"><button class="tbtn small" data-work-action="invoice">Invoice</button><button class="tbtn small primary" data-work-action="order">Order</button></div></div>`;
-  } else {
-    const mine = ownedServers(g);
-    content = civSection('Your servers', mine.map(srv => {
-      const web = (srv.services || []).find(v => [80,443].includes(v.port));
-      return `<div class="civ-row"><div><b>${esc(srv.host)} · ${esc(srv.ip)}</b><small>${esc(srv.role)} · ${esc(srv.os)} · sec ${Math.round(srv.security)} · web ${web ? esc(web.state) : 'none'}</small></div><div class="civ-row-right">
-        <button class="tbtn small" data-work-srv="${esc(srv.id)}" data-work-srv-action="service" data-work-service="${web ? esc(web.name) : ''}" data-work-state="${web?.state === 'running' ? 'stop' : 'start'}">${web?.state === 'running' ? 'Stop web' : 'Start web'}</button>
-        <button class="tbtn small" data-work-srv="${esc(srv.id)}" data-work-srv-action="backup">Backup</button>
-        <button class="tbtn small" data-work-srv="${esc(srv.id)}" data-work-srv-action="firewall" data-work-port="443">Firewall 443</button>
-        <button class="tbtn small" data-work-srv="${esc(srv.id)}" data-work-srv-action="restart">Restart</button>
-      </div></div>`;
-    }).join('') || '<div class="empty-state">Buy a server with: buy vps-std</div>', `${mine.length} owned hosts`);
-  }
-  win.body.innerHTML = `<div class="civ-tabs">${tabs}</div><div class="win-scroll">${content}</div>`;
-  win.status.innerHTML = `<span>${m.hardwareHealth}% hardware health · ${m.temperature}°C</span><span>${m.runningOperations} running ops · ${m.pendingReplies} pending replies</span><span class="st-right"><b>${fmtMoney(app.game.player.money)}</b><span>${m.openInvoices} invoices</span></span>`;
-}
-
-function handleWorkClick(win, e) {
-  const tab = e.target.closest('[data-work-tab]');
-  if (tab) { win.workTab = tab.dataset.workTab; renderWork(win); return; }
-  const up = e.target.closest('[data-work-upgrade]');
-  if (up) {
-    const component = up.dataset.workUpgrade;
-    const tiers = HARDWARE_TIERS[component];
-    formModal({
-      title: `Upgrade ${component}`, eyebrow: 'WORKSTATION',
-      fields: [{ name: 'tier', label: 'OPTION', type: 'select', value: tiers[0].id, options: tiers.map(t => ({ value: t.id, label: `${t.name} · ${fmtMoney(t.cost)}` })) }],
-      submit: 'Install',
-      onSubmit: vals => {
-        const r = upgradeHardware(app.game, component, vals.tier);
-        toast(r.ok ? 'Hardware upgraded' : 'Upgrade failed', r.ok ? `${r.tier.name} installed.` : r.error, r.ok ? 'g' : 'r');
-        if (r.ok) refreshUI();
-      }
-    });
-    return;
-  }
-  const action = e.target.closest('[data-work-action]');
-  if (action) {
-    const kind = action.dataset.workAction;
-    if (kind === 'maintain') {
-      const r = maintainHardware(app.game);
-      toast('Maintenance', r.ok ? r.message : r.error, r.ok ? 'g' : 'r');
-      refreshUI();
-    } else if (kind === 'contact') {
-      formModal({
-        title: 'Contact an operator', eyebrow: 'RELATIONSHIPS',
-        fields: [
-          { name: 'handle', label: 'HANDLE', placeholder: 'relay' },
-          { name: 'kind', label: 'PURPOSE', type: 'select', value: 'message', options: ['message','help','collaborate','hire','negotiate','review'].map(v => ({ value: v, label: v })) },
-          { name: 'message', label: 'MESSAGE', type: 'textarea', rows: 3 }
-        ],
-        submit: 'Send',
-        onSubmit: vals => {
-          const r = contactNpc(app.game, vals.handle, vals.kind, vals.message);
-          toast(r.ok ? 'Message queued' : 'Cannot send', r.ok ? r.message : r.error, r.ok ? 'g' : 'r');
-          if (r.ok) refreshUI();
-        }
-      });
-    } else if (kind === 'invoice') {
-      formModal({
-        title: 'Issue an invoice', eyebrow: 'FINANCE',
-        fields: [{ name: 'client', label: 'CLIENT' }, { name: 'amount', label: 'AMOUNT', type: 'number', value: '150' }, { name: 'days', label: 'DUE IN DAYS', type: 'number', value: '14' }],
-        submit: 'Send invoice',
-        onSubmit: vals => {
-          const r = issueInvoice(app.game, vals.client, Number(vals.amount), Number(vals.days));
-          toast(r.ok ? 'Invoice sent' : 'Cannot invoice', r.ok ? `${r.invoice.id} · ${fmtMoney(r.invoice.amount)}` : r.error, r.ok ? 'g' : 'r');
-          if (r.ok) refreshUI();
-        }
-      });
-    } else if (kind === 'order') {
-      formModal({
-        title: 'Place a market order', eyebrow: 'FINANCE',
-        fields: [
-          { name: 'side', label: 'SIDE', type: 'select', value: 'buy', options: [{ value: 'buy', label: 'buy' }, { value: 'sell', label: 'sell' }] },
-          { name: 'asset', label: 'ASSET', value: 'IDX' },
-          { name: 'qty', label: 'QUANTITY', type: 'number', value: '10' },
-          { name: 'price', label: 'LIMIT', type: 'number', value: String(Math.round(app.game.market.index)) }
-        ],
-        submit: 'Place order',
-        onSubmit: vals => {
-          const r = placeOrder(app.game, vals.side, vals.asset, Number(vals.qty), Number(vals.price));
-          toast(r.ok ? 'Order placed' : 'Cannot place order', r.ok ? `${r.order.id} · ${r.order.side} ${r.order.qty}` : r.error, r.ok ? 'g' : 'r');
-          if (r.ok) refreshUI();
-        }
-      });
-    }
-    return;
-  }
-  const cancelOp = e.target.closest('[data-work-cancel]');
-  if (cancelOp) { const r = cancelOperation(app.game, cancelOp.dataset.workCancel); toast('Operation', r.ok ? r.message || 'Cancelled' : r.error, r.ok ? 'a' : 'r'); refreshUI(); return; }
-  const inv = e.target.closest('[data-work-invoice]');
-  if (inv) {
-    const r = inv.dataset.workInvoice === 'pay' ? payInvoice(app.game, inv.dataset.workId) : collectInvoice(app.game, inv.dataset.workId);
-    toast('Invoice', r.ok ? `${r.invoice.id} settled` : r.error, r.ok ? 'g' : 'r'); refreshUI(); return;
-  }
-  const oc = e.target.closest('[data-work-order-cancel]');
-  if (oc) { const r = cancelOrder(app.game, oc.dataset.workOrderCancel); toast('Order', r.ok ? `${r.order.id} cancelled` : r.error, r.ok ? 'a' : 'r'); refreshUI(); return; }
-  const contact = e.target.closest('[data-work-contact]');
-  if (contact) {
-    formModal({
-      title: `Message @${contact.dataset.workContact}`, eyebrow: 'RELATIONSHIPS',
-      fields: [{ name: 'kind', label: 'PURPOSE', type: 'select', value: 'message', options: ['message','help','collaborate','hire','negotiate','review'].map(v => ({ value: v, label: v })) }, { name: 'message', label: 'MESSAGE', type: 'textarea', rows: 3 }],
-      submit: 'Send',
-      onSubmit: vals => {
-        const r = contactNpc(app.game, contact.dataset.workContact, vals.kind, vals.message);
-        toast(r.ok ? 'Message queued' : 'Cannot send', r.ok ? r.message : r.error, r.ok ? 'g' : 'r');
-        if (r.ok) refreshUI();
-      }
-    });
-    return;
-  }
-  const srv = e.target.closest('[data-work-srv]');
-  if (srv) {
-    const opts = { subaction: srv.dataset.workSrvAction };
-    if (opts.subaction === 'service') { opts.service = srv.dataset.workService; opts.state = srv.dataset.workState; }
-    if (opts.subaction === 'firewall') { opts.subaction = 'allow'; opts.port = srv.dataset.workPort; }
-    const r = serverAdmin(app.game, srv.dataset.workSrv, opts.subaction, opts);
-    toast('Server', r.ok ? r.message : r.error, r.ok ? 'g' : 'r'); refreshUI();
-  }
-}
-
-/* ============================================================
-   AUTONOMOUS SOCIETY
-   ============================================================ */
-const SOCIETY_TABS = [['overview','Overview'],['people','People'],['culture','Culture'],['economy','Economy'],['life','Life feed']];
-
-MOUNTS.society = function mountSociety(win) {
-  win.socTab = win.socTab || 'overview';
-  win.body.addEventListener('click', e => handleSocietyClick(win, e));
-  win.render = () => renderSociety(win);
-  renderSociety(win);
-};
-
-function renderSociety(win) {
-  const s = societyOverview(app.game);
-  const m = s.metrics;
-  if (!SOCIETY_TABS.some(t => t[0] === win.socTab)) win.socTab = 'overview';
-  const tab = win.socTab;
-  const tabs = SOCIETY_TABS.map(([id, label]) => `<button class="civ-tab ${id === tab ? 'on' : ''}" data-soc-tab="${id}">${label}</button>`).join('');
-  let content = '';
-  if (tab === 'overview') {
-    content = `<div class="civ-grid cols-4">
-      ${civStat('Population', m.population, `${m.active} detailed lives`, 'b')}
-      ${civStat('Culture', m.content, `${m.tests} real tests · ${m.reviews} reviews`, 'ok')}
-      ${civStat('Economy', fmtMoney(m.revenue), `${m.transactions} transactions`, 'ok')}
-      ${civStat('Mood', `+${m.averageHappiness}`, `stress ${m.averageStress}`, m.averageStress > 40 ? 'r' : '')}
-    </div>
-    ${civSection('How this world works', `<div class="civ-row"><div><b>Lives continue without you</b><small>Identity, emotions, needs, routines and careers persist in the shared world</small></div></div>
-      <div class="civ-row"><div><b>Content is real</b><small>Artifacts have creators, stored text or generated source, versions and availability</small></div></div>
-      <div class="civ-row"><div><b>Nothing is counted twice</b><small>Downloads, sales and reviews require recorded consumption, transaction and test events</small></div></div>`)}
-    ${civSection('Recent lives', s.events.slice(0, 12).map(e => `<div class="civ-row"><div><b>${esc(e.title)}</b><small>${esc(e.body)}</small></div><div class="civ-row-right"><span class="tag">${esc(e.category)}</span></div></div>`).join(''))}`;
-  } else if (tab === 'people') {
-    content = civSection('Inhabitants', s.citizens.slice(0, 80).map(i => {
-      const top = Object.entries(i.needs).sort((a, b) => b[1] - a[1])[0];
-      return `<div class="civ-row"><div><b>@${esc(i.handle)} · ${esc(i.name)}</b><small>${i.age} · ${esc(i.employment.role)} at ${esc(i.employment.employer)} · ${esc(i.mood)}</small></div><div class="civ-row-right">
-        <span class="tag ${i.level === 'active' ? 'g' : i.level === 'known' ? 'b' : ''}">${esc(i.level)}</span><span class="tag">${fmtMoney(i.funds)}</span><span class="tag">need ${esc(top?.[0] || '—')}</span>
-        <button class="tbtn small" data-soc-profile="${esc(i.handle)}">Profile</button>
-      </div></div>`;
-    }).join(''), `${m.population} identities`);
-  } else if (tab === 'culture') {
-    content = civSection('Created content', s.content.slice(0, 80).map(c => `<div class="civ-row"><div><b>${esc(c.title)}</b><small>${esc(c.type)} · @${esc(c.creatorHandle)} · ${esc(c.reason)} · ${esc(c.tags.join(', '))}</small></div><div class="civ-row-right">
-      <span class="tag">${fmtMoney(c.price)}</span><span class="tag">${c.usage.views} views</span><span class="tag">${c.usage.tests} tests</span>
-      <button class="tbtn small" data-soc-content="${esc(c.id)}">Open</button>
-      ${c.creatorId !== 'player-identity' ? `<button class="tbtn small primary" data-soc-buy="${esc(c.id)}">Acquire</button>` : ''}
-    </div></div>`).join('') || '<div class="empty-state">Nothing published yet.</div>', `${s.content.length} artifacts`);
-  } else if (tab === 'economy') {
-    content = civSection('Transaction ledger', s.transactions.slice(0, 60).map(t => `<div class="civ-row"><div><b>${esc(t.id)} · ${esc(t.buyerHandle)} → ${esc(t.sellerHandle)}</b><small>${esc(t.kind)} · world ${Math.round(t.world)}</small></div><div class="civ-row-right"><span class="tag ${t.amount > 0 ? 'g' : ''}">${fmtMoney(t.amount)}</span></div></div>`).join('') || '<div class="empty-state">No transactions yet.</div>', `${m.transactions} recorded`) +
-      civSection('Reviews derived from tests', s.reviews.slice(0, 40).map(r => `<div class="civ-row"><div><b>${r.rating}/5 · ${esc(r.text)}</b><small>@${esc(r.handle)} · test ${esc(r.testId)}</small></div></div>`).join(''));
-  } else {
-    content = civSection('Life events', s.events.slice(0, 80).map(e => `<div class="civ-row"><div><b>${esc(e.title)}</b><small>${esc(e.body)}</small></div><div class="civ-row-right"><span class="tag ${e.severity === 'critical' ? 'r' : ''}">${esc(e.category)}</span><span class="tag">${e.year || Math.round(e.world / 1440)}</span></div></div>`).join(''));
-  }
-  win.body.innerHTML = `<div class="civ-tabs">${tabs}</div><div class="win-scroll">${content}</div>`;
-  win.status.innerHTML = `<span>${m.population} inhabitants · ${m.active} active</span><span>${m.content} content items · ${m.transactions} transactions</span><span class="st-right"><b>${fmtMoney(m.revenue)} economy</b><span>happiness ${m.averageHappiness}</span></span>`;
-}
-
-function handleSocietyClick(win, e) {
-  const tab = e.target.closest('[data-soc-tab]');
-  if (tab) { win.socTab = tab.dataset.socTab; renderSociety(win); return; }
-  const profile = e.target.closest('[data-soc-profile]');
-  if (profile) { openWindow('terminal'); runCommand(`citizen ${profile.dataset.socProfile}`); return; }
-  const show = e.target.closest('[data-soc-content]');
-  if (show) { openWindow('terminal'); runCommand(`content show ${show.dataset.socContent}`); return; }
-  const buy = e.target.closest('[data-soc-buy]');
-  if (buy) {
-    const r = playerPurchaseContent(app.game, buy.dataset.socBuy);
-    toast(r.ok ? 'Content acquired' : 'Purchase failed', r.ok ? `${r.content.title} · transaction ${r.transaction.id}` : r.error, r.ok ? 'g' : 'r');
-    refreshUI();
-  }
-}
-
-/* ============================================================
-   SETTINGS
-   ============================================================ */
-function applySettings() {
-  const s = app.game?.settings || {};
-  const root = document.documentElement;
-  root.style.fontSize = `${clamp(Number(s.fontSize) || 10, 7, 18)}px`;
-  root.classList.toggle('reduced-motion', !!s.reducedMotion);
-  root.classList.toggle('compact-ui', !!s.compact);
-}
-
-MOUNTS.settings = function mountSettings(win) {
-  win.body.addEventListener('click', e => {
-    const b = e.target.closest('[data-setting]');
-    if (!b) return;
-    const key = b.dataset.setting;
-    const s = app.game.settings || (app.game.settings = {});
-    if (key === 'save') { saveGame(true); toast('World saved', 'Local state written.', 'g'); return; }
-    if (key === 'fontSize') s.fontSize = clamp(Number(b.dataset.value) || 10, 7, 18);
-    else s[key] = !s[key];
-    applySettings();
-    renderSettings(win);
-    scheduleSave();
-    toast('Setting changed', `${key}: ${s[key]}`, 'b');
-  });
-  win.render = () => renderSettings(win);
-  renderSettings(win);
-};
-
-function renderSettings(win) {
-  const s = app.game.settings || (app.game.settings = {});
-  const toggle = (key, label, note) => `<div class="civ-row"><div><b>${esc(label)}</b><small>${esc(note)}</small></div><div class="civ-row-right"><button class="tbtn small ${s[key] ? 'primary' : ''}" data-setting="${key}">${s[key] ? 'enabled' : 'disabled'}</button></div></div>`;
-  win.body.innerHTML = `<div class="win-scroll">
-    ${civSection('Display', toggle('reducedMotion', 'Reduced motion', 'Minimise background animation and sparkline updates.') + toggle('compact', 'Compact interface', 'Tighter panels and smaller controls for small screens.'))}
-    ${civSection('Text size', `<div class="civ-row"><div><b>Terminal and panel text</b><small>Applies everywhere and persists with the world save.</small></div><div class="civ-row-right">${[8,9,10,11,12,14].map(n => `<button class="tbtn small ${Number(s.fontSize || 10) === n ? 'primary' : ''}" data-setting="fontSize" data-value="${n}">${n}px</button>`).join('')}</div></div>`)}
-    ${civSection('Persistence', `<div class="civ-row"><div><b>Local save</b><small>Stored in this browser under internet-persistent-world.v1. Autosave runs every few ticks.</small></div><div class="civ-row-right"><button class="tbtn small primary" data-setting="save">Save now</button></div></div>`)}
   </div>`;
-  win.status.innerHTML = `<span>font ${s.fontSize || 10}px</span><span>motion ${s.reducedMotion ? 'reduced' : 'full'}</span><span class="st-right"><b>saved locally</b></span>`;
+  for (const b of $$('[data-civ-cmd]', win.body)) b.addEventListener('click', () => runCommand(b.dataset.civCmd));
+  win.status.innerHTML = `<span>${esc(s.country.name)} · ${s.year}</span><span>${s.activeEvents} active event(s)</span><span class="st-right"><b>${m.civilizationIndex}/100</b><span>civilization index</span></span>`;
 }
 
 /* ============================================================
@@ -3814,56 +2960,6 @@ const CMD_HELP = {
   map: 'Open the network topology.',
   achievements: 'List achievements.',
   search: 'Search sites, hosts, people, and work.',
-  project: 'Analyse a local project and its code health.',
-  init: 'Scaffold a new project from a template.',
-  lint: 'Statically analyse local source files.',
-  fmt: 'Format a source file in place.',
-  symbols: 'List functions, classes and selectors.',
-  run: 'Run a file with its simulated runtime.',
-  build: 'Compile a project file.',
-  test: 'Run the matching test command.',
-  coding: 'Show coding level, XP and activity.',
-  net: 'Inspect internet architecture and adoption.',
-  web: 'Inspect DNS, TLS, APIs and web properties.',
-  registry: 'Browse and publish software packages.',
-  model: 'Inspect and train AI models, serve inference.',
-  sec: 'Check security posture and advisories.',
-  dev: 'Inspect autonomous NPC developers and projects.',
-  repo: 'Read, clone, lint and contribute to generated repositories.',
-  vuln: 'Investigate vulnerabilities derived from real generated code.',
-  lab: 'Open authorized cyber ranges and practice safely.',
-  packets: 'Capture a bounded packet trace from a simulated host.',
-  forensics: 'Produce a chain-of-custody forensic report.',
-  http: 'Inspect HTTP headers and site state.',
-  inspect: 'Fingerprint a host from simulated configuration.',
-  debug: 'Inspect symbols and static faults in local code.',
-  openssl: 'Inspect a simulated TLS certificate.',
-  hw: 'Inspect and upgrade workstation hardware.',
-  ops: 'List background operations and their progress.',
-  bg: 'Start an install, download, audit, compile or deploy job.',
-  contact: 'Contact an NPC; replies depend on trust and personality.',
-  friends: 'Review relationships and pending replies.',
-  pcreate: 'Create a real source project in the developer economy.',
-  pwrite: 'Edit a source file in one of your projects.',
-  pbuild: 'Build and version your project.',
-  ptest: 'Run simulated smoke tests.',
-  ppublish: 'Publish your project for NPCs to discover.',
-  pdeploy: 'Deploy your project to a site you control.',
-  prelease: 'Release an update to your project.',
-  srv: 'Administer a server you own.',
-  invoice: 'Create, pay and collect invoices.',
-  transfer: 'Transfer funds to another operator.',
-  order: 'Place and inspect simulated market orders.',
-  ln: 'Create hard or symbolic links.',
-  tar: 'Create and extract virtual filesystem archives.',
-  session: 'Open an additional terminal session.',
-  settings: 'Read or change persistent system settings.',
-  society: 'Observe autonomous inhabitants and their activity.',
-  citizens: 'List the simulated population.',
-  citizen: 'Inspect one inhabitant’s life and decisions.',
-  culture: 'Browse content created by inhabitants.',
-  content: 'Inspect, buy, test, review or publish content.',
-  meet: 'Meet an inhabitant and form a relationship.',
   save: 'Save the persistent world.',
   reset: 'Erase the world and start over.'
 };
@@ -4012,7 +3108,6 @@ function helpContent(section) {
 function init() {
   const loaded = readSave();
   app.game = reviveGame(loaded.game);
-  applySettings();
   const elapsed = Date.now() - (app.game.lastSaved || app.game.lastActive || Date.now());
   if (loaded.loaded && elapsed > 120000) {
     try {
