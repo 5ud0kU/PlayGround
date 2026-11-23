@@ -32,6 +32,7 @@ import {
   civilizationSummary, validateLedger, careerSnapshot, playerProperties, civKnowledge,
   civEventList, civHistory
 } from './civilization.js';
+import { interactionSummary } from './interaction.js';
 
 const $ = (sel, root = document) => root.querySelector(sel);
 const $$ = (sel, root = document) => Array.from(root.querySelectorAll(sel));
@@ -2733,6 +2734,7 @@ function renderCivilization(win) {
   const knowledge = Object.entries(civKnowledge(g)).sort((a, b) => b[1] - a[1]).slice(0, 4);
   const cultures = civ.culture.organizations.slice(0, 4);
   const games = civ.culture.games.slice(-3).reverse();
+  const ops = interactionSummary(g);
   const stats = [
     ['POPULATION', fmtNum(m.population)],
     ['GDP', fmtMoney(m.gdp)],
@@ -2826,6 +2828,24 @@ function renderCivilization(win) {
     <div class="section-label" style="margin-top:14px">CULTURE</div>
     ${cultures.map(o => `<div style="display:flex;gap:6px;padding:3px 0;border-bottom:1px solid #161e24;font-family:var(--mono);font-size:8px"><b style="flex:1;color:var(--text)">${esc(o.name)}</b><span style="color:var(--dim)">${esc(o.kind)}</span><span style="width:58px;text-align:right;color:var(--accent)">${fmtNum(o.audience)}</span></div>`).join('')}
     ${games.map(x => `<div style="padding:3px 0;font-family:var(--mono);font-size:8px;color:var(--dim)">${esc(x.title)} · ${fmtNum(x.players)} players · ${x.rating.toFixed(1)}★</div>`).join('')}
+
+    <div class="section-label" style="margin-top:14px">OPERATIONS <span class="dim">jobs · hardware · faults</span></div>
+    ${ops.running.length ? ops.running.map(j => `<div style="padding:3px 0;border-bottom:1px solid #161e24;font-family:var(--mono);font-size:8px"><div style="display:flex;gap:6px"><b style="flex:1;color:var(--text)">${esc(j.label)}</b><span style="color:var(--accent)">${Math.round(j.progress)}%</span></div><div class="bar" style="margin-top:3px"><i style="width:${clamp(j.progress, 0, 100)}%"></i></div></div>`).join('') : '<div class="dim" style="font-size:8px">No background jobs running.</div>'}
+    <div style="margin-top:6px">
+      ${civRow('CPU', `${esc(ops.hardware.cpu.model)} · ${Math.round(ops.hardware.cpu.load)}% · ${Math.round(ops.hardware.temp)}°C`)}
+      ${civRow('Memory', `${ops.hardware.ram.used}/${ops.hardware.ram.total} GB`)}
+      ${civRow('Storage', `${ops.hardware.storage.used.toFixed(1)}/${ops.hardware.storage.total} GB`)}
+      ${civRow('Open faults', String(ops.faults.length), ops.faults.length ? 'var(--red)' : 'var(--green)')}
+      ${civRow('Conversations', String(ops.conversations.length))}
+      ${civRow('Bank balance', fmtMoney(ops.bank.accounts.primary.balance))}
+    </div>
+    <div style="display:flex;gap:4px;flex-wrap:wrap;margin-top:8px">
+      <button class="tbtn small" data-civ-cmd="bg">Jobs</button>
+      <button class="tbtn small" data-civ-cmd="hw">Hardware</button>
+      <button class="tbtn small" data-civ-cmd="fault">Faults</button>
+      <button class="tbtn small" data-civ-cmd="dev">Projects</button>
+      <button class="tbtn small" data-civ-cmd="lab">Lab</button>
+    </div>
 
     <div class="section-label" style="margin-top:14px">ACTIVE WORLD EVENTS</div>
     ${eventRows}
