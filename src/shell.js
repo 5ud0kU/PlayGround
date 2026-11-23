@@ -31,7 +31,8 @@ import {
   playerSellProperty, playerLobby, playerRelocate, playerAdoptTech, playerProperties,
   playerCredentials, playerCompliance, getCivCountry, getCivCity, playerCountry, playerCity,
   outletFor, researchField, civKnowledge, validateLedger, sharedSnapshot, joinSharedWorld,
-  disconnectSharedPlayer, activeLegalDisputes
+  disconnectSharedPlayer, activeLegalDisputes, careerSnapshot, jobMatch, playerApplyJob,
+  playerInterviewJob, playerNegotiateJob, playerAcceptJob, playerDeclineJob, playerQuitJob
 } from './civilization.js';
 
 const CMD_ALIASES = {
@@ -3695,6 +3696,63 @@ function civProperty(ctx, args) {
   ctx.print('');
   ctx.dim('civ property available   ·   civ property buy <id> [--rented]   ·   civ property sell <id>');
 }
+function civJobs(ctx, query) {
+  const g = ctx.game;
+  const snap = careerSnapshot(g);
+  const q = String(query || '').trim().toLowerCase();
+  const jobs = snap.jobs.filter(j => !q || `${j.title} ${j.companyName} ${j.field} ${j.level} ${j.remote ? 'remote' : ''}`.toLowerCase().includes(q));
+  ctx.head('GLOBAL JOB MARKET');
+  const prof = snap.professional;
+  if (prof.employerId) {
+    ctx.print(`Employed: ${prof.role} at ${prof.employerName} · ${fmtMoney(prof.salary)}/yr · performance ${Math.round(prof.performance)}/100`, 'ok');
+    ctx.dim('civ quit ends the role. You can apply after leaving.');
+  } else {
+    ctx.print(`Independent · professional score ${Math.round(prof.score)}/100 · ${snap.applications.length} active application(s)`, 'accent');
+  }
+  ctx.print('');
+  if (!jobs.length) ctx.dim('No open roles match. The market refreshes as companies hire.');
+  for (const j of jobs.slice(0, 24)) {
+    const match = jobMatch(g, j);
+    const country = getCivCountry(g, j.countryId);
+    const city = j.cityId ? g.civ.cities.find(c => c.id === j.cityId) : null;
+    const closes = Math.max(1, Math.ceil((j.expiresWorld - g.worldMinutes) / 1440));
+    ctx.print(`${pad(j.id, 8)} ${pad(j.title, 24)} ${pad(j.companyName, 20)} ${padLeft(fmtMoney(j.salary) + '/yr', 12)} ${j.remote ? 'remote' : pad(city?.name || country?.name || '', 12)} match ${padLeft(match, 3)}%`, match >= 55 ? 'ok' : match >= 30 ? 'accent' : '');
+    ctx.dim(`    ${j.levelName} · ${country?.name || j.countryId} · needs professional ${j.requirements.professional} / ${j.field} knowledge ${j.requirements.knowledge} · closes in ${closes}d`);
+  }
+  ctx.print('');
+  ctx.dim('civ apply <job>  ·  civ interview <job>  ·  civ accept <job>  ·  civ negotiate <job> <salary>  ·  civ career');
+}
+function civCareer(ctx) {
+  const g = ctx.game;
+  const snap = careerSnapshot(g);
+  const prof = snap.professional;
+  ctx.head(`CAREER — ${prof.employerId ? prof.role : 'INDEPENDENT'}`);
+  if (prof.employerId) {
+    ctx.print(`${prof.employerName} · ${fmtMoney(prof.salary)}/yr · since ${fmtDate(new Date(g.createdAt + Math.floor((prof.sinceWorld || g.worldMinutes) / 1440) * 86400000))}`, 'ok');
+    ctx.print(`Professional score ${Math.round(prof.score)}/100 · performance ${Math.round(prof.performance)}/100 · endorsements ${prof.endorsements}`, 'accent');
+  } else {
+    ctx.print(`Not employed · professional score ${Math.round(prof.score)}/100 · ${prof.employmentHistory.length} prior role(s)`, 'accent');
+    ctx.dim('Use civ jobs to find work. Interviews weigh field knowledge, reputation, and credentials.');
+  }
+  ctx.print('');
+  if (snap.applications.length) {
+    ctx.print('APPLICATIONS', 'head');
+    for (const a of snap.applications) {
+      const j = a.job;
+      ctx.print(`  ${pad(a.status, 11)} ${pad(j?.title || a.jobId, 24)} ${pad(j?.companyName || '', 20)} match ${padLeft(a.match ?? jobMatch(g, j), 3)}%${a.offerSalary ? ' · offer ' + fmtMoney(a.offerSalary) : ''}`, a.status === 'offered' ? 'ok' : a.status === 'rejected' ? 'err' : 'accent');
+    }
+  } else ctx.dim('No active applications.');
+  ctx.print('');
+  if (prof.employmentHistory.length) {
+    ctx.print('EMPLOYMENT HISTORY', 'head');
+    for (const h of prof.employmentHistory.slice().reverse().slice(0, 8)) {
+      const end = h.untilWorld ? fmtDate(new Date(g.createdAt + Math.floor(h.untilWorld / 1440) * 86400000)) : 'present';
+      ctx.print(`  ${pad(h.role || 'role', 24)} ${pad(h.employerName || h.companyId || '', 20)} ${fmtMoney(h.salary || 0)}/yr · ${h.sinceWorld ? fmtDate(new Date(g.createdAt + Math.floor(h.sinceWorld / 1440) * 86400000)) : '—'} → ${end}${h.reason ? ' · ' + h.reason : ''}`);
+    }
+  } else ctx.dim('No employment history yet.');
+  ctx.print('');
+  ctx.dim('civ jobs · civ apply <job> · civ interview <job> · civ negotiate <job> <salary> · civ accept <job> · civ quit');
+}
 function civHistoryCmd(ctx) {
   const g = ctx.game;
   const q = ctx.args.join(' ').trim();
@@ -3783,6 +3841,57 @@ COMMANDS.civ = (ctx) => {
   if (sub === 'tech' || sub === 'technology') return civTech(ctx, rest);
   if (sub === 'supply' || sub === 'logistics') return civSupply(ctx);
   if (sub === 'property' || sub === 'properties' || sub === 'realestate') return civProperty(ctx, rest);
+  if (sub === 'jobs' || sub === 'jobmarket' || sub === 'hiring') return civJobs(ctx, rest.join(' '));
+  if (sub === 'career' || sub === 'employment' || sub === 'work') return civCareer(ctx);
+  if (sub === 'apply') {
+    if (!rest.length) { ctx.err('usage: civ apply <job>'); return; }
+    const r = playerApplyJob(g, rest.join(' '));
+    if (!r.ok) { ctx.err(r.error); return; }
+    ctx.ok(`Applied to ${r.job.title} at ${r.job.companyName} · match ${r.match}%.`);
+    ctx.dim(`Interview with: civ interview ${r.job.id}`);
+    return;
+  }
+  if (sub === 'interview') {
+    if (!rest.length) { ctx.err('usage: civ interview <job>'); return; }
+    const r = playerInterviewJob(g, rest.join(' '));
+    if (!r.ok) { ctx.err(r.error); return; }
+    if (r.offered) {
+      ctx.ok(`Offer: ${r.job.title} at ${r.job.companyName} · ${fmtMoney(r.offer)}/yr.`);
+      ctx.dim(`Accept: civ accept ${r.job.id} · negotiate: civ negotiate ${r.job.id} <salary>`);
+    } else ctx.warn(`${r.job.companyName} declined your application. Build experience or study the required field and try again.`);
+    return;
+  }
+  if (sub === 'negotiate') {
+    if (rest.length < 2) { ctx.err('usage: civ negotiate <job> <salary>'); return; }
+    const amount = Number(rest[rest.length - 1]);
+    const r = playerNegotiateJob(g, rest.slice(0, -1).join(' '), amount);
+    if (!r.ok) { ctx.err(r.error); return; }
+    if (r.accepted) ctx.ok(`${r.job.companyName} agreed to ${fmtMoney(r.offer)}/yr.`);
+    else ctx.warn(`${r.job.companyName} withdrew the offer. The role is open again.`);
+    return;
+  }
+  if (sub === 'accept') {
+    if (!rest.length) { ctx.err('usage: civ accept <job>'); return; }
+    const r = playerAcceptJob(g, rest.join(' '));
+    if (!r.ok) { ctx.err(r.error); return; }
+    ctx.ok(`You now work at ${r.job.companyName} as ${r.job.title} (${fmtMoney(r.salary)}/yr).`);
+    ctx.dim('Salary is paid monthly in world time, net of income tax. Use civ career to review the record.');
+    return;
+  }
+  if (sub === 'decline') {
+    if (!rest.length) { ctx.err('usage: civ decline <job>'); return; }
+    const r = playerDeclineJob(g, rest.join(' '));
+    if (!r.ok) { ctx.err(r.error); return; }
+    ctx.ok(`Declined ${r.job?.title || 'the role'}.`);
+    return;
+  }
+  if (sub === 'quit' || sub === 'resign') {
+    const r = playerQuitJob(g);
+    if (!r.ok) { ctx.err(r.error); return; }
+    ctx.ok(`Left ${r.employer} after ${Math.max(1, Math.round(r.tenure / 1440))} world days.`);
+    ctx.dim('A short tenure can affect reputation. Future employers see the record.');
+    return;
+  }
   if (sub === 'history' || sub === 'timeline') return civHistoryCmd(ctx);
   if (sub === 'events' || sub === 'event') return civEvents(ctx);
   if (sub === 'mp' || sub === 'multiplayer' || sub === 'shared') return civMultiplayer(ctx, rest);
@@ -3820,6 +3929,8 @@ COMMANDS.civ = (ctx) => {
     ctx.print('  civ tech [query] | civ tech adopt <name>');
     ctx.print('  civ supply                      materials, components and shipments');
     ctx.print('  civ property [available|buy id|sell id]');
+    ctx.print('  civ jobs [query] | civ career');
+    ctx.print('  civ apply <job> | civ interview <job> | civ negotiate <job> <salary> | civ accept <job> | civ decline <job> | civ quit');
     ctx.print('  civ history [query] | civ events [active|all]');
     ctx.print('  civ mp [status|join handle|leave handle|validate|snapshot]');
     ctx.print('  civ relocate <country> [city] | civ lobby <country> [domain]');

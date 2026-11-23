@@ -267,7 +267,7 @@ export function createGame(seed = randomSeed()) {
 }
 
 /* ---------------- bounded procedural growth ---------------- */
-const GROWTH_CAPS = Object.freeze({ companies: 30, npcs: 420, servers: 180, sites: 220, contracts: 60 });
+const GROWTH_CAPS = Object.freeze({ companies: 30, npcs: 420, servers: 240, sites: 220, contracts: 60 });
 
 function crossedCadence(game, key, interval) {
   const cycle = Math.floor(game.worldMinutes / interval);
