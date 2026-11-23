@@ -14,6 +14,9 @@ import { buildSystems, ensureSystems, tickSystems } from './systems.js';
 import {
   buildCivilization, ensureCivilization, tickCivilization, legalPenaltyMultiplier, playerCountry
 } from './civilization.js';
+import { ensureCoding, recordCoding, codingSummary } from './coding.js';
+import { ensureInternet, tickInternet, internetSummary, recomputeMetrics } from './internet.js';
+import { ensureDevWorld, tickDevWorld, devOverview } from './devworld.js';
 
 export const SAVE_KEY = 'internet-persistent-world.v1';
 export const WORLD_VERSION = 4;
@@ -149,6 +152,9 @@ export function reviveGame(game) {
   ensureSystems(game);
   ensureCivilization(game);
   ensureGrowth(game);
+  ensureCoding(game);
+  ensureInternet(game);
+  ensureDevWorld(game);
   for (const s of game.servers || []) {
     if (!s.fsMeta) {
       s.fsMeta = {
@@ -255,6 +261,9 @@ export function createGame(seed = randomSeed()) {
   buildProcesses(game, rng);
   buildRepos(game, rng);
   buildCivilization(game, rng);
+  ensureCoding(game);
+  ensureInternet(game);
+  ensureDevWorld(game);
 
   game.feed = [
     { id: game.seq.feed++, time: now - 90000, world: game.worldMinutes - 3, text: 'NullNet Collective restarted the public shell after maintenance.', kind: 'info' },
@@ -1639,6 +1648,9 @@ export function tickWorld(game, minutes = 1, opts = {}) {
   ensureSystems(game);
   ensureCivilization(game);
   ensureGrowth(game);
+  ensureCoding(game);
+  ensureInternet(game);
+  ensureDevWorld(game);
   const rng = makeRng((game.seed ^ Math.floor(game.worldMinutes * 2654435761) ^ (game.tickCount * 97)) >>> 0);
   minutes = Math.max(1, Math.round(minutes));
   game.worldMinutes += minutes;
@@ -1872,6 +1884,31 @@ export function tickWorld(game, minutes = 1, opts = {}) {
     }
   } catch (err) {
     console.error('systems tick failed', err);
+  }
+
+  // Internet architecture, web, developer ecosystem, AI, security and social platforms.
+  try {
+    const netEvents = tickInternet(game, minutes, rng);
+    for (const e of netEvents) {
+      if (e.type === 'money') addMoney(game, e.amount, e.memo);
+      else if (e.type === 'feed') addFeed(game, e.text, e.kind || 'info');
+      else if (e.type === 'news') addNews(game, rng, { headline: e.headline, body: e.body, source: e.source, silent: true });
+      else if (e.type === 'mail') addMail(game, { from: e.from, subject: e.subject, body: e.body });
+    }
+  } catch (err) {
+    console.error('internet tick failed', err);
+  }
+
+  // Autonomous developers, repositories, advisories and security research.
+  try {
+    const devEvents = tickDevWorld(game, minutes, rng);
+    for (const e of devEvents) {
+      if (e.type === 'feed') addFeed(game, e.text, e.kind || 'info');
+      else if (e.type === 'news') addNews(game, rng, { headline: e.headline, body: e.body, source: e.source, silent: true });
+      else if (e.type === 'mail') addMail(game, { from: e.from, subject: e.subject, body: e.body });
+    }
+  } catch (err) {
+    console.error('developer tick failed', err);
   }
 
   updateDerived(game);
